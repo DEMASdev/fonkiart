@@ -398,7 +398,7 @@ function HomePage({ setPage }) {
           <h1 className="hero-title">Where <em>art</em><br />meets the soul</h1>
           <p className="hero-sub">Curated works available for purchase. Each piece is original and ships worldwide.</p>
           <div style={{ display:"flex", gap:12, marginTop:32 }}>
-            <button className="btn-p" onClick={() => setPage("catalog")}>Browse Catalog</button>
+            <button className="btn-p" onClick={() => setPage("catalog")} style={{ background:"var(--gold)" }}>Browse Catalog</button>
             <button className="btn-s" onClick={() => setPage("special")} style={{ color:"rgba(255,255,255,.6)", borderColor:"rgba(255,255,255,.2)" }}>Special Orders</button>
           </div>
         </div>
