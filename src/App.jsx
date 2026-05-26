@@ -58,9 +58,9 @@ body { font-family:'DM Sans',sans-serif;background:#fdfcf8;color:#1c1a18; }
   transition:all .18s;border:none;background:none;
   width:100%;text-align:left;position:relative;
 }
-.nav-item:hover { color:#fff;background:rgba(255,255,255,.06); }
+.nav-item:hover { color:var(--gold);background:rgba(255,255,255,.06); }
 .nav-item.active {
-  color:#fff;background:rgba(255,255,255,.1);
+  color:var(--gold);background:rgba(255,255,255,.1);
 }
 .nav-item.active::before {
   content:'';position:absolute;left:0;top:0;bottom:0;
