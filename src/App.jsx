@@ -132,7 +132,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .hero-title { font-family:'Cormorant Garamond',serif;font-size:clamp(28px,4vw,58px);font-weight:300;line-height:1.05;color:#fff;margin-bottom:12px; }
 .hero-title em { font-style:italic;color:#ffe066;font-weight:600;font-size:1.25em; }
 .hero-sub { font-size:13px;color:#fff;line-height:1.6;max-width:320px; }
-.hero-right { position:relative;overflow:hidden;background:#e8e2d9;border:3px solid #d4a847; }
+.hero-right { position:relative;overflow:hidden;background:#fff;border:3px solid #d4a847; }
 .hero-shop-btn { position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(10,8,6,.55);backdrop-filter:blur(6px);border:1px solid rgba(212,168,71,.6);color:#fff;padding:10px 20px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;transition:all .25s;white-space:nowrap; }
 .hero-shop-btn:hover { background:#d4a847;border-color:#d4a847; }
 .hero-panel { position:absolute;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.6); }
