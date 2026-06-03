@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment, Component } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment, Component } from "react";
 import {
   Home, LayoutGrid, Star, Timer, Handshake, Mail,
   Info, Heart, Settings, ChevronRight, X, Menu, Sparkles, Tag, Archive, RefreshCw, Package, LogIn, KeyRound
