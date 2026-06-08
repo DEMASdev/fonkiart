@@ -26,7 +26,7 @@ function row(a) {
     "new",
     priceStr,
     salePriceStr,
-    `https://fonkiart.com`,
+    `https://fonkiart.com/?artwork=${a.id}`,
     a.image || (Array.isArray(a.images) ? a.images[0] : "") || "",
     "FonkiArt",
     "Arts & Entertainment > Hobbies & Creative Arts > Artwork"
