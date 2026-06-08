@@ -49,7 +49,10 @@ export default async function handler(req, res) {
     return res.status(500).send(`Database error: ${error.message || JSON.stringify(error)}`);
   }
 
-  const filtered = artworks.filter(a => !a.isCollectorsOnly && !a.collectors_only);
+  const filtered = artworks.filter(a =>
+    !a.isCollectorsOnly && !a.collectors_only &&
+    (parseFloat(a.price) > 0 || parseFloat(a.salePrice) > 0)
+  );
   const csv = [COLS.join(","), ...filtered.map(row)].join("\n");
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");

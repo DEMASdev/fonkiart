@@ -47,9 +47,14 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
       {paged.map(item => (
         <div key={item.id} className="admin-item">
           <img src={item.image} alt={item.title} />
-          <div>
+          <div style={{ flex:1 }}>
             <div className="ai-title">{item.title}</div>
             <div className="ai-meta">{item.category}{item.price?` · $${item.price}`:""}{item.salePrice?` · SALE $${item.salePrice}`:""}{item.medium?` · ${item.medium}`:""}{item.dimensions?` · ${item.dimensions}`:""}{item.isNew?" · NEW":""}{item.isSold?" · SOLD":""}{item.isChildren?" · ❤️ Children":""}</div>
+            {!item.price && !item.isSold && (
+              <div style={{ marginTop:5, display:"inline-flex", alignItems:"center", gap:5, background:"#fff8e1", border:"1px solid #f0c040", borderRadius:3, padding:"3px 8px", fontSize:11, color:"#7a5c00", fontFamily:"'DM Sans',sans-serif" }}>
+                ⚠ No price — excluded from Instagram Shopping feed
+              </div>
+            )}
           </div>
           <div className="ai-btns" style={{ flexDirection:"column", alignItems:"flex-end" }}>
             <div style={{ display:"flex", gap:5, marginBottom:5 }}>
