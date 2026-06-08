@@ -15,7 +15,7 @@ export default function OrdersTab() {
   const blank = { client_email:"", item_title:"", amount:"", status:"pending", notes:"" };
   const [form, setForm] = useState(blank);
   const [manual, setManual] = useState({ first:"", last:"", email:"", phone:"", address:"", city:"", state:"", zip:"", country:"" });
-  const invBlank = { client_email:"", client_name:"", item_title:"", amount:"", notes:"", due_date:"", zelle_contact:"", stripe_link:"", newFirst:"", newLast:"", newEmail:"", newPhone:"", clientMode:"select" };
+  const invBlank = { client_email:"", client_name:"", item_title:"", amount:"", notes:"", due_date:"", zelle_contact:"", stripe_link:"", pay_zelle:true, pay_venmo:false, pay_cashapp:false, pay_stripe:false, newFirst:"", newLast:"", newEmail:"", newPhone:"", clientMode:"select" };
   const [inv, setInv] = useState(invBlank);
   const iv = (k,v) => setInv(x=>({...x,[k]:v}));
   const [invSending, setInvSending] = useState(false);
@@ -28,7 +28,7 @@ export default function OrdersTab() {
   const buildInvoiceEmail = (order, link) => {
     const invNum  = fmtInvNum(order.id);
     const invDate = fmtDate(order.created_at || new Date().toISOString());
-    const dueStr  = order.due_date ? `<tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Due Date</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:13px;color:#1c1a18;text-align:right;">${order.due_date}</td></tr>` : "";
+    const dueStr  = order.due_date ? `<tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Due Date</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:13px;color:#1c1a18;text-align:right;">${fmtDate(order.due_date + "T00:00:00")}</td></tr>` : "";
     const notesStr = order.notes ? `<tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Notes</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:13px;color:#1c1a18;text-align:right;">${order.notes}</td></tr>` : "";
     const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
     return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:40px 32px;background:#fdfcf8;">
@@ -78,12 +78,15 @@ export default function OrdersTab() {
       }
       const token = crypto.randomUUID();
       const link = `${window.location.origin}/?invoice=${token}`;
+      const methods = ["zelle","venmo","cashapp","stripe"].filter(m => inv[`pay_${m}`]).join(",");
       const { data: orderData } = await supabase.from("Orders").insert([{
         client_email: email, client_name: name,
         item_title: inv.item_title, amount: Number(inv.amount),
         notes: inv.notes, due_date: inv.due_date || null,
         status: "pending", invoice_token: token, invoice_approved: false,
-        zelle_contact: inv.zelle_contact, stripe_link: inv.stripe_link,
+        zelle_contact: inv.pay_zelle ? inv.zelle_contact : null,
+        stripe_link: inv.pay_stripe ? inv.stripe_link : null,
+        payment_methods: methods,
       }]).select().single();
       const order = { ...orderData, client_name: name, created_at: new Date().toISOString() };
       await sendEmail({ to: email, subject: `Invoice ${fmtInvNum(order.id)} — ${inv.item_title} · Fonkiart`, htmlContent: buildInvoiceEmail(order, link) });
@@ -218,9 +221,49 @@ export default function OrdersTab() {
                 <div className="fld"><label>Due Date (optional)</label><input type="date" value={inv.due_date} onChange={e=>iv("due_date",e.target.value)} /></div>
               </div>
               <div className="fld"><label>Notes (optional)</label><textarea value={inv.notes} onChange={e=>iv("notes",e.target.value)} placeholder="Any notes visible to the client…" style={{minHeight:60}} /></div>
-              <p style={{fontSize:11,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"14px 0 10px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Payment Options (shown after client approves)</p>
-              <div className="fld"><label>Zelle Contact</label><input value={inv.zelle_contact} onChange={e=>iv("zelle_contact",e.target.value)} placeholder="fonkiart@gmail.com" /></div>
-              <div className="fld"><label>Stripe Link (optional)</label><input value={inv.stripe_link} onChange={e=>iv("stripe_link",e.target.value)} placeholder="https://buy.stripe.com/…" /></div>
+              <p style={{fontSize:11,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"14px 0 12px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Payment Options (shown after client approves)</p>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {/* Zelle */}
+                <div>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:500,color:"var(--ink)"}}>
+                    <input type="checkbox" checked={inv.pay_zelle} onChange={e=>iv("pay_zelle",e.target.checked)} />
+                    💚 Zelle
+                  </label>
+                  {inv.pay_zelle && (
+                    <div className="fld" style={{marginTop:6,marginLeft:24}}>
+                      <input value={inv.zelle_contact} onChange={e=>iv("zelle_contact",e.target.value)} placeholder="fonkiart@gmail.com" />
+                    </div>
+                  )}
+                </div>
+                {/* Venmo */}
+                <div>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:500,color:"var(--ink)"}}>
+                    <input type="checkbox" checked={inv.pay_venmo} onChange={e=>iv("pay_venmo",e.target.checked)} />
+                    🔵 Venmo
+                    <span style={{fontSize:11,color:"var(--muted)",fontWeight:400}}>(handle from Settings)</span>
+                  </label>
+                </div>
+                {/* Cash App */}
+                <div>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:500,color:"var(--ink)"}}>
+                    <input type="checkbox" checked={inv.pay_cashapp} onChange={e=>iv("pay_cashapp",e.target.checked)} />
+                    💵 Cash App
+                    <span style={{fontSize:11,color:"var(--muted)",fontWeight:400}}>(cashtag from Settings)</span>
+                  </label>
+                </div>
+                {/* Stripe */}
+                <div>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:500,color:"var(--ink)"}}>
+                    <input type="checkbox" checked={inv.pay_stripe} onChange={e=>iv("pay_stripe",e.target.checked)} />
+                    💳 Credit Card (Stripe)
+                  </label>
+                  {inv.pay_stripe && (
+                    <div className="fld" style={{marginTop:6,marginLeft:24}}>
+                      <input value={inv.stripe_link} onChange={e=>iv("stripe_link",e.target.value)} placeholder="https://buy.stripe.com/…" />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

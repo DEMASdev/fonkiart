@@ -53,10 +53,12 @@ export default function InvoicePage({ token }) {
     </div>
   );
 
-  const payZelle    = order.zelle_contact;
-  const payStripe   = order.stripe_link;
-  const payVenmo    = settings.venmoHandle;
-  const payCashApp  = settings.cashAppHandle;
+  const methods     = order.payment_methods ? order.payment_methods.split(",") : null;
+  const allowed     = (m) => !methods || methods.includes(m);
+  const payZelle    = allowed("zelle")   ? order.zelle_contact          : null;
+  const payVenmo    = allowed("venmo")   ? settings.venmoHandle          : null;
+  const payCashApp  = allowed("cashapp") ? settings.cashAppHandle        : null;
+  const payStripe   = allowed("stripe")  ? order.stripe_link             : null;
   const hasAnyPayment = payZelle || payStripe || payVenmo || payCashApp;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = `INV-${String(order.id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
