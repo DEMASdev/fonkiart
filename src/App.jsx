@@ -252,10 +252,7 @@ export default function App() {
           ))}
           <div style={{ borderTop:"2px solid var(--border)", margin:"8px 0" }} />
           <button className="nav-item" onClick={() => { setTrackModal(true); setSidebarOpen(false); }}><Package size={16} />Track My Order</button>
-          <button className="nav-item" onClick={() => {
-              if (user?.user_metadata?.role === "buyer") { setPage("buyer-dashboard"); setSidebarOpen(false); }
-              else { setLoginModal(true); setSidebarOpen(false); }
-            }}>
+          <button className="nav-item" onClick={() => { goAccount(); setSidebarOpen(false); }}>
             <LogIn size={16} />
             {user?.user_metadata?.role === "buyer"
               ? user.user_metadata?.name?.split(" ")[0] || "My Account"

@@ -413,7 +413,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .marquee-social { display:none; }
 .marquee-social-icon {
   display:flex;align-items:center;justify-content:center;
-  width:20px;height:20px;border-radius:50%;
+  width:21px;height:21px;border-radius:50%;
   color:#fff;background:transparent;border:1px solid rgba(255,255,255,.5);
   transition:background .2s,border-color .2s;
 }
