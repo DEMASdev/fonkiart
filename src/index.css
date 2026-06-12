@@ -1,6 +1,17 @@
 * { box-sizing:border-box;margin:0;padding:0; }
 body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
-:root { --cream:#fff;--white:#fff;--ink:#1c1a18;--muted:#9e7fa0;--accent:#b8923f;--border:#e8c97a;--gold:#b8923f;--label:#df88cc;--pink:#ffcdf4;--sidebar-bg:#DF88B7;--sidebar:240px;--topbar:58px;--marquee:30px; }
+:root {
+  --cream:#fff;--white:#fff;--ink:#1c1a18;--muted:#9e7fa0;--accent:#b8923f;--border:#e8c97a;--gold:#b8923f;--label:#df88cc;--pink:#ffcdf4;--sidebar-bg:#DF88B7;--sidebar:240px;--topbar:58px;--marquee:30px;
+  /* ── TYPE SCALE — use these for new/updated font-sizes instead of one-off px values ── */
+  --fs-xs:12px;    /* fine print, badges, micro-labels */
+  --fs-sm:13px;    /* secondary/meta text */
+  --fs-base:14px;  /* default body text, buttons, inputs */
+  --fs-md:16px;    /* emphasized body text */
+  --fs-lg:18px;    /* small headings, topbar title */
+  --fs-xl:22px;    /* section headings */
+  --fs-2xl:28px;   /* page headings */
+  --fs-3xl:36px;   /* hero / display titles */
+}
 
 /* ── LAYOUT ── */
 .layout { display:flex;min-height:100vh; }
