@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from "react";
 import { supabase, BREVO_SENDER } from "../lib/supabase";
 import { sendEmail } from "../utils/helpers";
-export default function OrdersTab({ data }) {
+export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
   const [clients, setClients] = useState([]);
@@ -68,6 +68,13 @@ export default function OrdersTab({ data }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!action) return;
+    if (action === "invoice") { setSendingInvoice(true); setAdding(false); }
+    else if (action === "add") { setAdding(true); setSendingInvoice(false); }
+    onActionHandled?.();
+  }, [action]);
 
   const sendInvoice = async () => {
     const email = inv.clientMode === "new" ? inv.newEmail : inv.client_email;

@@ -16,6 +16,8 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
   const [badges, setBadges] = useState({ orders:0, requests:0 });
   const [settingsHover, setSettingsHover] = useState(false);
   const [settingsJumpTo, setSettingsJumpTo] = useState(null);
+  const [ordersHover, setOrdersHover] = useState(false);
+  const [ordersAction, setOrdersAction] = useState(null);
   const isCRM = ["dashboard","leads","orders","requests","clients"].includes(tab);
   const SETTINGS_SECTIONS = [...SETTINGS_FORM_SECTIONS, ["tasks","✅ Pending Tasks"]];
 
@@ -42,10 +44,31 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
         </div>
       </div>
       <div className="crm-tabs">
-        {[["dashboard","Dashboard"],["items","Artworks"],["leads","Leads"],["orders","Orders"],["requests","Requests"],["clients","Clients"]].map(([id,label]) => (
+        {[["dashboard","Dashboard"],["items","Artworks"],["leads","Leads"]].map(([id,label]) => (
           <button key={id} className={`admin-tab${tab===id?" active":""}`} onClick={() => setTabAndSave(id)}>
             {label}
-            {id==="orders"   && <Badge n={badges.orders} />}
+          </button>
+        ))}
+        <div style={{ position:"relative" }} onMouseEnter={() => setOrdersHover(true)} onMouseLeave={() => setOrdersHover(false)}>
+          <button className={`admin-tab${tab==="orders"?" active":""}`} onClick={() => { setTabAndSave("orders"); setOrdersAction(null); }}>
+            Orders<Badge n={badges.orders} />
+          </button>
+          {ordersHover && (
+            <div style={{ position:"absolute", top:"100%", left:0, background:"#fff", border:"1px solid var(--border)", minWidth:180, zIndex:600, boxShadow:"0 4px 16px rgba(0,0,0,.1)", marginTop:1 }}>
+              {[["view","📋 View Orders"],["invoice","✉ Send Invoice"],["add","+ Add Order"]].map(([k,label]) => (
+                <button key={k} onClick={() => { setTabAndSave("orders"); setOrdersAction(k==="view" ? null : k); setOrdersHover(false); }}
+                  style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", fontSize:12, fontFamily:"'DM Sans',sans-serif", color:"var(--ink)", letterSpacing:".04em" }}
+                  onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
+                  onMouseLeave={e => e.currentTarget.style.background="none"}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {[["requests","Requests"],["clients","Clients"]].map(([id,label]) => (
+          <button key={id} className={`admin-tab${tab===id?" active":""}`} onClick={() => setTabAndSave(id)}>
+            {label}
             {id==="requests" && <Badge n={badges.requests} />}
           </button>
         ))}
@@ -70,7 +93,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
           <ErrorBoundary key={tab}>
             {tab==="dashboard" && <DashboardTab goToTab={setTabAndSave} goToSettings={(section) => { setTabAndSave("settings"); setSettingsJumpTo(section); }} />}
             {tab==="leads"    && <LeadsTab discount={data.settings.couponDiscount ?? 15} />}
-            {tab==="orders"   && <OrdersTab data={data} />}
+            {tab==="orders"   && <OrdersTab data={data} action={ordersAction} onActionHandled={() => setOrdersAction(null)} />}
             {tab==="requests" && <RequestsTab />}
             {tab==="clients"  && <ClientsTab />}
           </ErrorBoundary>
