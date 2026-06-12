@@ -23,6 +23,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const [invSent, setInvSent] = useState("");
   const showMsg = (msg) => { setInvSent(msg); setTimeout(() => setInvSent(""), 4000); };
   const [resending, setResending] = useState({});
+  const [invAmountHint, setInvAmountHint] = useState("350");
+  const [formAmountHint, setFormAmountHint] = useState("350");
 
   const fmtInvNum = (id) => `INV-${String(id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
   const fmtDate   = (iso) => iso ? new Date(iso).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
@@ -107,7 +109,11 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       await load();
       setInv(invBlank); setSendingInvoice(false);
       showMsg(`Invoice sent to ${email}`);
-    } catch(e) { console.warn("Send invoice:", e); showMsg("Error sending invoice. Please try again."); }
+    } catch(e) {
+      console.warn("Send invoice:", e);
+      const detail = e?.message || e?.error_description || e?.details || e?.hint;
+      showMsg(detail ? `Error sending invoice: ${detail}` : "Error sending invoice. Please try again.");
+    }
     finally { setInvSending(false); }
   };
 
@@ -233,15 +239,19 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <label>Artwork / Item *</label>
                 <select value="" onChange={e => {
                   const it = catalog.find(i => String(i.id) === e.target.value);
-                  if (it) { iv("item_title", it.title); if (it.salePrice || it.price) iv("amount", String(it.salePrice || it.price)); }
+                  if (it) {
+                    iv("item_title", it.title);
+                    if (it.salePrice || it.price) { iv("amount", String(it.salePrice || it.price)); setInvAmountHint("350"); }
+                    else { iv("amount", ""); setInvAmountHint("REQUEST — SET PRICE HERE"); }
+                  }
                 }} style={{marginBottom:6}}>
                   <option value="">— Select from catalog —</option>
-                  {catalog.map(it => <option key={it.id} value={it.id}>{it.title}{it.isSold?" (Sold)":""}</option>)}
+                  {catalog.map(it => <option key={it.id} value={it.id}>{it.title}{!it.salePrice && !it.price ? " (No price set)" : ""}{it.isSold?" (Sold)":""}</option>)}
                 </select>
                 <input value={inv.item_title} onChange={e=>iv("item_title",e.target.value)} placeholder="Or type a custom item title" />
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div className="fld"><label>Amount (USD) *</label><input type="number" value={inv.amount} onChange={e=>iv("amount",e.target.value)} placeholder="350" /></div>
+                <div className="fld"><label>Amount (USD) *</label><input type="number" value={inv.amount} onChange={e=>iv("amount",e.target.value)} placeholder={invAmountHint} /></div>
                 <div className="fld"><label>Due Date (optional)</label><input type="date" value={inv.due_date} onChange={e=>iv("due_date",e.target.value)} /></div>
               </div>
               <div className="fld"><label>Notes (optional)</label><textarea value={inv.notes} onChange={e=>iv("notes",e.target.value)} placeholder="Any notes visible to the client…" style={{minHeight:60}} /></div>
@@ -373,15 +383,19 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <label>Artwork / Item *</label>
                 <select value="" onChange={e => {
                   const it = catalog.find(i => String(i.id) === e.target.value);
-                  if (it) { f("item_title", it.title); if (it.salePrice || it.price) f("amount", String(it.salePrice || it.price)); }
+                  if (it) {
+                    f("item_title", it.title);
+                    if (it.salePrice || it.price) { f("amount", String(it.salePrice || it.price)); setFormAmountHint("350"); }
+                    else { f("amount", ""); setFormAmountHint("REQUEST — SET PRICE HERE"); }
+                  }
                 }} style={{marginBottom:6}}>
                   <option value="">— Select from catalog —</option>
-                  {catalog.map(it => <option key={it.id} value={it.id}>{it.title}{it.isSold?" (Sold)":""}</option>)}
+                  {catalog.map(it => <option key={it.id} value={it.id}>{it.title}{!it.salePrice && !it.price ? " (No price set)" : ""}{it.isSold?" (Sold)":""}</option>)}
                 </select>
                 <input value={form.item_title} onChange={e=>f("item_title",e.target.value)} placeholder="Or type a custom item title" />
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div className="fld"><label>Amount (USD)</label><input type="number" value={form.amount} onChange={e=>f("amount",e.target.value)} placeholder="350" /></div>
+                <div className="fld"><label>Amount (USD)</label><input type="number" value={form.amount} onChange={e=>f("amount",e.target.value)} placeholder={formAmountHint} /></div>
                 <div className="fld"><label>Status</label>
                   <select value={form.status} onChange={e=>f("status",e.target.value)}>
                     <option value="pending">Pending</option>
