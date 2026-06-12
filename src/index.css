@@ -93,7 +93,6 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   color:var(--label);background:var(--pink);
   padding:4px 12px;border-radius:20px;
 }
-.social-icons-mobile { display:none; }
 .hamburger {
   display:none;background:none;border:none;cursor:pointer;
   color:var(--ink);padding:4px;
@@ -414,8 +413,9 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   .social-icon { width:26px;height:26px; }
   .social-icon svg { width:15px;height:15px; }
   .social-icons-desktop { display:none; }
-  .social-icons-mobile { display:flex;border-left:none;padding-left:0; }
-  .topbar-tag { display:none; }
+    .topbar-tag { display:none; }
+  .marquee-social { display:flex;align-items:center;gap:6px;padding-right:12px;flex-shrink:0; }
+  .marquee-wrap { padding-right:0; }
   .topbar-title span, .topbar-title { font-size:14px; }
   .content { margin-left:0;padding-bottom:80px;overflow-x:hidden; }
   .hamburger { display:flex; }
@@ -499,11 +499,21 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 }
 
 /* ── MARQUEE STRIP ── */
-.marquee-wrap { position:fixed;top:0;left:var(--sidebar);right:0;height:var(--marquee);background:var(--sidebar-bg);z-index:201;overflow:hidden;display:flex;align-items:center; }
+.marquee-wrap { position:fixed;top:0;left:var(--sidebar);right:0;height:var(--marquee);background:var(--sidebar-bg);z-index:201;overflow:hidden;display:flex;align-items:center;justify-content:space-between; }
 @keyframes marqueeScroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-.marquee-track { display:flex;white-space:nowrap;animation:marqueeScroll 26s linear infinite;will-change:transform; }
+.marquee-track { display:flex;white-space:nowrap;animation:marqueeScroll 50s linear infinite;will-change:transform; }
 .marquee-item { font-family:'DM Sans',sans-serif;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.9);padding:0 32px; }
 .marquee-sep { color:rgba(255,255,255,.35);margin:0 4px; }
+
+/* Social icons inside the marquee strip — mobile only (desktop shows them in the top bar) */
+.marquee-social { display:none; }
+.marquee-social-icon {
+  display:flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;
+  color:#fff;background:transparent;border:1px solid rgba(255,255,255,.5);
+  transition:background .2s,border-color .2s;
+}
+.marquee-social-icon:hover { background:rgba(255,255,255,.18);border-color:#fff; }
 
 /* ── FLOATING CART ── */
 .cart-fab-badge { position:absolute;top:-3px;right:-3px;background:#c0392b;color:#fff;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff; }

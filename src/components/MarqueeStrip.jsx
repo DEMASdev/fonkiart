@@ -1,4 +1,6 @@
-export default function MarqueeStrip() {
+import SocialIcons from "./SocialIcons";
+
+export default function MarqueeStrip({ settings }) {
   const msgs = ["Ships Worldwide", "Original Art & Fine Art Prints", "New Works Added Weekly", "Shop the Collection", "Secure Checkout", "Contact Us for Shipping Rates"];
   const items = [...msgs, ...msgs];
   return (
@@ -10,6 +12,7 @@ export default function MarqueeStrip() {
           </span>
         ))}
       </div>
+      <SocialIcons settings={settings} className="marquee-social" iconClassName="marquee-social-icon" size={13} />
     </div>
   );
 }

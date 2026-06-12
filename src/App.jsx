@@ -12,6 +12,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import CookieBanner from "./components/CookieBanner";
 import Footer from "./components/Footer";
 import MarqueeStrip from "./components/MarqueeStrip";
+import SocialIcons from "./components/SocialIcons";
 import FloatingCart from "./components/FloatingCart";
 import MobileBottomNav from "./components/MobileBottomNav";
 import WelcomeModal from "./components/WelcomeModal";
@@ -227,28 +228,6 @@ export default function App() {
 
   const currentNav = NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0];
 
-  const SocialIcons = ({ className = "" }) => (
-    (data.settings.instagram || data.settings.facebook || data.settings.tiktok) && (
-      <div className={`social-icons ${className}`.trim()}>
-        {data.settings.instagram && (
-          <a href={data.settings.instagram} target="_blank" rel="noopener noreferrer" className="social-icon" title="Instagram">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-          </a>
-        )}
-        {data.settings.facebook && (
-          <a href={data.settings.facebook} target="_blank" rel="noopener noreferrer" className="social-icon" title="Facebook">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-          </a>
-        )}
-        {data.settings.tiktok && (
-          <a href={data.settings.tiktok} target="_blank" rel="noopener noreferrer" className="social-icon" title="TikTok">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.79a8.18 8.18 0 004.78 1.52V6.84a4.86 4.86 0 01-1.01-.15z"/></svg>
-          </a>
-        )}
-      </div>
-    )
-  );
-
   return (
     <div className="layout">
       <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
@@ -289,7 +268,7 @@ export default function App() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
               {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:-6, right:-8 }}>{cart.length}</span>}
             </button>
-            <SocialIcons className="social-icons-desktop" />
+            <SocialIcons settings={data.settings} className="social-icons-desktop" />
             {page !== "home" && (
               <div className="topbar-title"><currentNav.Icon size={16} />{currentNav.label}</div>
             )}
@@ -300,7 +279,6 @@ export default function App() {
             </div>
           )}
           <div className="topbar-right">
-            <SocialIcons className="social-icons-mobile" />
             <button onClick={() => user?.user_metadata?.role === "buyer" ? setPage("buyer-dashboard") : setLoginModal(true)} title="My Account" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", display:"flex", alignItems:"center", transition:"color .2s", padding:0, position:"relative" }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               {user && <span style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
@@ -315,7 +293,7 @@ export default function App() {
         {trackModal && <TrackOrderModal onClose={() => setTrackModal(false)} />}
         {loginModal && <BuyerAuthModal onClose={() => setLoginModal(false)} onAdminLogin={() => { setAdminAuthed(true); setPage("admin"); setLoginModal(false); setSidebarOpen(false); }} onClientLogin={(client) => { setCollectorsClient(client); setPage("collectors"); setLoginModal(false); setSidebarOpen(false); }} />}
         <CookieBanner onContact={() => setPage("contact")} />
-        <MarqueeStrip />
+        <MarqueeStrip settings={data.settings} />
 
         {page === "home"     && <HomePage setPage={setPage} data={mergedData} />}
         {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} />}
