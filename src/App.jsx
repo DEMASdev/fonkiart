@@ -51,7 +51,9 @@ export default function App() {
   const [artworks, setArtworks] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("fonkiart-cart") || "[]"); } catch { return []; }
+  });
   const [cartOpen, setCartOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [authModal, setAuthModal] = useState(false);
@@ -118,6 +120,7 @@ export default function App() {
   }, []);
 
   useEffect(() => { localStorage.setItem("fonkiart-page", page); }, [page]);
+  useEffect(() => { localStorage.setItem("fonkiart-cart", JSON.stringify(cart)); }, [cart]);
 
   // Browser back/forward support — without this, navigating into a page
   // (e.g. Admin) never adds a history entry, so the back button leaves the
@@ -249,6 +252,10 @@ export default function App() {
         <div className="topbar">
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
             <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
+            <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--muted)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+              {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:-6, right:-8 }}>{cart.length}</span>}
+            </button>
             {(data.settings.instagram || data.settings.facebook || data.settings.tiktok) && (
               <div className="social-icons">
                 {data.settings.instagram && (

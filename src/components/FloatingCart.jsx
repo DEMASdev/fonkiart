@@ -5,10 +5,6 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
   const [checkout, setCheckout] = useState(null);
   return (
     <>
-      <button className="cart-fab" onClick={() => setCartOpen(o => !o)} title="Shopping Cart">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-        {cart.length > 0 && <span className="cart-fab-badge">{cart.length}</span>}
-      </button>
       {cartOpen && (
         <>
           <div className="cart-overlay" onClick={() => setCartOpen(false)} />
@@ -17,6 +13,11 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
               <span>Your Cart ({cart.length})</span>
               <button onClick={() => setCartOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1, padding:0 }}>✕</button>
             </div>
+            {cart.length > 0 && (
+              <div style={{ padding:"12px 24px", borderBottom:"1px solid var(--border)", background:"var(--cream)", fontSize:12, color:"var(--muted)", letterSpacing:".04em" }}>
+                Ready to <strong style={{ color:"var(--ink)", textTransform:"uppercase", letterSpacing:".1em" }}>Checkout?</strong> Tap "Checkout" on an item below.
+              </div>
+            )}
             <div className="cart-drawer-body">
               {cart.length === 0 ? (
                 <div className="cart-empty">
@@ -36,7 +37,7 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
                       style={{ background:"none", border:"1px solid var(--gold)", color:"var(--gold)", cursor:"pointer", fontSize:10, letterSpacing:".12em", textTransform:"uppercase", padding:"4px 10px", fontFamily:"'DM Sans',sans-serif", marginTop:6, transition:"all .2s" }}
                       onMouseEnter={e=>{e.currentTarget.style.background="var(--gold)";e.currentTarget.style.color="#fff"}}
                       onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="var(--gold)"}}>
-                      Purchase Now
+                      Checkout →
                     </button>
                   </div>
                   <button onClick={() => removeFromCart(item.id)}
@@ -49,7 +50,7 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
             </div>
             {cart.length > 0 && (
               <div className="cart-drawer-foot">
-                <div style={{ fontSize:12, color:"var(--muted)", marginBottom:12 }}>Select an item above to purchase individually.</div>
+                <div style={{ fontSize:12, color:"var(--muted)", marginBottom:12 }}>Each piece checks out individually — tap "Checkout →" above.</div>
                 <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
                   onClick={() => { cart.forEach(i => removeFromCart(i.id)); }}>Clear Cart</button>
               </div>
