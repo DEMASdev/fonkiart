@@ -51,7 +51,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
       <div className="fld" style={{ maxWidth: 320, marginBottom: 18 }}>
         <label>Section</label>
         <select value={section} onChange={e => setSection(e.target.value)}
-          style={{ border:"1px solid var(--border)", padding:"10px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:15, letterSpacing:".04em", background:"#fff", color:"var(--ink)", outline:"none", cursor:"pointer", width:"100%" }}>
+          style={{ border:"1px solid var(--border)", padding:"10px 12px", letterSpacing:".04em", background:"#fff", color:"var(--ink)", outline:"none", cursor:"pointer", width:"100%" }}>
           {SETTINGS_SECTIONS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select>
       </div>
@@ -73,7 +73,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
         <div className="settings-box">
           <h3>🔵 Venmo</h3>
           <div className="fld"><label>Venmo Handle</label><input value={s.venmoHandle||""} onChange={e=>setS({...s,venmoHandle:e.target.value})} placeholder="@fonkiart" /></div>
-          <p style={{fontSize:14,color:"var(--muted)",lineHeight:1.7}}>Leave blank to hide Venmo as a payment option on checkout and invoices.</p>
+          <p style={{color:"var(--muted)",lineHeight:1.7}}>Leave blank to hide Venmo as a payment option on checkout and invoices.</p>
         </div>
       )}
 
@@ -81,7 +81,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
         <div className="settings-box">
           <h3>💵 Cash App</h3>
           <div className="fld"><label>Cash App Cashtag</label><input value={s.cashAppHandle||""} onChange={e=>setS({...s,cashAppHandle:e.target.value})} placeholder="$fonkiart" /></div>
-          <p style={{fontSize:14,color:"var(--muted)",lineHeight:1.7}}>Leave blank to hide Cash App as a payment option on checkout and invoices.</p>
+          <p style={{color:"var(--muted)",lineHeight:1.7}}>Leave blank to hide Cash App as a payment option on checkout and invoices.</p>
         </div>
       )}
 
@@ -92,7 +92,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
             <label>Welcome Coupon Discount (%)</label>
             <input type="number" min="1" max="99" value={s.couponDiscount ?? 15} onChange={e=>setS({...s,couponDiscount:Number(e.target.value)})} style={{maxWidth:120}} />
           </div>
-          <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.7 }}>Applied automatically when a customer uses a coupon code at checkout.</p>
+          <p style={{ color:"var(--muted)", lineHeight:1.7 }}>Applied automatically when a customer uses a coupon code at checkout.</p>
         </div>
       )}
 
@@ -100,14 +100,14 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
         <div className="settings-box">
           <h3>💳 Stripe (Credit Card)</h3>
           <div className="fld"><label>Default Stripe Payment Link</label><input value={s.stripeLink} onChange={e=>setS({...s,stripeLink:e.target.value})} placeholder="https://buy.stripe.com/…" /></div>
-          <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.7 }}>Create links at <strong>dashboard.stripe.com → Payment Links</strong>.</p>
+          <p style={{ color:"var(--muted)", lineHeight:1.7 }}>Create links at <strong>dashboard.stripe.com → Payment Links</strong>.</p>
         </div>
       )}
 
       {section === "social" && (
         <div className="settings-box">
           <h3>📱 Social Media</h3>
-          <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.7, marginBottom:14 }}>Links appear as icons in the top bar. Leave blank to hide.</p>
+          <p style={{ color:"var(--muted)", lineHeight:1.7, marginBottom:14 }}>Links appear as icons in the top bar. Leave blank to hide.</p>
           <div className="fld"><label>Instagram URL</label><input value={s.instagram||""} onChange={e=>setS({...s,instagram:e.target.value})} placeholder="https://instagram.com/fonkiart" /></div>
           <div className="fld"><label>Facebook URL</label><input value={s.facebook||""} onChange={e=>setS({...s,facebook:e.target.value})} placeholder="https://facebook.com/fonkiart" /></div>
           <div className="fld"><label>TikTok URL</label><input value={s.tiktok||""} onChange={e=>setS({...s,tiktok:e.target.value})} placeholder="https://tiktok.com/@fonkiart" /></div>
@@ -127,7 +127,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
           <div style={{ display:"flex", gap:8 }}>
             <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="New category…"
               onKeyDown={e=>e.key==="Enter"&&(()=>{ const c=newCat.trim();if(c&&!cats.includes(c)){setCats([...cats,c]);setNewCat("");}})()}
-              style={{ flex:1, border:"1px solid var(--border)", padding:"8px 12px", fontFamily:"inherit", fontSize:15, outline:"none" }} />
+              style={{ flex:1, border:"1px solid var(--border)", padding:"8px 12px", outline:"none" }} />
             <button className="btn-s" onClick={()=>{ const c=newCat.trim();if(c&&!cats.includes(c)){setCats([...cats,c]);setNewCat("");} }}>Add</button>
           </div>
         </div>
@@ -136,14 +136,14 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
       {section === "nav" && (
         <div className="settings-box">
           <h3>🔗 Navigation Links</h3>
-          <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.7, marginBottom:14 }}>Turn any link off to hide it from the sidebar.</p>
+          <p style={{ color:"var(--muted)", lineHeight:1.7, marginBottom:14 }}>Turn any link off to hide it from the sidebar.</p>
           {NAV_ITEMS.map(({ id, label, Icon }) => {
             const on = navVis[id] !== false;
             return (
               <div key={id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                   <Icon size={14} color="var(--muted)" />
-                  <span style={{ fontSize:15, color:on?"var(--ink)":"var(--muted)" }}>{label}</span>
+                  <span style={{ color:on?"var(--ink)":"var(--muted)" }}>{label}</span>
                 </div>
                 <button onClick={() => toggleNav(id)} style={{ width:42, height:24, borderRadius:12, border:"none", cursor:"pointer", background:on?"var(--sidebar-bg)":"#ddd", transition:"background .2s", position:"relative", flexShrink:0, padding:0 }}>
                   <div style={{ width:18, height:18, borderRadius:"50%", background:"#fff", position:"absolute", top:3, left:on?21:3, transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.2)" }} />

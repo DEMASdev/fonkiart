@@ -39,12 +39,12 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
           {err && <p className="err">{err}</p>}
         </div>
         <button className="btn-p" style={{ width:"100%", marginBottom:12 }} onClick={() => pw===ADMIN_PASSWORD?doAuth():setErr("Incorrect password")}>Enter</button>
-        <button onClick={onBack} style={{ width:"100%", background:"none", border:"1px solid var(--border)", padding:"10px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", transition:"all .2s" }}
+        <button onClick={onBack} style={{ width:"100%", background:"none", border:"1px solid var(--border)", padding:"10px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", transition:"all .2s" }}
           onMouseEnter={e => { e.currentTarget.style.borderColor="var(--ink)"; e.currentTarget.style.color="var(--ink)"; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.color="var(--muted)"; }}>
           ← Back to Site
         </button>
-        <p style={{ textAlign:"center", fontSize:13, color:"var(--muted)", marginTop:14, letterSpacing:".06em" }}>
+        <p style={{ textAlign:"center", color:"var(--muted)", marginTop:14, letterSpacing:".06em" }}>
           Redirecting to site in {countdown}s…
         </p>
       </div>

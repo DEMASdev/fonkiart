@@ -46,25 +46,25 @@ export default function RequestsTab() {
                 <tr>
                   <td>{r.name}</td>
                   <td>{r.email}</td>
-                  <td style={{maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--muted)",fontSize:14}}>{r.message}</td>
+                  <td style={{maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--muted)"}}>{r.message}</td>
                   <td>
-                    <select value={r.status||"new"} onChange={e=>updateStatus(r.id,e.target.value)} style={{border:"1px solid var(--border)",padding:"4px 8px",fontSize:14,background:"#fff",cursor:"pointer"}}>
+                    <select value={r.status||"new"} onChange={e=>updateStatus(r.id,e.target.value)} style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
                       <option value="new">New</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>
                   </td>
                   <td>{r.created_at?new Date(r.created_at).toLocaleDateString():"—"}</td>
                   <td>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>toggleExpand(r.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",fontSize:13,padding:"3px 8px",color:"var(--muted)",fontFamily:"'DM Sans',sans-serif"}}>{expanded[r.id]?"▲":"▼"}</button>
-                      <a href={`mailto:${r.email}?subject=Re: Your Request — Fonkiart&body=Hi ${r.name},%0A%0A`} className="btn-s" style={{fontSize:13,padding:"4px 10px",textDecoration:"none"}}>Reply</a>
+                      <button onClick={()=>toggleExpand(r.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[r.id]?"▲":"▼"}</button>
+                      <a href={`mailto:${r.email}?subject=Re: Your Request — Fonkiart&body=Hi ${r.name},%0A%0A`} className="btn-s" style={{padding:"4px 10px",textDecoration:"none"}}>Reply</a>
                       <button className="btn-d" onClick={()=>deleteRequest(r.id)}>Delete</button>
                     </div>
                   </td>
                 </tr>
                 {expanded[r.id] && (
                   <tr><td colSpan={6} style={{background:"#fffbf5",padding:"12px 14px 16px",borderTop:"none"}}>
-                    <p style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Full Message</p>
-                    <p style={{fontSize:15,color:"var(--ink)",lineHeight:1.75,whiteSpace:"pre-wrap"}}>{r.message}</p>
+                    <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>Full Message</p>
+                    <p style={{color:"var(--ink)",lineHeight:1.75,whiteSpace:"pre-wrap"}}>{r.message}</p>
                   </td></tr>
                 )}
               </Fragment>

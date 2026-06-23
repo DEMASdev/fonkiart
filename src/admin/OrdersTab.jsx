@@ -199,12 +199,12 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       {sendingInvoice && (
         <div className="crm-add-form" style={{maxWidth:"100%",borderTop:"3px solid var(--sidebar-bg)"}}>
           <h3 style={{marginBottom:4}}>Send Invoice to Client</h3>
-          <p style={{fontSize:14,color:"var(--muted)",marginBottom:20}}>Client receives an email with a link to approve and pay.</p>
+          <p style={{color:"var(--muted)",marginBottom:20}}>Client receives an email with a link to approve and pay.</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
 
             {/* LEFT — Client */}
             <div>
-              <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Client</p>
+              <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Client</p>
               <div className="fld">
                 <label>Select Client</label>
                 <select value={inv.clientMode==="new" ? "__new__" : inv.client_email}
@@ -234,7 +234,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
 
             {/* RIGHT — Invoice Details */}
             <div>
-              <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Invoice Details</p>
+              <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Invoice Details</p>
               <div className="fld">
                 <label>Artwork / Item *</label>
                 <select value="" onChange={e => {
@@ -255,11 +255,11 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <div className="fld"><label>Due Date (optional)</label><input type="date" value={inv.due_date} onChange={e=>iv("due_date",e.target.value)} /></div>
               </div>
               <div className="fld"><label>Notes (optional)</label><textarea value={inv.notes} onChange={e=>iv("notes",e.target.value)} placeholder="Any notes visible to the client…" style={{minHeight:60}} /></div>
-              <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"14px 0 12px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Payment Options (shown after client approves)</p>
+              <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"14px 0 12px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Payment Options (shown after client approves)</p>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {/* Zelle */}
                 <div>
-                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,fontWeight:500,color:"var(--ink)"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_zelle} onChange={e=>iv("pay_zelle",e.target.checked)} />
                     💚 Zelle
                   </label>
@@ -271,23 +271,23 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 </div>
                 {/* Venmo */}
                 <div>
-                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,fontWeight:500,color:"var(--ink)"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_venmo} onChange={e=>iv("pay_venmo",e.target.checked)} />
                     🔵 Venmo
-                    <span style={{fontSize:13,color:"var(--muted)",fontWeight:400}}>(handle from Settings)</span>
+                    <span style={{color:"var(--muted)",fontWeight:400}}>(handle from Settings)</span>
                   </label>
                 </div>
                 {/* Cash App */}
                 <div>
-                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,fontWeight:500,color:"var(--ink)"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_cashapp} onChange={e=>iv("pay_cashapp",e.target.checked)} />
                     💵 Cash App
-                    <span style={{fontSize:13,color:"var(--muted)",fontWeight:400}}>(cashtag from Settings)</span>
+                    <span style={{color:"var(--muted)",fontWeight:400}}>(cashtag from Settings)</span>
                   </label>
                 </div>
                 {/* Stripe */}
                 <div>
-                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,fontWeight:500,color:"var(--ink)"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_stripe} onChange={e=>iv("pay_stripe",e.target.checked)} />
                     💳 Credit Card (Stripe)
                   </label>
@@ -305,7 +305,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <button className="btn-p" onClick={sendInvoice} disabled={invSending}>
               {invSending ? "Sending…" : "Send Invoice →"}
             </button>
-            <p style={{fontSize:14,color:"var(--muted)",margin:0}}>A payment link will be emailed to the client automatically.</p>
+            <p style={{color:"var(--muted)",margin:0}}>A payment link will be emailed to the client automatically.</p>
           </div>
         </div>
       )}
@@ -317,7 +317,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
 
             {/* LEFT — Client */}
             <div>
-              <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Client</p>
+              <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Client</p>
               <div className="fld">
                 <label>Select Client</label>
                 <select value={clientMode==="manual" ? "__manual__" : form.client_email}
@@ -335,7 +335,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
               </div>
               {selectedClient && missingFields.length > 0 && (
                 <div style={{background:"#fffbf0",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:8}}>
-                  <p style={{fontSize:14,color:"var(--muted)",marginBottom:12}}>⚠ Some info is missing for this client. Fill in what you know:</p>
+                  <p style={{color:"var(--muted)",marginBottom:12}}>⚠ Some info is missing for this client. Fill in what you know:</p>
                   {missingFields.includes("phone") && <div className="fld"><label>Phone</label><input value={clientUpdate.phone||""} onChange={e=>cu("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>}
                   {missingFields.includes("address") && <div className="fld"><label>Street Address</label><input value={clientUpdate.address||""} onChange={e=>cu("address",e.target.value)} placeholder="123 Main St" /></div>}
                   {(missingFields.includes("city")||missingFields.includes("state")) && (
@@ -362,7 +362,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     <div className="fld"><label>Email *</label><input value={manual.email} onChange={e=>m("email",e.target.value)} placeholder="jane@email.com" /></div>
                     <div className="fld"><label>Phone</label><input value={manual.phone} onChange={e=>m("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
                   </div>
-                  <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"12px 0 10px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Shipping Address</p>
+                  <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"12px 0 10px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Shipping Address</p>
                   <div className="fld"><label>Street Address</label><input value={manual.address} onChange={e=>m("address",e.target.value)} placeholder="123 Main St" /></div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                     <div className="fld"><label>City</label><input value={manual.city} onChange={e=>m("city",e.target.value)} placeholder="Miami" /></div>
@@ -378,7 +378,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
 
             {/* RIGHT — Order Details */}
             <div>
-              <p style={{fontSize:13,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Order Details</p>
+              <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:14,borderBottom:"1px solid var(--border)",paddingBottom:8}}>Order Details</p>
               <div className="fld">
                 <label>Artwork / Item *</label>
                 <select value="" onChange={e => {
@@ -419,7 +419,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         <div style={{display:"flex",gap:4,flexShrink:0}}>
           {[["all","All"],["pending","Pending"],["confirmed","Confirmed"],["shipped","Shipped"],["delivered","Delivered"]].map(([val,label])=>(
             <button key={val} onClick={()=>setStatusFilter(val)}
-              style={{border:`1px solid ${statusFilter===val?"var(--ink)":"var(--border)"}`,background:statusFilter===val?"var(--ink)":"none",color:statusFilter===val?"#fff":"var(--muted)",padding:"5px 12px",fontSize:13,letterSpacing:".08em",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              style={{border:`1px solid ${statusFilter===val?"var(--ink)":"var(--border)"}`,background:statusFilter===val?"var(--ink)":"none",color:statusFilter===val?"#fff":"var(--muted)",padding:"5px 12px",letterSpacing:".08em",cursor:"pointer"}}>
               {label}{statusFilter!==val&&statusCounts[val]!==undefined?` (${statusCounts[val]})`:statusFilter===val?` (${statusCounts[val]})`:""}</button>
           ))}
         </div>
@@ -431,7 +431,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <tbody>{filtered.map(o=>(
               <Fragment key={o.id}>
                 <tr>
-                  <td style={{fontFamily:"monospace",fontSize:13,color:"var(--muted)",whiteSpace:"nowrap"}}>
+                  <td style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div>{o.invoice_token ? fmtInvNum(o.id) : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (
                       <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
@@ -440,14 +440,14 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     )}
                   </td>
                   <td>
-                    {(o.client_name || clientName(o.client_email)) && <div style={{fontWeight:500,fontSize:15}}>{o.client_name || clientName(o.client_email)}</div>}
-                    <div style={{fontSize:13,color:"var(--muted)"}}>{o.client_email}</div>
+                    {(o.client_name || clientName(o.client_email)) && <div style={{fontWeight:500}}>{o.client_name || clientName(o.client_email)}</div>}
+                    <div style={{color:"var(--muted)"}}>{o.client_email}</div>
                   </td>
                   <td>{o.item_title}</td>
                   <td>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
                   <td>
                     <select value={o.status||"pending"} onChange={e=>updateStatus(o.id,e.target.value)}
-                      style={{border:"1px solid var(--border)",padding:"4px 8px",fontSize:14,background:"#fff",cursor:"pointer"}}>
+                      style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
                       <option value="pending">Pending</option><option value="confirmed">Confirmed</option>
                       <option value="shipped">Shipped</option><option value="delivered">Delivered</option>
                     </select>
@@ -455,14 +455,14 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <td>{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                   <td>
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                      {o.notes && <button onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",fontSize:13,padding:"3px 8px",color:"var(--muted)",fontFamily:"'DM Sans',sans-serif"}}>{expanded[o.id]?"▲":"▼"}</button>}
+                      {o.notes && <button onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                       {o.invoice_token && (<>
                         <button onClick={()=>{ const link=`${window.location.origin}/?invoice=${o.invoice_token}`; navigator.clipboard.writeText(link).then(()=>alert("Invoice link copied!")); }}
-                          style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",fontSize:13,padding:"3px 8px",color:"var(--muted)",fontFamily:"'DM Sans',sans-serif"}}>
+                          style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>
                           🔗 Link
                         </button>
                         <button onClick={()=>resendInvoice(o)} disabled={resending[o.id]}
-                          style={{background:"none",border:"1px solid var(--border)",cursor:resending[o.id]?"not-allowed":"pointer",fontSize:13,padding:"3px 8px",color:"var(--muted)",fontFamily:"'DM Sans',sans-serif",opacity:resending[o.id]?0.5:1}}>
+                          style={{background:"none",border:"1px solid var(--border)",cursor:resending[o.id]?"not-allowed":"pointer",padding:"3px 8px",color:"var(--muted)",opacity:resending[o.id]?0.5:1}}>
                           {resending[o.id] ? "…" : "✉ Resend"}
                         </button>
                       </>)}
@@ -473,8 +473,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 {expanded[o.id] && o.notes && (
                   <tr>
                     <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px",borderTop:"none"}}>
-                      <p style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:6}}>Order Details</p>
-                      <p style={{fontSize:15,color:"var(--ink)",lineHeight:1.7}}>{o.notes}</p>
+                      <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:6}}>Order Details</p>
+                      <p style={{color:"var(--ink)",lineHeight:1.7}}>{o.notes}</p>
                     </td>
                   </tr>
                 )}

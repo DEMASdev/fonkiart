@@ -96,14 +96,14 @@ export default function ClientsTab() {
                   <td>{c.email}</td>
                   <td>{c.phone||"—"}</td>
                   <td style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
-                  <td>{c.password ? <span style={{color:"#2d6a4f",fontSize:13,fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa",fontSize:13}}>—</span>}</td>
+                  <td>{c.password ? <span style={{color:"#2d6a4f",fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa"}}>—</span>}</td>
                   <td>{c.created_at?new Date(c.created_at).toLocaleDateString():"—"}</td>
                   <td>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      <button className="btn-s" style={{fontSize:13,padding:"4px 10px"}} onClick={()=>toggleHistory(c)}>
+                      <button className="btn-s" style={{padding:"4px 10px"}} onClick={()=>toggleHistory(c)}>
                         {expandedClientId===c.id ? "▲ Hide" : "▼ Orders"}
                       </button>
-                      <button className="btn-s" style={{fontSize:13,padding:"4px 10px"}} onClick={()=>startEdit(c)}>Edit</button>
+                      <button className="btn-s" style={{padding:"4px 10px"}} onClick={()=>startEdit(c)}>Edit</button>
                       <button className="btn-d" onClick={()=>deleteClient(c.id)}>Delete</button>
                     </div>
                   </td>
@@ -111,26 +111,26 @@ export default function ClientsTab() {
                 {expandedClientId===c.id && (
                   <tr>
                     <td colSpan={6} style={{background:"#fffbf5",padding:"12px 14px 16px",borderTop:"none"}}>
-                      <p style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>Order History</p>
+                      <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>Order History</p>
                       {!clientOrders[c.id]
-                        ? <p style={{fontSize:15,color:"var(--muted)"}}>Loading…</p>
+                        ? <p style={{color:"var(--muted)"}}>Loading…</p>
                         : clientOrders[c.id].length === 0
-                          ? <p style={{fontSize:15,color:"var(--muted)"}}>No orders yet.</p>
+                          ? <p style={{color:"var(--muted)"}}>No orders yet.</p>
                           : <table style={{width:"100%",borderCollapse:"collapse"}}>
                               <thead>
                                 <tr>
                                   {["Artwork","Amount","Status","Date"].map(h=>(
-                                    <th key={h} style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",padding:"4px 12px",textAlign:"left",borderBottom:"1px solid var(--border)"}}>{h}</th>
+                                    <th key={h} style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",padding:"4px 12px",textAlign:"left",borderBottom:"1px solid var(--border)"}}>{h}</th>
                                   ))}
                                 </tr>
                               </thead>
                               <tbody>
                                 {clientOrders[c.id].map(o=>(
                                   <tr key={o.id}>
-                                    <td style={{padding:"8px 12px",fontSize:15}}>{o.item_title}</td>
-                                    <td style={{padding:"8px 12px",fontSize:15}}>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
-                                    <td style={{padding:"8px 12px",fontSize:15,textTransform:"capitalize"}}>{o.status||"pending"}</td>
-                                    <td style={{padding:"8px 12px",fontSize:15}}>{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
+                                    <td style={{padding:"8px 12px"}}>{o.item_title}</td>
+                                    <td style={{padding:"8px 12px"}}>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
+                                    <td style={{padding:"8px 12px",textTransform:"capitalize"}}>{o.status||"pending"}</td>
+                                    <td style={{padding:"8px 12px"}}>{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                                   </tr>
                                 ))}
                               </tbody>

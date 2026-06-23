@@ -38,9 +38,9 @@ export default function DashboardTab({ goToTab, goToSettings }) {
 
   const Stat = ({ label, value, sub, color }) => (
     <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", borderTop:`3px solid ${color||"var(--gold)"}` }}>
-      <div style={{ fontSize:13, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>{label}</div>
+      <div style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>{label}</div>
       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:42, fontWeight:300, color:"var(--ink)", lineHeight:1 }}>{value}</div>
-      {sub && <div style={{ fontSize:14, color:"var(--muted)", marginTop:8 }}>{sub}</div>}
+      {sub && <div style={{ color:"var(--muted)", marginTop:8 }}>{sub}</div>}
     </div>
   );
 
@@ -48,7 +48,7 @@ export default function DashboardTab({ goToTab, goToSettings }) {
     <div className="crm-wrap">
       <div className="crm-header">
         <span className="crm-title">Dashboard</span>
-        <button className="btn-s" style={{ display:"flex", alignItems:"center", gap:6, fontSize:14 }} onClick={() => setTick(t => t+1)}>
+        <button className="btn-s" style={{ display:"flex", alignItems:"center", gap:6 }} onClick={() => setTick(t => t+1)}>
           <RefreshCw size={13} /> Refresh
         </button>
       </div>
@@ -57,11 +57,11 @@ export default function DashboardTab({ goToTab, goToSettings }) {
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ fontSize:20 }}>🔑</span>
             <div>
-              <div style={{ fontSize:15, fontWeight:600, color:"var(--ink)", marginBottom:2 }}>{stats.collectorRequests.length} Collector{stats.collectorRequests.length > 1 ? "s" : ""} Waiting for Access</div>
-              <div style={{ fontSize:14, color:"var(--muted)" }}>{stats.collectorRequests.slice(0,3).map(r => r.email).join(", ")}{stats.collectorRequests.length > 3 ? ` +${stats.collectorRequests.length - 3} more` : ""}</div>
+              <div style={{ fontWeight:600, color:"var(--ink)", marginBottom:2 }}>{stats.collectorRequests.length} Collector{stats.collectorRequests.length > 1 ? "s" : ""} Waiting for Access</div>
+              <div style={{ color:"var(--muted)" }}>{stats.collectorRequests.slice(0,3).map(r => r.email).join(", ")}{stats.collectorRequests.length > 3 ? ` +${stats.collectorRequests.length - 3} more` : ""}</div>
             </div>
           </div>
-          <button onClick={() => goToTab("leads")} style={{ background:"var(--gold)", color:"#fff", border:"none", padding:"8px 18px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:13, letterSpacing:".1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>View in Leads →</button>
+          <button onClick={() => goToTab("leads")} style={{ background:"var(--gold)", color:"#fff", border:"none", padding:"8px 18px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>View in Leads →</button>
         </div>
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:2, marginBottom:2 }}>
@@ -73,12 +73,12 @@ export default function DashboardTab({ goToTab, goToSettings }) {
         {stats.newRequests > 0 && <Stat label="New Requests" value={stats.newRequests} sub="Need attention" color="#c0392b" />}
       </div>
       <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", marginTop:2 }}>
-        <p style={{ fontSize:13, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:18 }}>Orders by Status</p>
+        <p style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:18 }}>Orders by Status</p>
         <div style={{ display:"flex", gap:32, flexWrap:"wrap" }}>
           {[{label:"Pending",value:stats.pending,color:"#f0d5a8"},{label:"Confirmed",value:stats.confirmed,color:"#1e3a52"},{label:"Shipped",value:stats.shipped,color:"#2d6a4f"},{label:"Delivered",value:stats.delivered,color:"var(--gold)"}].map(({ label, value, color }) => (
             <div key={label} style={{ display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:color, flexShrink:0, border:"1px solid rgba(0,0,0,.1)" }} />
-              <span style={{ fontSize:15, color:"var(--muted)" }}>{label}</span>
+              <span style={{ color:"var(--muted)" }}>{label}</span>
               <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"var(--ink)" }}>{value}</span>
             </div>
           ))}

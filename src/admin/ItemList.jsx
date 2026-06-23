@@ -18,7 +18,7 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
     await deleteArtwork(id);
   };
 
-  if (!data.items.length) return <p style={{ color:"var(--muted)", fontSize:15 }}>No artworks yet. Add your first piece.</p>;
+  if (!data.items.length) return <p style={{ color:"var(--muted)" }}>No artworks yet. Add your first piece.</p>;
 
   const q = search.toLowerCase();
   const filtered = q ? data.items.filter(i =>
@@ -39,10 +39,10 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
           placeholder="Search by title or category…"
           value={search}
           onChange={e => handleSearch(e.target.value)}
-          style={{ flex:1, border:"1px solid var(--border)", padding:"7px 11px", fontFamily:"'DM Sans',sans-serif", fontSize:15, outline:"none" }}
+          style={{ flex:1, border:"1px solid var(--border)", padding:"7px 11px", outline:"none" }}
         />
         {search && <button className="btn-s" onClick={() => handleSearch("")}>Clear</button>}
-        <span style={{ fontSize:14, color:"var(--muted)", whiteSpace:"nowrap" }}>{filtered.length} result{filtered.length!==1?"s":""}</span>
+        <span style={{ color:"var(--muted)", whiteSpace:"nowrap" }}>{filtered.length} result{filtered.length!==1?"s":""}</span>
       </div>
       {paged.map(item => (
         <div key={item.id} className="admin-item">
@@ -53,10 +53,10 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
             {!item.price && !item.isSold && (
               <div style={{ marginTop:7, background:"#fffbf0", border:"1px solid #e8c840", borderLeft:"3px solid #e8b800", borderRadius:4, padding:"7px 11px", fontFamily:"'DM Sans',sans-serif" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                  <span style={{ fontSize:15 }}>⚠</span>
-                  <span style={{ fontSize:14, fontWeight:600, color:"#6b4c00", letterSpacing:".02em" }}>Missing Price — Not listed on Instagram Shopping</span>
+                  <span>⚠</span>
+                  <span style={{ fontWeight:600, color:"#6b4c00", letterSpacing:".02em" }}>Missing Price — Not listed on Instagram Shopping</span>
                 </div>
-                <div style={{ fontSize:15, color:"#8a6a20", lineHeight:1.6 }}>
+                <div style={{ color:"#8a6a20", lineHeight:1.6 }}>
                   Meta requires a price for every product in the catalog. Without it, this piece is excluded from the Instagram Shopping feed and cannot be tagged in posts or discovered through the Shop tab. Add a price to make it shoppable.
                 </div>
               </div>
@@ -66,11 +66,11 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
             <div style={{ display:"flex", gap:5, marginBottom:5 }}>
               <button
                 onClick={async () => { await patchArtwork(item.id, { isNew: !item.isNew }); }}
-                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isNew?"var(--sidebar-bg)":"var(--border)", background:item.isNew?"var(--sidebar-bg)":"transparent", color:item.isNew?"var(--gold)":"var(--muted)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", transition:"all .2s", borderRadius:2 }}
+                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isNew?"var(--sidebar-bg)":"var(--border)", background:item.isNew?"var(--sidebar-bg)":"transparent", color:item.isNew?"var(--gold)":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
               >New</button>
               <button
                 onClick={async () => { await patchArtwork(item.id, { isSold: !item.isSold }); }}
-                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isSold?"#c0392b":"var(--border)", background:item.isSold?"#c0392b":"transparent", color:item.isSold?"#fff":"var(--muted)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", transition:"all .2s", borderRadius:2 }}
+                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isSold?"#c0392b":"var(--border)", background:item.isSold?"#c0392b":"transparent", color:item.isSold?"#fff":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
               >Sold</button>
             </div>
             <div style={{ display:"flex", gap:5 }}>
@@ -83,7 +83,7 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
       {totalPages > 1 && (
         <div style={{ display:"flex", gap:6, justifyContent:"center", marginTop:16 }}>
           <button className="btn-s" onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}>‹ Prev</button>
-          <span style={{ fontSize:14, color:"var(--muted)", alignSelf:"center" }}>Page {page} of {totalPages}</span>
+          <span style={{ color:"var(--muted)", alignSelf:"center" }}>Page {page} of {totalPages}</span>
           <button className="btn-s" onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}>Next ›</button>
         </div>
       )}
