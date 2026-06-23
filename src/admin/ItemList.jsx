@@ -56,7 +56,7 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
                   <span style={{ fontSize:15 }}>⚠</span>
                   <span style={{ fontSize:14, fontWeight:600, color:"#6b4c00", letterSpacing:".02em" }}>Missing Price — Not listed on Instagram Shopping</span>
                 </div>
-                <div style={{ fontSize:13, color:"#8a6a20", lineHeight:1.6 }}>
+                <div style={{ fontSize:15, color:"#8a6a20", lineHeight:1.6 }}>
                   Meta requires a price for every product in the catalog. Without it, this piece is excluded from the Instagram Shopping feed and cannot be tagged in posts or discovered through the Shop tab. Add a price to make it shoppable.
                 </div>
               </div>
