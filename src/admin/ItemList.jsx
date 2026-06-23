@@ -18,7 +18,7 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
     await deleteArtwork(id);
   };
 
-  if (!data.items.length) return <p style={{ color:"var(--muted)", fontSize:14 }}>No artworks yet. Add your first piece.</p>;
+  if (!data.items.length) return <p style={{ color:"var(--muted)", fontSize:15 }}>No artworks yet. Add your first piece.</p>;
 
   const q = search.toLowerCase();
   const filtered = q ? data.items.filter(i =>
@@ -39,10 +39,10 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
           placeholder="Search by title or category…"
           value={search}
           onChange={e => handleSearch(e.target.value)}
-          style={{ flex:1, border:"1px solid var(--border)", padding:"7px 11px", fontFamily:"'DM Sans',sans-serif", fontSize:13, outline:"none" }}
+          style={{ flex:1, border:"1px solid var(--border)", padding:"7px 11px", fontFamily:"'DM Sans',sans-serif", fontSize:15, outline:"none" }}
         />
         {search && <button className="btn-s" onClick={() => handleSearch("")}>Clear</button>}
-        <span style={{ fontSize:12, color:"var(--muted)", whiteSpace:"nowrap" }}>{filtered.length} result{filtered.length!==1?"s":""}</span>
+        <span style={{ fontSize:14, color:"var(--muted)", whiteSpace:"nowrap" }}>{filtered.length} result{filtered.length!==1?"s":""}</span>
       </div>
       {paged.map(item => (
         <div key={item.id} className="admin-item">
@@ -83,11 +83,10 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
       {totalPages > 1 && (
         <div style={{ display:"flex", gap:6, justifyContent:"center", marginTop:16 }}>
           <button className="btn-s" onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}>‹ Prev</button>
-          <span style={{ fontSize:12, color:"var(--muted)", alignSelf:"center" }}>Page {page} of {totalPages}</span>
+          <span style={{ fontSize:14, color:"var(--muted)", alignSelf:"center" }}>Page {page} of {totalPages}</span>
           <button className="btn-s" onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}>Next ›</button>
         </div>
       )}
     </>
   );
 }
-

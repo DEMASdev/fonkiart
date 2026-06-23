@@ -74,13 +74,13 @@ export default function LeadsTab({ discount = 15 }) {
       {creating && (
         <div className="crm-add-form">
           <h3>Create a Coupon</h3>
-          <p style={{fontSize:13,color:"var(--muted)",marginBottom:16,lineHeight:1.6}}>Generate a unique {discount}% off coupon code for any email. The code will appear in the leads list and can be shared manually or emailed directly.</p>
+          <p style={{fontSize:15,color:"var(--muted)",marginBottom:16,lineHeight:1.6}}>Generate a unique {discount}% off coupon code for any email. The code will appear in the leads list and can be shared manually or emailed directly.</p>
           <div className="fld"><label>Customer Email *</label>
             <input value={newEmail} onChange={e=>{setNewEmail(e.target.value);setCreateMsg(null);}} placeholder="customer@email.com" onKeyDown={e=>e.key==="Enter"&&createCoupon()} />
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
             <input type="checkbox" id="sendCouponEmail" checked={couponEmailEnabled} onChange={e=>setCouponEmailEnabled(e.target.checked)} style={{width:"auto"}} />
-            <label htmlFor="sendCouponEmail" style={{textTransform:"none",fontSize:13,letterSpacing:0,color:"var(--ink)"}}>Email the coupon to this customer</label>
+            <label htmlFor="sendCouponEmail" style={{textTransform:"none",fontSize:15,letterSpacing:0,color:"var(--ink)"}}>Email the coupon to this customer</label>
           </div>
           {createMsg && <div className={createMsg.type==="ok"?"ok-msg":"warn-msg"} style={{marginBottom:14}}>{createMsg.text}</div>}
           <button className="btn-p" onClick={createCoupon} disabled={createMsg?.type==="loading"}>Generate & Save</button>
@@ -91,7 +91,7 @@ export default function LeadsTab({ discount = 15 }) {
         <div style={{display:"flex",gap:4,flexShrink:0}}>
           {[["all",`All (${leads.length})`],["unused",`Unused (${unusedCount})`],["used",`Used (${usedCount})`]].map(([val,label])=>(
             <button key={val} onClick={()=>setCouponFilter(val)}
-              style={{border:`1px solid ${couponFilter===val?"var(--ink)":"var(--border)"}`,background:couponFilter===val?"var(--ink)":"none",color:couponFilter===val?"#fff":"var(--muted)",padding:"5px 12px",fontSize:11,letterSpacing:".08em",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+              style={{border:`1px solid ${couponFilter===val?"var(--ink)":"var(--border)"}`,background:couponFilter===val?"var(--ink)":"none",color:couponFilter===val?"#fff":"var(--muted)",padding:"5px 12px",fontSize:13,letterSpacing:".08em",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
               {label}
             </button>
           ))}
@@ -104,7 +104,7 @@ export default function LeadsTab({ discount = 15 }) {
             <tbody>{filtered.map(l => (
               <tr key={l.id}>
                 <td>{l.email}</td>
-                <td style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,letterSpacing:".05em"}}>{l.coupon_code||"—"}</td>
+                <td style={{fontSize:15,letterSpacing:".05em"}}>{l.coupon_code||"—"}</td>
                 <td>{l.source||"—"}</td>
                 <td>
                   {l.coupon_used

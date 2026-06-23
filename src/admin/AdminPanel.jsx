@@ -57,7 +57,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
             <div style={{ position:"absolute", top:"100%", left:0, background:"#fff", border:"1px solid var(--border)", minWidth:180, zIndex:600, boxShadow:"0 4px 16px rgba(0,0,0,.1)", marginTop:1 }}>
               {[["view","📋 View Orders"],["invoice","✉ Send Invoice"],["add","+ Add Order"]].map(([k,label]) => (
                 <button key={k} onClick={() => { setTabAndSave("orders"); setOrdersAction(k==="view" ? null : k); setOrdersHover(false); }}
-                  style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", fontSize:12, fontFamily:"'DM Sans',sans-serif", color:"var(--ink)", letterSpacing:".04em" }}
+                  style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", fontSize:14, fontFamily:"'DM Sans',sans-serif", color:"var(--ink)", letterSpacing:".04em" }}
                   onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
                   onMouseLeave={e => e.currentTarget.style.background="none"}>
                   {label}
@@ -78,7 +78,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
             <div style={{ position:"absolute", top:"100%", left:0, background:"#fff", border:"1px solid var(--border)", minWidth:200, zIndex:600, boxShadow:"0 4px 16px rgba(0,0,0,.1)", marginTop:1 }}>
               {SETTINGS_SECTIONS.map(([k, label]) => (
                 <button key={k} onClick={() => { if(k==="tasks"){ setTabAndSave("dashboard"); setSettingsHover(false); } else { setTabAndSave("settings"); setSettingsJumpTo(k); setSettingsHover(false); } }}
-                  style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", fontSize:12, fontFamily:"'DM Sans',sans-serif", color:"var(--ink)", letterSpacing:".04em" }}
+                  style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", fontSize:14, fontFamily:"'DM Sans',sans-serif", color:"var(--ink)", letterSpacing:".04em" }}
                   onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
                   onMouseLeave={e => e.currentTarget.style.background="none"}>
                   {label}
@@ -109,7 +109,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
             <h2>
               {data.items.filter(i => !i.isSold).length} Active
               {data.items.filter(i => i.isSold).length > 0 &&
-                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:300, color:"var(--muted)", marginLeft:10 }}>
+                <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:300, color:"var(--muted)", marginLeft:10 }}>
                   · {data.items.filter(i => i.isSold).length} Sold
                 </span>
               }

@@ -84,8 +84,8 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
       )}
 
       <div style={{marginBottom:16}}>
-        <label style={{display:"block",fontSize:11,letterSpacing:".12em",textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>
-          Photos <span style={{fontWeight:300,textTransform:"none",letterSpacing:0,fontSize:11}}>(click to preview)</span>
+        <label style={{display:"block",fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>
+          Photos <span style={{fontWeight:300,textTransform:"none",letterSpacing:0,fontSize:13}}>(click to preview)</span>
         </label>
         <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
           {form.images.map((url, i) => (
@@ -97,12 +97,12 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
               <button onClick={e => { e.stopPropagation(); handleRemovePhoto(i); }} style={{
                 position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",
                 background:"#c0392b",color:"#fff",border:"2px solid #fff",cursor:"pointer",
-                fontSize:11,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,zIndex:2
+                fontSize:13,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,zIndex:2
               }}>✕</button>
               {i===0 && <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,textAlign:"center",letterSpacing:".08em",padding:"4px 0",pointerEvents:"none"}}>MAIN</div>}
               <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0)",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .2s",pointerEvents:"none"}}
                 className="img-hover-overlay">
-                <span style={{color:"#fff",fontSize:11,letterSpacing:".1em",opacity:0,transition:"opacity .2s"}}>🔍 Preview</span>
+                <span style={{color:"#fff",fontSize:13,letterSpacing:".1em",opacity:0,transition:"opacity .2s"}}>🔍 Preview</span>
               </div>
             </div>
           ))}
@@ -118,13 +118,13 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
             >
               {uploading ? <span style={{fontSize:28}}>⏳</span> : <>
                 <span style={{fontSize:36,lineHeight:1}}>+</span>
-                <span style={{fontSize:11,letterSpacing:".1em",textTransform:"uppercase"}}>Add Photo</span>
+                <span style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase"}}>Add Photo</span>
               </>}
             </button>
           )}
         </div>
-        {uploading && <p style={{fontSize:12,color:"var(--muted)",marginTop:8}}>Uploading photo…</p>}
-        {form.images.length > 1 && <p style={{fontSize:11,color:"var(--muted)",marginTop:8}}>First photo is the main gallery image. Remove and re-add to change order.</p>}
+        {uploading && <p style={{fontSize:14,color:"var(--muted)",marginTop:8}}>Uploading photo…</p>}
+        {form.images.length > 1 && <p style={{fontSize:13,color:"var(--muted)",marginTop:8}}>First photo is the main gallery image. Remove and re-add to change order.</p>}
         <input ref={multiFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleAddPhoto} />
       </div>
 
@@ -147,7 +147,7 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
                   f("category", cat); setNewCatInput("");
                 }
               }}
-              style={{flex:1,border:"1px solid var(--border)",padding:"8px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none"}} />
+              style={{flex:1,border:"1px solid var(--border)",padding:"8px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:15,outline:"none"}} />
             <button className="btn-p" style={{padding:"8px 16px",flexShrink:0}} onClick={() => {
               const cat = newCatInput.trim();
               if (!cat || data.categories.includes(cat)) return;
@@ -166,25 +166,25 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
       <div className="fld"><label>Sale Price (USD — leave blank if not on sale)</label><input type="number" value={form.salePrice||""} onChange={e=>f("salePrice",e.target.value)} placeholder="250" /></div>
       <div className="fld" style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="checkbox" id="isNew" checked={!!form.isNew} onChange={e=>f("isNew",e.target.checked)} style={{width:"auto"}} />
-        <label htmlFor="isNew" style={{textTransform:"none",fontSize:13,letterSpacing:0}}>Mark as New Collection</label>
+        <label htmlFor="isNew" style={{textTransform:"none",fontSize:15,letterSpacing:0}}>Mark as New Collection</label>
       </div>
       <div className="fld" style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="checkbox" id="isSold" checked={!!form.isSold} onChange={e=>f("isSold",e.target.checked)} style={{width:"auto"}} />
-        <label htmlFor="isSold" style={{textTransform:"none",fontSize:13,letterSpacing:0,color:"#c0392b"}}>Mark as Sold (shows "Sold Out" badge — stays visible until deleted)</label>
+        <label htmlFor="isSold" style={{textTransform:"none",fontSize:15,letterSpacing:0,color:"#c0392b"}}>Mark as Sold (shows "Sold Out" badge — stays visible until deleted)</label>
       </div>
       <div className="fld" style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="checkbox" id="isChildren" checked={!!form.isChildren} onChange={e=>f("isChildren",e.target.checked)} style={{width:"auto"}} />
-        <label htmlFor="isChildren" style={{textTransform:"none",fontSize:13,letterSpacing:0,color:"#e74c3c"}}>❤️ Children Benefit piece (shows heart badge in catalog)</label>
+        <label htmlFor="isChildren" style={{textTransform:"none",fontSize:15,letterSpacing:0,color:"#e74c3c"}}>❤️ Children Benefit piece (shows heart badge in catalog)</label>
       </div>
       <div style={{borderTop:"1px solid var(--border)",margin:"12px 0 12px",paddingTop:12}}>
-        <p style={{fontSize:11,letterSpacing:".12em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>🔑 Exclusive Collectors Room</p>
+        <p style={{fontSize:13,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>🔑 Exclusive Collectors Room</p>
         <div className="fld" style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
           <input type="checkbox" id="isCollectorsOnly" checked={!!form.isCollectorsOnly} onChange={e=>f("isCollectorsOnly",e.target.checked)} style={{width:"auto",accentColor:"#b8923f"}} />
-          <label htmlFor="isCollectorsOnly" style={{textTransform:"none",fontSize:13,letterSpacing:0,color:"#b8923f",fontWeight:500}}>Private Collectors Room only (hidden from public)</label>
+          <label htmlFor="isCollectorsOnly" style={{textTransform:"none",fontSize:15,letterSpacing:0,color:"#b8923f",fontWeight:500}}>Private Collectors Room only (hidden from public)</label>
         </div>
         <div className="fld" style={{display:"flex",alignItems:"center",gap:10}}>
           <input type="checkbox" id="isEarlyAccess" checked={!!form.isEarlyAccess} onChange={e=>f("isEarlyAccess",e.target.checked)} style={{width:"auto",accentColor:"#b8923f"}} />
-          <label htmlFor="isEarlyAccess" style={{textTransform:"none",fontSize:13,letterSpacing:0,color:"#b8923f"}}>Early Access — show to collectors before public release</label>
+          <label htmlFor="isEarlyAccess" style={{textTransform:"none",fontSize:15,letterSpacing:0,color:"#b8923f"}}>Early Access — show to collectors before public release</label>
         </div>
       </div>
       <div className="fld"><label>Stripe Link (optional)</label><input value={form.stripeLink} onChange={e=>f("stripeLink",e.target.value)} placeholder="https://buy.stripe.com/…" /></div>
@@ -195,4 +195,3 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
     </div>
   );
 }
-
