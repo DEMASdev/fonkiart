@@ -36,7 +36,7 @@ export default function HomePage({ setPage, data }) {
       <div className="home-quicklinks" style={{ borderTop:"2px solid var(--border)", borderBottom:"1px solid var(--border)", display:"grid", gridTemplateColumns:"repeat(4,1fr)" }}>
         {[
           { label:"Original Art",     desc:"One-of-a-kind pieces",  page:"catalog" },
-          { label:"Fine Art Prints",  desc:"Art prints & editions",  page:"catalog" },
+          { label:"Fine Art Prints",  desc:"Art prints & editions",  page:"artprints" },
           { label:"Special Orders",   desc:"Custom commissions",     page:"special" },
           { label:"Children Benefit", desc:"Art for a cause",        page:"children" },
         ].map((c, i) => (

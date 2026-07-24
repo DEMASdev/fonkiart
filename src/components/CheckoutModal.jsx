@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase, BREVO_SENDER } from "../lib/supabase";
 import { sendEmail, formatOrderRef } from "../utils/helpers";
 
-export default function CheckoutModal({ items, settings, onClose, onSuccess }) {
+export default function CheckoutModal({ items, settings, onClose, onSuccess, fullPage }) {
   const venmoHandle   = settings.venmoHandle   || "@fonkiart";
   const cashAppHandle = settings.cashAppHandle || "$fonkiart";
   const [method, setMethod] = useState(null);
@@ -94,8 +94,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess }) {
   };
 
   if (done) return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="checkout" style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
+    <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
+      <div className={`checkout${fullPage ? " checkout-fullpage" : ""}`} style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize:50, marginBottom:14 }}>🎨</div>
         <h2 style={{ marginBottom:10 }}>Thank you!</h2>
         <p style={{ color:"var(--muted)", fontSize:14, lineHeight:1.7, marginBottom:16 }}>
@@ -115,32 +115,31 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess }) {
   );
 
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="checkout" onClick={e => e.stopPropagation()}>
+    <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
+      <div className={`checkout${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
         <h2>Purchase</h2>
-        {items.length > 1 ? (
-          <div style={{ marginBottom:6 }}>
-            {items.map(i => (
-              <p key={i.id} className="checkout-sub" style={{ margin:"2px 0" }}>
+        <div className="checkout-items" style={{ marginBottom:24 }}>
+          {items.map(i => (
+            <div key={i.id} className="checkout-item-row">
+              {i.image && <img src={i.image} alt={i.title} className="checkout-item-thumb" />}
+              <p className="checkout-sub" style={{ margin:0 }}>
                 {i.title}{itemEffective(i) ? ` · $${Number(itemEffective(i)).toLocaleString()}` : ""}
+                {couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
               </p>
-            ))}
+            </div>
+          ))}
+          {items.length > 1 && (
             <p className="checkout-sub" style={{ marginTop:6, fontWeight:600 }}>
               Total{effectivePrice ? ` · $${Number(effectivePrice).toLocaleString()}` : ""}
               {couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
             </p>
-          </div>
-        ) : (
-          <p className="checkout-sub">
-            {items[0].title}{effectivePrice ? ` · $${Number(effectivePrice).toLocaleString()}` : ""}
-            {couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
-          </p>
-        )}
+          )}
+        </div>
 
         {step === 1 && (
           <>
-            <div className="pay-opts" style={{ gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+            <div className="pay-opts">
               {[["zelle","💚","Zelle","Instant · Free"],["venmo","🔵","Venmo","Instant · Free"],["cashapp","💵","Cash App","Instant · Free"],["card","💳","Credit Card","Stripe · Secure"]].map(([id,icon,label,sub]) => (
                 <button key={id} className={`pay-opt${method===id?" sel":""}`} onClick={() => setMethod(id)}>
                   <span className="pay-opt-icon">{icon}</span>

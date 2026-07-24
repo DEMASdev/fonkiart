@@ -1,11 +1,8 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
-import CheckoutModal from "../components/CheckoutModal";
-import { getUrgency } from "../utils/helpers";
 
 export default function SpecialsPage({ data, addToCart, cart }) {
   const [selected, setSelected] = useState(null);
-  const [checkout, setCheckout] = useState(null);
   const items = data.items.filter(i => i.salePrice);
   return (
     <div>
@@ -36,21 +33,13 @@ export default function SpecialsPage({ data, addToCart, cart }) {
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>
                       : <button className="card-btn" onClick={e=>{e.stopPropagation();addToCart(item);}}>{cart?.find(i=>i.id===item.id) ? "✓ Added" : "Shop →"}</button>
                     }
-                    {!item.isSold && (() => { const u = getUrgency(item.id); return (
-                      <div style={{fontSize:10,color:"rgba(255,255,255,.8)",letterSpacing:".05em",marginTop:7,lineHeight:1.7,textAlign:"center"}}>
-                        <div>🎨 Only 1 available</div>
-                        {u.inDemand && <div>🔥 This piece is in demand</div>}
-                        {u.cartCount > 0 && <div>👀 {u.cartCount} other visitor{u.cartCount > 1 ? "s have" : " has"} this in their cart</div>}
-                      </div>
-                    ); })()}
                   </div>
                 </div>
               ))}
             </div>
         }
       </div>
-      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); setCheckout(s); }} />}
-      {checkout && <CheckoutModal items={[checkout]} settings={data.settings} onClose={() => setCheckout(null)} />}
+      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); addToCart(s); }} />}
     </div>
   );
 }

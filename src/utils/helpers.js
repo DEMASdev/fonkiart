@@ -51,17 +51,6 @@ export async function sendEmail({ to, subject, htmlContent, replyTo } = {}) {
   }
 }
 
-const _urgencyCache = new Map();
-export function getUrgency(id) {
-  if (!_urgencyCache.has(id)) {
-    _urgencyCache.set(id, {
-      inDemand:  Math.random() > 0.30,
-      cartCount: Math.floor(Math.random() * 4),
-    });
-  }
-  return _urgencyCache.get(id);
-}
-
 export async function loadData() {
   try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : null; }
   catch { return null; }

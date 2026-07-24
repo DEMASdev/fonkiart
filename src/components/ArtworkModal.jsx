@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { getUrgency } from "../utils/helpers";
 
 export default function ArtworkModal({ item, onClose, onBuy, sold }) {
   const allImages = (item.images?.length > 0) ? item.images : (item.image ? [item.image] : []);
   const [imgIdx, setImgIdx] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-gallery-wrap">
-          <img className="modal-img" src={allImages[imgIdx] || item.image} alt={item.title} style={sold ? {filter:"grayscale(20%)"} : undefined} />
+          <img className="modal-img" src={allImages[imgIdx] || item.image} alt={item.title} style={{ cursor:"zoom-in", ...(sold ? {filter:"grayscale(20%)"} : {}) }} onClick={() => setZoomed(true)} />
           {allImages.length > 1 && (
             <div className="modal-thumbs">
               {allImages.map((url, i) => (
@@ -39,17 +39,12 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
               ? <div className="modal-price">${Number(item.price).toLocaleString()}</div>
               : <div style={{ fontSize:16, color:"var(--muted)", letterSpacing:".08em", marginBottom:20 }}>Price on request — contact us</div>
           }
-          {onBuy && (() => { const u = getUrgency(item.id); return (<>
-            <div style={{fontSize:14,color:"var(--muted)",letterSpacing:".05em",lineHeight:1.9,marginBottom:14}}>
-              <div>🎨 Only 1 available — original artwork</div>
-              {u.inDemand  && <div>🔥 This piece is in demand</div>}
-              {u.cartCount > 0 && <div>👀 {u.cartCount} other visitor{u.cartCount > 1 ? "s have" : " has"} this in their cart</div>}
-            </div>
+          {onBuy && (<>
             <button className="buy-btn" onClick={() => onBuy(item)}>
-              {item.price || item.salePrice ? "Purchase This Piece" : "Request Pricing"}
+              {item.price || item.salePrice ? "Add to Cart" : "Request Pricing"}
             </button>
             <p className="buy-note">Ships worldwide · Secure payment</p>
-          </>); })()}
+          </>)}
           {sold && <>
             <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"12px 16px", marginBottom:16 }}>
               <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:18, letterSpacing:".18em", textTransform:"uppercase", color:"var(--muted)" }}>This piece has found its home</span>
@@ -58,6 +53,12 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
           </>}
         </div>
       </div>
+      {zoomed && (
+        <div className="modal-zoom-bg" onClick={e => { e.stopPropagation(); setZoomed(false); }}>
+          <button className="modal-zoom-close" onClick={e => { e.stopPropagation(); setZoomed(false); }}>✕</button>
+          <img className="modal-zoom-img" src={allImages[imgIdx] || item.image} alt={item.title} onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }

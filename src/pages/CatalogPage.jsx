@@ -1,17 +1,14 @@
 import { useState } from "react";
 import Pagination from "../components/Pagination";
 import ArtworkModal from "../components/ArtworkModal";
-import CheckoutModal from "../components/CheckoutModal";
 import PriceInquiryModal from "../components/PriceInquiryModal";
-import { getUrgency } from "../utils/helpers";
 
-export default function CatalogPage({ data, addToCart, cart }) {
-  const [cat, setCat] = useState("All");
+export default function CatalogPage({ data, addToCart, cart, initialCategory }) {
+  const [cat, setCat] = useState(initialCategory || "All");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
-  const [checkout, setCheckout] = useState(null);
   const [priceInquiry, setPriceInquiry] = useState(null);
   const PER_PAGE = 12;
 
@@ -80,13 +77,6 @@ export default function CatalogPage({ data, addToCart, cart }) {
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>
                       : <button className="card-btn" onClick={e => { e.stopPropagation(); item.price||item.salePrice ? addToCart(item) : setPriceInquiry(item); }}>{item.price||item.salePrice ? (cart?.find(i=>i.id===item.id) ? "✓ Added" : "Shop →") : "Inquire"}</button>
                     }
-                    {!item.isSold && (() => { const u = getUrgency(item.id); return (
-                      <div style={{fontSize:10,color:"rgba(255,255,255,.8)",letterSpacing:".05em",marginTop:7,lineHeight:1.7,textAlign:"center"}}>
-                        <div>🎨 Only 1 available</div>
-                        {u.inDemand && <div>🔥 This piece is in demand</div>}
-                        {u.cartCount > 0 && <div>👀 {u.cartCount} other visitor{u.cartCount > 1 ? "s have" : " has"} this in their cart</div>}
-                      </div>
-                    ); })()}
                   </div>
                 </div>
               ))}
@@ -94,8 +84,7 @@ export default function CatalogPage({ data, addToCart, cart }) {
         }
       </div>
       <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? setCheckout(s) : setPriceInquiry(s); }} />}
-      {checkout && <CheckoutModal items={[checkout]} settings={data.settings} onClose={() => setCheckout(null)} />}
+      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? addToCart(s) : setPriceInquiry(s); }} />}
       {priceInquiry && <PriceInquiryModal item={priceInquiry} onClose={() => setPriceInquiry(null)} />}
     </div>
   );

@@ -1,9 +1,9 @@
 import {
-  Home, LayoutGrid, Star, Timer, Handshake, Mail,
-  Info, Heart, Sparkles, Tag, Archive,
+  Home, LayoutGrid, Handshake, Mail,
+  Heart, Sparkles, Tag, Archive, Layers, Image,
 } from "lucide-react";
 
-export const DEFAULT_CATEGORIES = ["The Ladies", "Ocean", "Mountain", "Windows"];
+export const DEFAULT_CATEGORIES = ["The Ladies", "Ocean", "Mountain", "Windows", "Art Prints"];
 
 export const DEFAULT_STATE = {
   items: [],
@@ -13,15 +13,14 @@ export const DEFAULT_STATE = {
 
 export const NAV_ITEMS = [
   { id: "home",        label: "Home",             Icon: Home },
-  { id: "catalog",     label: "Catalog",           Icon: LayoutGrid },
+  { id: "catalog",     label: "Original Art",     Icon: LayoutGrid },
+  { id: "collections", label: "Collections",      Icon: Layers },
+  { id: "artprints",   label: "Art Prints",       Icon: Image },
   { id: "new",         label: "New Collections",   Icon: Sparkles },
   { id: "specials",    label: "Specials",          Icon: Tag },
   { id: "archive",     label: "Past Works",        Icon: Archive },
-  { id: "special",     label: "Special Orders",    Icon: Star },
-  { id: "auctions",    label: "Auctions",          Icon: Timer },
   { id: "partners",    label: "Partners",          Icon: Handshake },
   { id: "contact",     label: "Contact Us",        Icon: Mail },
-  { id: "about",       label: "About Us",          Icon: Info },
   { id: "children",    label: "Children Benefit",  Icon: Heart },
 ];
 

@@ -1,8 +1,4 @@
-import { useState } from "react";
-import CheckoutModal from "./CheckoutModal";
-
-export default function FloatingCart({ cart, removeFromCart, settings, cartOpen, setCartOpen, onView }) {
-  const [checkout, setCheckout] = useState(null);
+export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOpen, onView, onViewCart }) {
   return (
     <>
       {cartOpen && (
@@ -13,16 +9,6 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
               <span>Your Cart ({cart.length})</span>
               <button onClick={() => setCartOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1, padding:0 }}>✕</button>
             </div>
-            {cart.length > 0 && (
-              <div style={{ padding:"12px 24px", borderBottom:"1px solid var(--border)", background:"var(--cream)", fontSize:12, color:"var(--muted)", letterSpacing:".04em" }}>
-                Ready to <strong style={{ color:"var(--ink)", textTransform:"uppercase", letterSpacing:".1em" }}>Checkout?</strong> Tap "Checkout" on an item below…
-                <br />Or{" "}
-                <button onClick={() => setCheckout(cart)}
-                  style={{ background:"none", border:"none", padding:0, margin:0, cursor:"pointer", color:"var(--gold)", fontWeight:700, fontSize:12, letterSpacing:".08em", textTransform:"uppercase", fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3 }}>
-                  Click Here » CHECKOUT
-                </button>
-              </div>
-            )}
             <div className="cart-drawer-body">
               {cart.length === 0 ? (
                 <div className="cart-empty">
@@ -38,12 +24,6 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
                     <div className="cart-drawer-price">
                       {item.salePrice ? `$${Number(item.salePrice).toLocaleString()}` : item.price ? `$${Number(item.price).toLocaleString()}` : "Price on request"}
                     </div>
-                    <button onClick={() => setCheckout([item])}
-                      style={{ background:"none", border:"1px solid var(--gold)", color:"var(--gold)", cursor:"pointer", fontSize:10, letterSpacing:".12em", textTransform:"uppercase", padding:"4px 10px", fontFamily:"'DM Sans',sans-serif", marginTop:6, transition:"all .2s" }}
-                      onMouseEnter={e=>{e.currentTarget.style.background="var(--gold)";e.currentTarget.style.color="#fff"}}
-                      onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="var(--gold)"}}>
-                      Checkout →
-                    </button>
                   </div>
                   <button onClick={() => removeFromCart(item.id)}
                     style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:18, lineHeight:1, padding:0, transition:"color .2s" }}
@@ -55,13 +35,12 @@ export default function FloatingCart({ cart, removeFromCart, settings, cartOpen,
             </div>
             {cart.length > 0 && (
               <div className="cart-drawer-foot">
-                <div style={{ fontSize:12, color:"var(--muted)", marginBottom:12 }}>Each piece checks out individually — tap "Checkout →" above.</div>
+                <button className="cart-drawer-view-btn" onClick={() => { setCartOpen(false); onViewCart && onViewCart(); }}>View Cart</button>
                 <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
                   onClick={() => { cart.forEach(i => removeFromCart(i.id)); }}>Clear Cart</button>
               </div>
             )}
           </div>
-          {checkout && <CheckoutModal items={checkout} settings={settings} onClose={() => setCheckout(null)} onSuccess={() => checkout.forEach(i => removeFromCart(i.id))} />}
         </>
       )}
     </>

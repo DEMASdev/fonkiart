@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Home, LayoutGrid, Star, Timer, Handshake, Mail,
-  Info, Heart, Settings, ChevronRight, X, Menu, Sparkles, Tag, Archive, Package, LogIn, KeyRound
+  Info, Heart, Settings, ChevronRight, X, Menu, Sparkles, Tag, Archive, Package, LogIn, KeyRound, ShoppingBag
 } from "lucide-react";
 
 import { supabase, ADMIN_PASSWORD } from "./lib/supabase";
@@ -18,7 +18,6 @@ import MobileBottomNav from "./components/MobileBottomNav";
 import WelcomeModal from "./components/WelcomeModal";
 import AuthModal from "./components/AuthModal";
 import ArtworkModal from "./components/ArtworkModal";
-import CheckoutModal from "./components/CheckoutModal";
 import PriceInquiryModal from "./components/PriceInquiryModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import BuyerAuthModal from "./components/BuyerAuthModal";
@@ -26,6 +25,8 @@ import BuyerAuthModal from "./components/BuyerAuthModal";
 import InvoicePage from "./pages/InvoicePage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
+import CollectionsPage from "./pages/CollectionsPage";
+import CartPage from "./pages/CartPage";
 import NewCollectionsPage from "./pages/NewCollectionsPage";
 import SpecialsPage from "./pages/SpecialsPage";
 import SoldPage from "./pages/SoldPage";
@@ -45,9 +46,11 @@ export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
   const [deepModal, setDeepModal] = useState(null);
-  const [deepCheckout, setDeepCheckout] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
   const [page, setPage] = useState(() => localStorage.getItem("fonkiart-page") || "home");
+  const [pendingCategory, setPendingCategory] = useState(null);
+  const goToCategory = (cat) => { setPendingCategory(cat); setPage("catalog"); };
+  const goToPage = (p) => { if (p === "catalog") setPendingCategory(null); setPage(p); };
   const [data, setData] = useState(null);
   const [artworks, setArtworks] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,6 +83,19 @@ export default function App() {
   const removeFromCart = (id) => {
     setCart(prev => prev.filter(i => i.id !== id));
   };
+
+  // Brief pulse on the cart icon whenever an item is added, so it's easier to spot.
+  const prevCartLen = useRef(cart.length);
+  const [cartPulse, setCartPulse] = useState(false);
+  useEffect(() => {
+    if (cart.length > prevCartLen.current) {
+      setCartPulse(true);
+      const t = setTimeout(() => setCartPulse(false), 600);
+      prevCartLen.current = cart.length;
+      return () => clearTimeout(t);
+    }
+    prevCartLen.current = cart.length;
+  }, [cart.length]);
 
   const loadArtworks = async () => {
     if (!supabase) return;
@@ -183,7 +199,7 @@ export default function App() {
   useEffect(() => {
     const titles = {
       home:"Fonkiart — Original Art & Fine Art Prints | South Florida",
-      catalog:"Catalog — Fonkiart", new:"New Collections — Fonkiart",
+      catalog:"Original Art — Fonkiart", cart:"Your Cart — Fonkiart", collections:"Collections — Fonkiart", artprints:"Art Prints — Fonkiart", new:"New Collections — Fonkiart",
       specials:"Specials — Fonkiart", archive:"Past Works — Fonkiart",
       special:"Special Orders — Fonkiart", auctions:"Auctions — Fonkiart",
       partners:"Partners — Fonkiart", contact:"Contact — Fonkiart",
@@ -233,7 +249,7 @@ export default function App() {
 
   if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => setPage("collectors-room")} tab={adminTab} setTab={setAdminTab} />;
 
-  const currentNav = NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0];
+  const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag } : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (
     <div className="layout">
@@ -246,7 +262,7 @@ export default function App() {
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.filter(({ id }) => mergedData.settings.navVisible?.[id] !== false).map(({ id, label, Icon }) => (
-            <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => { setPage(id); setSidebarOpen(false); }}>
+            <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => { if (id === "catalog") setPendingCategory(null); setPage(id); setSidebarOpen(false); }}>
               <Icon size={16} />{label}
             </button>
           ))}
@@ -268,10 +284,6 @@ export default function App() {
         <div className="topbar">
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
             <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
-            <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--muted)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-              {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:-6, right:-8 }}>{cart.length}</span>}
-            </button>
             <SocialIcons settings={data.settings} className="social-icons-desktop" />
             {page !== "home" && (
               <div className="topbar-title"><currentNav.Icon size={16} />{currentNav.label}</div>
@@ -283,12 +295,16 @@ export default function App() {
             </div>
           )}
           <div className="topbar-right">
+            <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" className={cartPulse ? "cart-icon-pulse" : ""} style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--ink)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--ink)"}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+              {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:-7, right:-9 }}>{cart.length}</span>}
+            </button>
             <button onClick={goAccount} title="My Account" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", display:"flex", alignItems:"center", transition:"color .2s", padding:0, position:"relative" }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               {user && <span style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
             </button>
             {page !== "home" && <button onClick={() => setPage("home")} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", color:"var(--gold)", display:"flex", alignItems:"center", gap:5, padding:0 }}>← Home</button>}
-            {page === "home" && <button className="topbar-tag" onClick={() => setPage("catalog")} style={{ cursor:"pointer", border:"none" }}>Shop Now</button>}
+            {page === "home" && <button className="topbar-tag" onClick={() => goToPage("catalog")} style={{ cursor:"pointer", border:"none" }}>Shop Now</button>}
           </div>
         </div>
 
@@ -299,35 +315,35 @@ export default function App() {
         <CookieBanner onContact={() => setPage("contact")} />
         <MarqueeStrip settings={data.settings} />
 
-        {page === "home"     && <HomePage setPage={setPage} data={mergedData} />}
-        {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} />}
-        {page === "special"  && <SpecialOrdersPage setPage={setPage} />}
+        {page === "home"     && <HomePage setPage={goToPage} data={mergedData} />}
+        {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
+        {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory="Art Prints" key="artprints" />}
+        {page === "collections" && <CollectionsPage data={mergedData} setPage={goToPage} goToCategory={goToCategory} />}
+        {page === "cart"     && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} />}
+        {page === "special"  && <SpecialOrdersPage setPage={goToPage} />}
         {page === "auctions" && <AuctionsPage />}
-        {page === "partners" && <PartnersPage setPage={setPage} />}
+        {page === "partners" && <PartnersPage setPage={goToPage} />}
         {page === "contact"  && <ContactPage data={mergedData} />}
         {page === "new"      && <NewCollectionsPage data={mergedData} addToCart={addToCart} cart={cart} />}
         {page === "specials" && <SpecialsPage data={mergedData} addToCart={addToCart} cart={cart} />}
         {page === "about"    && <AboutPage />}
         {page === "archive"  && <SoldPage data={mergedData} />}
-        {page === "children" && <ChildrenPage setPage={setPage} />}
+        {page === "children" && <ChildrenPage setPage={goToPage} />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
-        <FloatingCart cart={cart} removeFromCart={removeFromCart} settings={mergedData.settings} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} />
-        <MobileBottomNav page={page} setPage={setPage} cartCount={cart.length} onCart={() => setCartOpen(true)} onAccount={goAccount} />
+        <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => setPage("cart")} />
+        <MobileBottomNav page={page} setPage={goToPage} cartCount={cart.length} onCart={() => setCartOpen(true)} onAccount={goAccount} />
 
-        {deepModal && !deepCheckout && !deepPriceInquiry && (
+        {deepModal && !deepPriceInquiry && (
           <ArtworkModal
             item={deepModal}
             sold={!!deepModal.isSold}
             onClose={() => setDeepModal(null)}
             onBuy={deepModal.isSold ? undefined : (s) => {
               setDeepModal(null);
-              s.price || s.salePrice ? setDeepCheckout(s) : setDeepPriceInquiry(s);
+              s.price || s.salePrice ? addToCart(s) : setDeepPriceInquiry(s);
             }}
           />
-        )}
-        {deepCheckout && (
-          <CheckoutModal items={[deepCheckout]} onClose={() => setDeepCheckout(null)} settings={mergedData.settings} onSuccess={() => removeFromCart(deepCheckout.id)} />
         )}
         {deepPriceInquiry && (
           <PriceInquiryModal item={deepPriceInquiry} onClose={() => setDeepPriceInquiry(null)} />
