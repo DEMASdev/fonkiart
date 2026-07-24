@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fonkiart — Dev Review, July 24</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream: #fdfcf8;
+  --card: #ffffff;
+  --ink: #1c1a18;
+  --muted: #7a6f63;
+  --border: #e8c97a;
+  --border-soft: #ece4d3;
+  --gold: #b8923f;
+  --gold-deep: #96742e;
+  --pink: #df88cc;
+  --pink-soft: #f9ecf5;
+  --good: #2d6a4f;
+  --good-bg: #eef6f1;
+  --flag: #b1462f;
+  --flag-bg: #fbeee9;
+  --shadow: 0 1px 2px rgba(28,26,24,.04), 0 8px 24px -12px rgba(28,26,24,.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cream: #17140f;
+    --card: #211c16;
+    --ink: #f3ede1;
+    --muted: #a89a86;
+    --border: #4d3f26;
+    --border-soft: #35291a;
+    --gold: #d4ac5c;
+    --gold-deep: #e8c97a;
+    --pink: #e6a9d8;
+    --pink-soft: #2c2130;
+    --good: #6fbf98;
+    --good-bg: #1b2b24;
+    --flag: #e08469;
+    --flag-bg: #2e1e18;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--cream);
+  color: var(--ink);
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+/* ── Masthead ── */
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 22px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 8px;
+}
+.brand {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.brand .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+.masthead .date { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+
+h1.title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 300;
+  font-size: clamp(32px, 6vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -.01em;
+  margin: 22px 0 10px;
+  text-wrap: balance;
+}
+.subhead {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 62ch;
+  margin-bottom: 28px;
+}
+.subhead strong { color: var(--ink); font-weight: 600; }
+
+/* ── Progress strip ── */
+.progress-strip {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+}
+.progress-pill {
+  flex: 1 1 140px;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow);
+}
+.progress-pill .n {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--gold-deep);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.progress-pill .lbl {
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+/* ── Task cards ── */
+.task {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.task-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--pink-soft), transparent 140%);
+}
+.task-id {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gold-deep);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 7px;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.task-head h2 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.25;
+  flex: 1;
+  margin: 0;
+  text-wrap: balance;
+}
+.task-head .prompt {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.task-body { padding: 6px 22px 18px; }
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.item:last-child { border-bottom: none; }
+
+.item input[type="checkbox"] {
+  appearance: none;
+  width: 18px; height: 18px;
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--cream);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+  position: relative;
+  transition: background .15s, border-color .15s;
+}
+.item input[type="checkbox"]:checked {
+  background: var(--good);
+  border-color: var(--good);
+}
+.item input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px; top: 1px;
+  width: 5px; height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg);
+}
+.item input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.item label { flex: 1; font-size: 14px; line-height: 1.55; cursor: pointer; }
+.item label .fine { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ── Flag callout ── */
+.flag {
+  display: flex;
+  gap: 11px;
+  background: var(--flag-bg);
+  border: 1px solid color-mix(in srgb, var(--flag) 35%, transparent);
+  border-radius: 3px;
+  padding: 12px 14px;
+  margin: 12px 0 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.flag .mark {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--flag);
+  flex-shrink: 0;
+}
+.flag strong { color: var(--ink); }
+
+/* ── Divider label ── */
+.section-label {
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 44px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-soft);
+}
+
+/* ── Footer note ── */
+.footnote {
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 2px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.footnote strong { color: var(--ink); }
+
+@media (max-width: 480px) {
+  .wrap { padding: 32px 16px 72px; }
+  .task-head { padding: 15px 16px; }
+  .task-body { padding: 4px 16px 14px; }
+  .progress-pill { flex: 1 1 100px; padding: 10px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="brand"><span class="dot"></span>Fonkiart — Dev Review</div>
+    <div class="date">July 24, 2026</div>
+  </div>
+
+  <h1 class="title">Six updates, built and ready for your eyes</h1>
+  <p class="subhead">Everything below is coded and passing a clean build on the dev site. Nothing is deployed to <strong>fonkiart.com</strong> beyond this page itself — go through each item with Aliana, check off what looks right, and flag anything that needs a change. Once you both sign off, say the word and it goes live.</p>
+
+  <div class="progress-strip">
+    <div class="progress-pill"><div class="n">6</div><div class="lbl">Tasks built</div></div>
+    <div class="progress-pill"><div class="n">3</div><div class="lbl">Need your input</div></div>
+    <div class="progress-pill"><div class="n">0</div><div class="lbl">Deployed live</div></div>
+  </div>
+
+  <div class="section-label">Review checklist</div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#723</span>
+      <div style="flex:1">
+        <h2>Cart overhaul</h2>
+        <div class="prompt">"For cart page on the right side to be bigger and have option of 'view cart' to expand the page..."</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c1"><label for="c1">Quick-view cart drawer is bigger (360px → 420px) with a "View Cart" button</label></div>
+      <div class="item"><input type="checkbox" id="c2"><label for="c2">"View Cart" opens a real full page, not a popup <span class="fine">Return to Shop link up top, bigger item photos, Subtotal, "Taxes and shipping calculated at checkout"</span></label></div>
+      <div class="item"><input type="checkbox" id="c3"><label for="c3">"You May Also Like" shows at the bottom, matched to what's already in the cart</label></div>
+      <div class="item"><input type="checkbox" id="c4"><label for="c4">Checkout is now one page for the whole cart (not one popup per piece) and shows a photo next to each item</label></div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#728</span>
+      <div style="flex:1">
+        <h2>Artwork popup: Add to Cart + image zoom</h2>
+        <div class="prompt">"...for it to open in separate page with... option 'add to the cart' and not 'purchase this item'"</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c5"><label for="c5">Button now says "Add to Cart" instead of "Purchase This Piece" — pieces stack in the cart instead of jumping straight to checkout</label></div>
+      <div class="item"><input type="checkbox" id="c6"><label for="c6">Kept the quick-look popup as-is (per your call) — clicking the image inside it now opens a bigger, full-screen version</label></div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#724</span>
+      <div style="flex:1">
+        <h2>Bigger grid + a sidebar that gets out of the way</h2>
+        <div class="prompt">"...only 2 or 3 in one line in bigger resolution... menu appears if hovered or clicked"</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c7"><label for="c7">Shop/Collection grids show 3 pieces per row on desktop instead of 4 — noticeably larger images <span class="fine">Mobile left untouched: still 2 then 1 per row on small screens</span></label></div>
+      <div class="item"><input type="checkbox" id="c8"><label for="c8">Left sidebar is hidden by default everywhere now (used to be permanently visible on desktop) — hover the menu icon or click it to bring the menu in, move away or pick a page to close it</label></div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#725</span>
+      <div style="flex:1">
+        <h2>Removed the fake urgency messages</h2>
+        <div class="prompt">"Remove please 'only 1 available, this piece in demand'... not to pop up unless it's truly in someone's cart"</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c9"><label for="c9">"Only 1 available," "in demand," and "X visitors have this in their cart" are gone from every artwork card and popup <span class="fine">Confirmed these were random/fake before — not driven by real visitor or cart data</span></label></div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#726</span>
+      <div style="flex:1">
+        <h2>Cart icon, easier to spot</h2>
+        <div class="prompt">"...took me a sec to find it when I added something"</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c10"><label for="c10">Moved to the top-right (by the account icon), bigger, and no longer washed-out gray</label></div>
+      <div class="item"><input type="checkbox" id="c11"><label for="c11">Gives a quick gold flash + pulse the moment something's added, so it catches your eye</label></div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="task-head">
+      <span class="task-id">#727</span>
+      <div style="flex:1">
+        <h2>Menu cleanup</h2>
+        <div class="prompt">"...tab 'collections' which would include all the ones from the top... change catalog to original art... remove auctions and special orders and about us. Add tab 'art prints'"</div>
+      </div>
+    </div>
+    <div class="task-body">
+      <div class="item"><input type="checkbox" id="c12"><label for="c12">"Catalog" renamed to "Original Art"</label></div>
+      <div class="item"><input type="checkbox" id="c13"><label for="c13">"Auctions," "Special Orders," "About Us" removed from the menu <span class="fine">Pages still exist behind the scenes, just not linked in the menu — say so if you want them deleted outright</span></label></div>
+      <div class="item"><input type="checkbox" id="c14"><label for="c14">New "Collections" tab — tiles for The Ladies / Ocean / Mountain / Windows, click one to jump straight into that filtered view</label></div>
+      <div class="item"><input type="checkbox" id="c15"><label for="c15">New "Art Prints" tab, wired the same way as Collections</label></div>
+    </div>
+  </div>
+
+  <div class="section-label">Needs a decision from you</div>
+
+  <div class="flag">
+    <span class="mark">1</span>
+    <div><strong>"Art Prints" has no pieces tagged yet.</strong> The tab works, but it'll show empty until you add "Art Prints" as a category in Admin → Settings and tag some artworks with it.</div>
+  </div>
+  <div class="flag">
+    <span class="mark">2</span>
+    <div><strong>Special Orders / Auctions / About Us pages</strong> are hidden from the menu but still live in the code. Keep them parked, or delete for good?</div>
+  </div>
+  <div class="flag">
+    <span class="mark">3</span>
+    <div><strong>The hover-open sidebar</strong> is a new interaction — worth a real look on your own screen once it's live, timing/feel may want a tweak.</div>
+  </div>
+
+  <div class="footnote">
+    <strong>Next step:</strong> once you and Aliana have been through this, let Andy's dev know what to change (if anything) — then it gets committed, pushed, and deployed to fonkiart.com for real, and each DEMAS task gets marked complete as it's confirmed.<br><br>
+    This page is a static, unlisted note (noindex, not linked from the site) — safe to ignore once you're done with it.
+  </div>
+
+</div>
+</body>
+</html>
