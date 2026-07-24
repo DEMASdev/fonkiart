@@ -45,4 +45,4 @@ The `cart_activity` table still exists in Supabase but nothing in the app reads 
 ---
 
 ## Source of Truth
-→ Asana: ClaudeAI project → Fonkiart section
+→ DEMAS Task Master: claudeai project → Fonkiart section — https://andy-dev.vercel.app/demas/tasks/
