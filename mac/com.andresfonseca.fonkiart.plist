@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.andresfonseca.wrapper.fonkiart</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.andresfonseca.fonkiart</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/andresfonseca/Library/Application Support/LaunchWrappers/Fonkiart Dev Server.app/Contents/MacOS/Fonkiart Dev Server</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/fonkiart.log</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/fonkiart.log</string>
+</dict>
+</plist>
