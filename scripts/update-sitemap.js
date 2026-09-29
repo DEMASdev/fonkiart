@@ -32,7 +32,11 @@ async function fetchArtworkIds() {
   }
   try {
     const supabase = createClient(url, key);
-    const { data, error } = await supabase.from('Artworks').select('id,price,salePrice,isCollectorsOnly,collectors_only');
+    // select("*"), not a named column list: api/catalog-feed.js checks both
+    // isCollectorsOnly and collectors_only defensively because it isn't sure
+    // which one is the real column, and Postgrest errors on an unknown named
+    // column (unlike select("*"), which just omits it from the row).
+    const { data, error } = await supabase.from('Artworks').select('*');
     if (error) { console.warn('update-sitemap: could not read Artworks —', error.message); return []; }
     // Same eligibility rule as api/catalog-feed.js: purchasable, non-collectors-only pieces.
     return (data || [])
