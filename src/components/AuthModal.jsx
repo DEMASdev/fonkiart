@@ -20,7 +20,7 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
         }
       }
       setSent(true);
-    } catch(e) { setErr("Could not send link."); }
+    } catch { setErr("Could not send link."); }
     setLoading(false);
   };
 

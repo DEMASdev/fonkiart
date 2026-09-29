@@ -1,4 +1,4 @@
-export default function CollectionsPage({ data, setPage, goToCategory }) {
+export default function CollectionsPage({ data, goToCategory }) {
   const categories = data.categories || [];
 
   return (

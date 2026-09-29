@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  Home, LayoutGrid, Star, Timer, Handshake, Mail,
-  Info, Heart, Settings, ChevronRight, X, Menu, Sparkles, Tag, Archive, Package, LogIn, KeyRound, ShoppingBag
-} from "lucide-react";
+import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
 
-import { supabase, ADMIN_PASSWORD } from "./lib/supabase";
+import { supabase } from "./lib/supabase";
+import { adminHasToken } from "./lib/adminAuth";
 import { loadData, saveData } from "./utils/helpers";
 import { NAV_ITEMS, DEFAULT_CATEGORIES, DEFAULT_STATE } from "./constants";
 
-import ErrorBoundary from "./components/ErrorBoundary";
 import CookieBanner from "./components/CookieBanner";
 import Footer from "./components/Footer";
 import MarqueeStrip from "./components/MarqueeStrip";
@@ -63,14 +60,15 @@ export default function App() {
   const [authModal, setAuthModal] = useState(false);
   const [trackModal, setTrackModal] = useState(false);
   const [loginModal, setLoginModal] = useState(false);
-  const [adminAuthed, setAdminAuthed] = useState(() => localStorage.getItem("fonkiart-admin-authed") === "1");
+  const [adminAuthed, setAdminAuthed] = useState(() => adminHasToken());
   const [adminTab, setAdminTabState] = useState(() => localStorage.getItem("fonkiart-admin-tab") || "dashboard");
   const setAdminTab = (t) => { localStorage.setItem("fonkiart-admin-tab", t); setAdminTabState(t); };
   // "My Account" / mobile account icon — go straight back to admin if already logged in,
-  // without re-prompting for the admin password.
+  // without re-prompting for the admin password. AdminPage still re-verifies the token
+  // with the server on mount, so a stale/forged token doesn't get a free pass here.
   const goAccount = () => {
     if (user?.user_metadata?.role === "buyer") { setPage("buyer-dashboard"); return; }
-    if (localStorage.getItem("fonkiart-admin-authed") === "1") { setPage("admin"); return; }
+    if (adminHasToken()) { setPage("admin"); return; }
     setLoginModal(true);
   };
   const [collectorsClient, setCollectorsClient] = useState(() => {

@@ -1,7 +1,8 @@
+const SocialLink = ({ href, title, children }) => href ? (
+  <a href={href} target="_blank" rel="noopener noreferrer" title={title}>{children}</a>
+) : null;
+
 export default function Footer({ settings, onTrackOrder }) {
-  const SocialLink = ({ href, title, children }) => href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" title={title}>{children}</a>
-  ) : null;
   return (
     <footer className="footer" style={{ flexDirection:"column", alignItems:"flex-start", gap:20 }}>
       <div style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:16 }}>

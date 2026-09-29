@@ -57,5 +57,5 @@ export async function loadData() {
 }
 
 export async function saveData(d) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch {}
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch { /* best-effort local cache */ }
 }

@@ -21,7 +21,7 @@ export default function InvoicePage({ token }) {
         if (orderRes.error || !orderRes.data) { setNotFound(true); }
         else { setOrder(orderRes.data); setApproved(!!orderRes.data.invoice_approved); }
         if (!settingsRes.error && settingsRes.data) setSettings(settingsRes.data);
-      } catch(e) { setNotFound(true); }
+      } catch { setNotFound(true); }
       finally { setLoading(false); }
     };
     load();

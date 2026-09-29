@@ -10,6 +10,10 @@ import ItemForm from "./ItemForm";
 import ItemList from "./ItemList";
 import SettingsForm, { SETTINGS_SECTIONS as SETTINGS_FORM_SECTIONS } from "./SettingsForm";
 
+const Badge = ({ n }) => n > 0
+  ? <span style={{ background:"#c0392b", color:"#fff", borderRadius:10, fontSize:10, padding:"1px 6px", marginLeft:6, fontWeight:600 }}>{n}</span>
+  : null;
+
 export default function AdminPanel({ data, updateData, addArtwork, editArtwork, deleteArtwork, patchArtwork, loadArtworks, onBack, onLogout, onViewRoom, tab, setTab }) {
   const setTabAndSave = setTab;
   const [editItem, setEditItem] = useState(null);
@@ -28,10 +32,6 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
       supabase.from("Requests").select("id", { count:"exact", head:true }).eq("status","new"),
     ]).then(([o, r]) => setBadges({ orders:o.count||0, requests:r.count||0 }));
   }, [tab]);
-
-  const Badge = ({ n }) => n > 0
-    ? <span style={{ background:"#c0392b", color:"#fff", borderRadius:10, fontSize:10, padding:"1px 6px", marginLeft:6, fontWeight:600 }}>{n}</span>
-    : null;
 
   return (
     <div className="admin-wrap">

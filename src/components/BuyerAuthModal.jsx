@@ -1,6 +1,17 @@
 import { useState } from "react";
-import { supabase, ADMIN_PASSWORD } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
+import { adminLogin } from "../lib/adminAuth";
 import { hashPassword } from "../utils/helpers";
+
+const TabBtn = ({ label, active, onClick }) => (
+  <button onClick={onClick}
+    style={{ flex:1, background:"none", border:"none", borderBottom:`2px solid ${active?"var(--ink)":"transparent"}`,
+      padding:"12px 0", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12,
+      letterSpacing:".12em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)",
+      fontWeight:active?500:400, transition:"all .2s" }}>
+    {label}
+  </button>
+);
 
 export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin }) {
   const [tab, setTab] = useState("login"); // "login" | "signup"
@@ -32,9 +43,10 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
     if (!loginEmail || !loginPw) { setLoginErr("Enter your email and password."); return; }
     setLoginErr(""); setLoginLoading(true);
 
-    // Admin shortcut
-    if (loginEmail.trim().toLowerCase() === "fonkiart@gmail.com" && loginPw === ADMIN_PASSWORD) {
-      onAdminLogin(); return;
+    // Admin shortcut — checked server-side, never compared in the browser
+    if (loginEmail.trim().toLowerCase() === "fonkiart@gmail.com") {
+      const isAdmin = await adminLogin(loginPw);
+      if (isAdmin) { onAdminLogin(); return; }
     }
 
     // Supabase Auth (new buyer accounts)
@@ -44,7 +56,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
         password: loginPw,
       });
       if (!error) { onClose(); return; } // onAuthStateChange handles routing
-    } catch(e) { /* fall through to legacy */ }
+    } catch { /* fall through to legacy */ }
 
     // Legacy fallback: manually set Clients table passwords (backwards compat)
     try {
@@ -58,7 +70,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
           onClientLogin(client); return;
         }
       }
-    } catch(e) { console.warn("Legacy login:", e); }
+    } catch (e) { console.warn("Legacy login:", e); }
 
     setLoginErr("Incorrect email or password.");
     setLoginLoading(false);
@@ -121,15 +133,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
     setTimeout(() => setResent(false), 4000);
   };
 
-  const TabBtn = ({ id, label }) => (
-    <button onClick={() => { setTab(id); setLoginErr(""); setSignupErr(""); setStep("form"); }}
-      style={{ flex:1, background:"none", border:"none", borderBottom:`2px solid ${tab===id?"var(--ink)":"transparent"}`,
-        padding:"12px 0", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12,
-        letterSpacing:".12em", textTransform:"uppercase", color:tab===id?"var(--ink)":"var(--muted)",
-        fontWeight:tab===id?500:400, transition:"all .2s" }}>
-      {label}
-    </button>
-  );
+  const goTab = (id) => { setTab(id); setLoginErr(""); setSignupErr(""); setStep("form"); };
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -142,8 +146,8 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
         {/* ── TABS (only show during form step) ── */}
         {step === "form" && (
           <div style={{ display:"flex", borderBottom:"1px solid var(--border)", marginBottom:24 }}>
-            <TabBtn id="login"  label="Sign In" />
-            <TabBtn id="signup" label="Create Account" />
+            <TabBtn label="Sign In"        active={tab==="login"}  onClick={() => goTab("login")} />
+            <TabBtn label="Create Account" active={tab==="signup"} onClick={() => goTab("signup")} />
           </div>
         )}
 

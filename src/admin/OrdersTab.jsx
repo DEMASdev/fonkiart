@@ -124,7 +124,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       const link = `${window.location.origin}/?invoice=${order.invoice_token}`;
       await sendEmail({ to: order.client_email, subject: `Invoice ${fmtInvNum(order.id)} — ${order.item_title} · Fonkiart`, htmlContent: buildInvoiceEmail(order, link) });
       showMsg(`Invoice resent to ${order.client_email}`);
-    } catch(e) { showMsg("Error resending invoice."); }
+    } catch { showMsg("Error resending invoice."); }
     finally { setResending(r => ({...r, [order.id]: false})); }
   };
 

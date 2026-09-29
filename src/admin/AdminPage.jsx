@@ -1,31 +1,52 @@
 import { useState, useEffect } from "react";
-import { ADMIN_PASSWORD } from "../lib/supabase";
+import { adminLogin, adminVerify, adminLogout, adminHasToken } from "../lib/adminAuth";
 import AdminPanel from "./AdminPanel";
 
 export default function AdminPage({ data, updateData, addArtwork, editArtwork, deleteArtwork, patchArtwork, loadArtworks, onBack, autoAuth, onAutoAuthUsed, onViewRoom, tab, setTab }) {
-  const [authed, setAuthed] = useState(() => autoAuth || localStorage.getItem("fonkiart-admin-authed") === "1");
+  const [authed, setAuthed] = useState(() => autoAuth || adminHasToken());
+  const [checking, setChecking] = useState(true);
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
-  const doAuth = () => { localStorage.setItem("fonkiart-admin-authed", "1"); setAuthed(true); };
+  const doAuth = async () => {
+    if (loggingIn) return;
+    setLoggingIn(true); setErr("");
+    const ok = await adminLogin(pw);
+    setLoggingIn(false);
+    if (ok) setAuthed(true);
+    else setErr("Incorrect password");
+  };
 
-  // If we got here via the auto-login shortcut, persist the session to
-  // localStorage right away — otherwise it's only remembered in memory
-  // for this visit, and "Back to Site" loses it (login prompt reappears).
+  // If we got here via the auto-login shortcut, BuyerAuthModal already
+  // verified the password with the server and stored the token — just
+  // clear the one-shot flag on the parent.
   useEffect(() => {
-    if (autoAuth) {
-      localStorage.setItem("fonkiart-admin-authed", "1");
-      if (onAutoAuthUsed) onAutoAuthUsed();
-    }
+    if (autoAuth && onAutoAuthUsed) onAutoAuthUsed();
+  }, []);
+
+  // Re-check the stored token against the server on every visit — a token
+  // that's expired, forged, or left over from a rotated password fails
+  // here even though it's still sitting in localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    adminVerify().then(valid => {
+      if (cancelled) return;
+      setChecking(false);
+      if (!valid) setAuthed(false);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (authed) return;
+    if (authed || checking) return;
     if (countdown <= 0) { onBack(); return; }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [authed, countdown]);
+  }, [authed, checking, countdown]);
+
+  if (checking) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"#8a8078" }}>Loading Admin…</div>;
 
   if (!authed) return (
     <div className="login-wrap">
@@ -35,10 +56,12 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
           <label>Password</label>
           <input type="password" value={pw} placeholder="Password" autoFocus
             onChange={e => { setPw(e.target.value); setErr(""); }}
-            onKeyDown={e => { if(e.key==="Enter") pw===ADMIN_PASSWORD?doAuth():setErr("Incorrect password"); }} />
+            onKeyDown={e => { if(e.key==="Enter") doAuth(); }} />
           {err && <p className="err">{err}</p>}
         </div>
-        <button className="btn-p" style={{ width:"100%", marginBottom:12 }} onClick={() => pw===ADMIN_PASSWORD?doAuth():setErr("Incorrect password")}>Enter</button>
+        <button className="btn-p" style={{ width:"100%", marginBottom:12 }} onClick={doAuth} disabled={loggingIn}>
+          {loggingIn ? "Checking…" : "Enter"}
+        </button>
         <button onClick={onBack} style={{ width:"100%", background:"none", border:"1px solid var(--border)", padding:"10px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", transition:"all .2s" }}
           onMouseEnter={e => { e.currentTarget.style.borderColor="var(--ink)"; e.currentTarget.style.color="var(--ink)"; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.color="var(--muted)"; }}>
@@ -52,5 +75,5 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
   );
 
   return <AdminPanel data={data} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={onBack} onViewRoom={onViewRoom} tab={tab} setTab={setTab}
-    onLogout={() => { localStorage.removeItem("fonkiart-admin-authed"); localStorage.removeItem("fonkiart-admin-tab"); localStorage.setItem("fonkiart-page","home"); setTab("dashboard"); setAuthed(false); setPw(""); onBack(); }} />;
+    onLogout={() => { adminLogout(); localStorage.removeItem("fonkiart-admin-tab"); localStorage.setItem("fonkiart-page","home"); setTab("dashboard"); setAuthed(false); setPw(""); onBack(); }} />;
 }

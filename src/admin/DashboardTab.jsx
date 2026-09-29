@@ -3,6 +3,14 @@ import { RefreshCw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import AdminTasksWidget from "./AdminTasksWidget";
 
+const Stat = ({ label, value, sub, color }) => (
+  <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", borderTop:`3px solid ${color||"var(--gold)"}` }}>
+    <div style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>{label}</div>
+    <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:42, fontWeight:300, color:"var(--ink)", lineHeight:1 }}>{value}</div>
+    {sub && <div style={{ color:"var(--muted)", marginTop:8 }}>{sub}</div>}
+  </div>
+);
+
 export default function DashboardTab({ goToTab, goToSettings }) {
   const [stats, setStats] = useState(null);
   const [loadErr, setLoadErr] = useState(false);
@@ -35,14 +43,6 @@ export default function DashboardTab({ goToTab, goToSettings }) {
 
   if (loadErr) return <div className="crm-wrap"><p className="crm-empty">Could not load dashboard. Check your connection and <button className="btn-s" style={{marginLeft:8}} onClick={()=>setTick(t=>t+1)}>retry</button></p></div>;
   if (!stats) return <div className="crm-wrap"><p className="crm-empty">Loading…</p></div>;
-
-  const Stat = ({ label, value, sub, color }) => (
-    <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", borderTop:`3px solid ${color||"var(--gold)"}` }}>
-      <div style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>{label}</div>
-      <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:42, fontWeight:300, color:"var(--ink)", lineHeight:1 }}>{value}</div>
-      {sub && <div style={{ color:"var(--muted)", marginTop:8 }}>{sub}</div>}
-    </div>
-  );
 
   return (
     <div className="crm-wrap">

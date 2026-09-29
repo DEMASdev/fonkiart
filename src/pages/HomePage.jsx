@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { useState } from "react";
 import CollectorsSection from "../components/CollectorsSection";
 
 export default function HomePage({ setPage, data }) {
   const allImgs = (data?.items || []).filter(i => i.image);
-  const slides = useMemo(() => {
-    const shuffled = [...allImgs].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
-  }, [data?.items?.length]);
+  // Shuffle once per mount via the useState initializer (the one place a
+  // render-path function is allowed to be impure) instead of Math.random()
+  // inside useMemo, which React's rules-of-react lint now flags.
+  const [slides] = useState(() => [...allImgs].sort(() => Math.random() - 0.5).slice(0, 3));
 
   return (
     <div>
@@ -23,7 +23,7 @@ export default function HomePage({ setPage, data }) {
         <div className="hero-right">
           {slides.length === 0
             ? <div style={{ gridColumn:"1/-1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
-            : slides.map((item, i) => (
+            : slides.map((item) => (
                 <div key={item.id} className="hero-panel">
                   <img src={item.image} alt={item.title} />
                 </div>

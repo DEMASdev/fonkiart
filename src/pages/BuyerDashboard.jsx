@@ -4,6 +4,13 @@ import { supabase } from "../lib/supabase";
 const STATUS_COLOR = { pending:"#c9a96e", confirmed:"#1e3a52", shipped:"#2d6a4f", delivered:"var(--gold)" };
 const STATUS_LABEL = { pending:"Pending", confirmed:"Confirmed", shipped:"Shipped", delivered:"Delivered" };
 
+const TabBtn = ({ label, active, onClick }) => (
+  <button onClick={onClick}
+    style={{ background:"none", border:"none", borderBottom:`2px solid ${active?"var(--gold)":"transparent"}`, padding:"14px 24px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".1em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)", transition:"all .2s", whiteSpace:"nowrap" }}>
+    {label}
+  </button>
+);
+
 export default function BuyerDashboard({ user, onLogout, onBack }) {
   const [tab, setTab]       = useState("orders");
   const [orders, setOrders] = useState([]);
@@ -38,13 +45,6 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
     });
   }, [user]);
 
-  const TabBtn = ({ id, label }) => (
-    <button onClick={() => setTab(id)}
-      style={{ background:"none", border:"none", borderBottom:`2px solid ${tab===id?"var(--gold)":"transparent"}`, padding:"14px 24px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".1em", textTransform:"uppercase", color:tab===id?"var(--ink)":"var(--muted)", transition:"all .2s", whiteSpace:"nowrap" }}>
-      {label}
-    </button>
-  );
-
   return (
     <div style={{ minHeight:"100vh", background:"var(--cream)", fontFamily:"'DM Sans',sans-serif" }}>
 
@@ -63,8 +63,8 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
 
       {/* Tabs */}
       <div style={{ background:"#fff", borderBottom:"1px solid var(--border)", padding:"0 40px", display:"flex" }}>
-        <TabBtn id="orders"  label="My Orders" />
-        <TabBtn id="profile" label="My Profile" />
+        <TabBtn label="My Orders"   active={tab==="orders"}  onClick={() => setTab("orders")} />
+        <TabBtn label="My Profile"  active={tab==="profile"} onClick={() => setTab("profile")} />
       </div>
 
       {/* Content */}

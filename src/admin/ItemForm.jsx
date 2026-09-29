@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase, SUPABASE_URL } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 export default function ItemForm({ data, updateData, addArtwork, editArtwork, editItem, setEditItem }) {
   const blank = { title:"", description:"", medium:"", dimensions:"", category:data.categories[0]||"", price:"", salePrice:"", images:[], image:"", isNew:false, isSold:false, isChildren:false, isCollectorsOnly:false, isEarlyAccess:false, stripeLink:"" };
   const [form, setForm] = useState(blank);
