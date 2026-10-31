@@ -18,6 +18,8 @@ create policy "public can read settings" on public."Settings" for select to anon
 create policy "public can read artworks" on public."Artworks" for select to anon, authenticated using (true);
 -- Andy, 2026-09-29: "9 delete it" (the orphaned cart table; nothing in the code uses it)
 drop table if exists public.cart_activity;
+-- The 10-31 test signup Andy said yes to: the public key can't delete from Leads.
+delete from public."Leads" where id = 12 and email = 'fonkiart+test@gmail.com';
 commit;
 select t.tablename, t.rowsecurity as locked,
        coalesce(string_agg(p.policyname || ' (' || p.cmd || ')', ', '), 'nothing (server only)') as allowed
