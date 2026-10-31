@@ -7,12 +7,15 @@ import { InputError } from "../api/_lib/errors.js";
 import { escapeHtml, senderAddress } from "../api/_lib/brevo.js";
 import { isServiceKey } from "../api/_lib/supabaseAdmin.js";
 import { ADMIN_EMAIL, hashPassword, checkPassword, adminCredentials, opResetRequest, opResetSet } from "../api/_lib/adminSecret.js";
+import { opCustomerResetRequest, opCustomerResetSet } from "../api/_lib/customerReset.js";
+import * as serverPw from "../api/_lib/pwRules.js";
+import * as browserPw from "../src/lib/pwRules.js";
 import * as T from "../api/_lib/emails.js";
 import { recordQuery } from "../src/lib/adminQuery.js";
 
 // Tiny in-memory stand-in for the supabase-js query builder: enough to run the
 // store's real logic and see exactly what it reads and writes.
-function fakeDb(tables = {}, { user = null, fail = {} } = {}) {
+function fakeDb(tables = {}, { user = null, fail = {}, users = [] } = {}) {
   const writes = [];
   function from(table) {
     let op = "select", payload = null, lim = null, single = null;
@@ -34,7 +37,7 @@ function fakeDb(tables = {}, { user = null, fail = {} } = {}) {
     function run() {
       if (fail[table]) return { data: null, error: fail[table] };
       const rows = (tables[table] ||= []);
-      if (op === "upsert") { writes.push({ table, op, payload }); [].concat(payload).forEach(r => { const hit = rows.find(x => x.id === r.id); if (hit) Object.assign(hit, r); else rows.push({ ...r }); }); return { data: null, error: null }; }
+      if (op === "upsert") { writes.push({ table, op, payload }); [].concat(payload).forEach(r => { const key = r.id !== undefined ? "id" : "email"; const hit = rows.find(x => x[key] === r[key]); if (hit) Object.assign(hit, r); else rows.push({ ...r }); }); return { data: null, error: null }; }
       if (op === "insert") { writes.push({ table, op, payload }); payload.forEach(r => rows.push({ id: rows.length + 100, ...r })); return { data: null, error: null }; }
       if (op === "update") { writes.push({ table, op, payload, filters: [...filters] }); rows.filter(match).forEach(r => Object.assign(r, payload)); return { data: null, error: null }; }
       let out = rows.filter(match).map(r => ({ ...r }));
@@ -45,7 +48,20 @@ function fakeDb(tables = {}, { user = null, fail = {} } = {}) {
     }
     return b;
   }
-  const auth = { getUser: async (t) => (user && t === "good-jwt" ? { data: { user }, error: null } : { data: {}, error: { message: "bad jwt" } }) };
+  const auth = {
+    getUser: async (t) => (user && t === "good-jwt" ? { data: { user }, error: null } : { data: {}, error: { message: "bad jwt" } }),
+    // Supabase sign-ins (auth.users), as the service key sees them.
+    admin: {
+      listUsers: async ({ page = 1, perPage = 50 } = {}) => ({ data: { users: users.slice((page - 1) * perPage, page * perPage) }, error: null }),
+      updateUserById: async (id, attrs) => {
+        const u = users.find(x => x.id === id);
+        if (!u) return { data: null, error: { message: "User not found" } };
+        writes.push({ table: "auth.users", op: "update", payload: attrs });
+        Object.assign(u, attrs);
+        return { data: { user: u }, error: null };
+      },
+    },
+  };
   return { from, auth, writes, tables };
 }
 
@@ -280,13 +296,75 @@ test("reset link: works once, expires, needs 8+ characters, and signs out old se
   await opResetRequest(db, { email: ADMIN_EMAIL }, mail, "https://fonkiart.com", t0);
   const token = linkToken(mail);
   await assert.rejects(opResetSet(db, { token, password: "short" }, t0), InputError);
-  await assert.rejects(opResetSet(db, { token: "x".repeat(43), password: "long-enough-1" }, t0), /already used or replaced/);
-  await assert.rejects(opResetSet(db, { token, password: "long-enough-1" }, t0 + 31 * 60_000), /expired/);
-  const out = await opResetSet(db, { token, password: "long-enough-1" }, t0 + 60_000);
+  await assert.rejects(opResetSet(db, { token: "x".repeat(43), password: "Long-enough-1" }, t0), /already used or replaced/);
+  await assert.rejects(opResetSet(db, { token, password: "Long-enough-1" }, t0 + 31 * 60_000), /expired/);
+  const out = await opResetSet(db, { token, password: "Long-enough-1" }, t0 + 60_000);
   const creds = await adminCredentials(db);
-  assert.equal(creds.check("long-enough-1"), true);
+  assert.equal(creds.check("Long-enough-1"), true);
   assert.equal(creds.check("env-pass"), false);
   assert.equal(isValidAdminToken(out.token, creds.secret, t0 + 120_000), true);
   assert.equal(isValidAdminToken(oldSession, creds.secret, t0 + 120_000), false);
-  await assert.rejects(opResetSet(db, { token, password: "another-pass-2" }, t0 + 90_000), /already used or replaced/);
+  await assert.rejects(opResetSet(db, { token, password: "Another-pass-2" }, t0 + 90_000), /already used or replaced/);
 }));
+
+// ── password rules (the same as DEMAS) ──────────────────────
+test("password rules: the browser copy and the server copy agree on every password", () => {
+  const corpus = ["", "a", "Ab1!", "abcdefgh", "ABCDEFGH", "Abcdefgh", "Abcdefg1", "Abcdef1!", "abcdef1!", "ABCDEF1!", "Abcdefg!", "Pass word 1", "Ünïcödé1a", "        ", "Aa1!Aa1!Aa1!"];
+  assert.deepEqual(serverPw.PW_RULES.map(r => [r.id, r.label]), browserPw.PW_RULES.map(r => [r.id, r.label]));
+  for (const pw of corpus) {
+    assert.deepEqual(serverPw.PW_RULES.map(r => r.test(pw)), browserPw.PW_RULES.map(r => r.test(pw)), pw);
+    assert.equal(serverPw.pwRulesMet(pw), browserPw.pwRulesMet(pw), pw);
+  }
+  assert.equal(serverPw.pwRulesMet("Abcdef1!"), true);
+  assert.deepEqual(serverPw.pwRulesFailed("abcdefgh"), ["An uppercase letter", "A number", "A special character"]);
+});
+
+test("reset links refuse a password that breaks the rules, naming the rule but never the password", async () => {
+  const mail = mailbox();
+  const adminDbFake = fakeDb({ admin_auth: [{ id: 1 }] });
+  await opResetRequest(adminDbFake, { email: ADMIN_EMAIL }, mail, "https://fonkiart.com", 0);
+  await assert.rejects(opResetSet(adminDbFake, { token: linkToken(mail), password: "alllowercase1!" }, 1000),
+    (e) => /An uppercase letter/.test(e.message) && !e.message.includes("alllowercase1!"));
+  const shopDb = fakeDb({ Clients: [{ id: 3, email: "c@x.com", password: "h" }], customer_resets: [] });
+  await opCustomerResetRequest(shopDb, { email: "c@x.com" }, mail, "https://fonkiart.com", 0);
+  await assert.rejects(opCustomerResetSet(shopDb, { token: resetToken(mail), password: "NoNumbers!!" }, 1000),
+    (e) => /A number/.test(e.message) && !e.message.includes("NoNumbers!!"));
+});
+
+// ── customers' "Forgot password?" ───────────────────────────
+function resetToken(mail) { return mail.sent.at(-1).htmlContent.match(/#reset=([A-Za-z0-9_-]{43})"/)[1]; }
+
+test("customer reset request: only real accounts get a link, stored hashed, no repeat within 2 minutes", async () => {
+  const db = fakeDb({ Clients: [{ id: 1, email: "col@x.com", password: "abc" }, { id: 2, email: "nopw@x.com", password: null }], customer_resets: [] },
+    { users: [{ id: "u1", email: "Buyer@X.com" }] });
+  const mail = mailbox();
+  // No account at all, and a checkout-only customer without a password: nothing sent.
+  await opCustomerResetRequest(db, { email: "nobody@x.com" }, mail, "https://fonkiart.com", 0);
+  await opCustomerResetRequest(db, { email: "nopw@x.com" }, mail, "https://fonkiart.com", 0);
+  assert.equal(mail.sent.length, 0);
+  await assert.rejects(opCustomerResetRequest(db, { email: "not-an-email" }, mail, "https://fonkiart.com", 0), InputError);
+  // A "Create Account" sign-in (any letter case) and a collectors password each get one.
+  await opCustomerResetRequest(db, { email: " Buyer@x.com " }, mail, "https://fonkiart.com", 0);
+  await opCustomerResetRequest(db, { email: "col@x.com" }, mail, "https://fonkiart.com", 0);
+  assert.deepEqual(mail.sent.map(m => m.to), ["buyer@x.com", "col@x.com"]);
+  assert.doesNotMatch(JSON.stringify(db.tables.customer_resets), new RegExp(resetToken(mail)));
+  await opCustomerResetRequest(db, { email: "col@x.com" }, mail, "https://fonkiart.com", 60_000);
+  assert.equal(mail.sent.length, 2);
+  const noTable = fakeDb({ Clients: [{ id: 1, email: "col@x.com", password: "abc" }] }, { fail: { customer_resets: { code: "PGRST205", message: "not in the schema cache" } } });
+  await assert.rejects(opCustomerResetRequest(noTable, { email: "col@x.com" }, mail, "https://fonkiart.com", 0), (e) => e instanceof InputError && e.status === 503);
+});
+
+test("customer reset link: sets the sign-in and the collectors password, works once, expires", async () => {
+  const db = fakeDb({ Clients: [{ id: 7, name: "Ana", email: "ana@x.com", password: "old-hash" }], customer_resets: [] },
+    { users: [{ id: "u7", email: "ana@x.com" }] });
+  const mail = mailbox();
+  await opCustomerResetRequest(db, { email: "ana@x.com" }, mail, "https://fonkiart.com", 0);
+  const token = resetToken(mail);
+  await assert.rejects(opCustomerResetSet(db, { token, password: "Short1!" }, 0), InputError);
+  await assert.rejects(opCustomerResetSet(db, { token, password: "Long-enough-1" }, 31 * 60_000), /expired/);
+  assert.deepEqual(await opCustomerResetSet(db, { token, password: "Long-enough-1" }, 60_000), { ok: true, email: "ana@x.com" });
+  assert.deepEqual(db.writes.find(w => w.table === "auth.users").payload, { password: "Long-enough-1", email_confirm: true });
+  assert.equal((await store.opLegacyLogin(db, { email: "ana@x.com", password: "Long-enough-1" })).ok, true);
+  assert.equal((await store.opLegacyLogin(db, { email: "ana@x.com", password: "Wrong-pass-1" })).ok, false);
+  await assert.rejects(opCustomerResetSet(db, { token, password: "Another-pass-2" }, 90_000), /already used or replaced/);
+});

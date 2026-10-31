@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { InputError } from "./errors.js";
 import { issueAdminToken, samePassword } from "./adminToken.js";
+import { pwRulesMet, pwRulesFailed } from "./pwRules.js";
 import * as T from "./emails.js";
 
 // The admin password starts out as the ADMIN_PASSWORD env var. Once it is reset
@@ -13,7 +14,7 @@ const RESET_MS = 30 * 60 * 1000;
 const RESEND_MS = 2 * 60 * 1000;
 
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
-const isMissingTable = (error) =>
+export const isMissingTable = (error) =>
   /PGRST205|42P01/.test(String(error?.code)) || /does not exist|schema cache/i.test(String(error?.message));
 
 export function hashPassword(password) {
@@ -74,7 +75,7 @@ export async function opResetSet(db, body, now = Date.now()) {
   const token = String(body.token || "");
   const password = body.password;
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new InputError("This reset link isn't valid. Ask for a new one.");
-  if (typeof password !== "string" || password.length < 8) throw new InputError("Use at least 8 characters.");
+  if (typeof password !== "string" || !pwRulesMet(password)) throw new InputError(`Password does not meet the requirements: ${pwRulesFailed(password).join(", ")}`);
   if (password.length > 200) throw new InputError("That password is too long.");
   const row = await readRow(db);
   const stored = String(row?.reset_token_hash || "");

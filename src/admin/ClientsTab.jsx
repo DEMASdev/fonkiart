@@ -1,6 +1,9 @@
 import { useState, useEffect, Fragment } from "react";
 import { adminDb as supabase } from "../lib/adminDb";
 import { hashPassword } from "../utils/helpers";
+import PasswordInput from "../components/PasswordInput";
+import PasswordRules from "../components/PasswordRules";
+import { pwRulesMet } from "../lib/pwRules";
 export default function ClientsTab() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +26,7 @@ export default function ClientsTab() {
   useEffect(() => { load(); }, []);
   const save = async () => {
     if (!form.name||!form.email) return;
+    if (form.password && !pwRulesMet(form.password)) return;
     const payload = { ...form };
     if (form.password) {
       payload.password = await hashPassword(form.password);
@@ -77,9 +81,9 @@ export default function ClientsTab() {
             <div className="fld"><label>Country</label><input value={form.country||""} onChange={e=>f("country",e.target.value)} placeholder="USA" /></div>
           </div>
           <div className="fld"><label>Notes</label><textarea value={form.notes||""} onChange={e=>f("notes",e.target.value)} placeholder="Any notes about this client…" /></div>
-          <div className="fld"><label>Collectors Password {editClient ? <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(leave blank to keep existing)</span> : ""}</label><input type="password" value={form.password||""} onChange={e=>f("password",e.target.value)} placeholder={editClient ? "Enter new password to change…" : "Set a password for this client"} autoComplete="new-password" /></div>
+          <div className="fld"><label>Collectors Password {editClient ? <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(leave blank to keep existing)</span> : ""}</label><PasswordInput value={form.password||""} onChange={e=>f("password",e.target.value)} placeholder={editClient ? "Enter new password to change…" : "Set a password for this client"} autoComplete="new-password" />{form.password && <PasswordRules value={form.password} />}</div>
           <div style={{display:"flex",gap:10}}>
-            <button className="btn-p" onClick={save}>{editClient ? "Update Client" : "Save Client"}</button>
+            <button className="btn-p" onClick={save} disabled={!!form.password && !pwRulesMet(form.password)}>{editClient ? "Update Client" : "Save Client"}</button>
             <button className="btn-s" onClick={cancelForm}>Cancel</button>
           </div>
         </div>

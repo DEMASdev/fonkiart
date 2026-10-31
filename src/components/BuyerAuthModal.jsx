@@ -3,6 +3,8 @@ import { supabase } from "../lib/supabase";
 import { adminLogin, requestAdminReset } from "../lib/adminAuth";
 import { storeCall } from "../lib/store";
 import PasswordInput from "./PasswordInput";
+import PasswordRules from "./PasswordRules";
+import { pwRulesMet } from "../lib/pwRules";
 
 const ADMIN_EMAIL = "fonkiart@gmail.com";
 const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
@@ -17,11 +19,11 @@ const TabBtn = ({ label, active, onClick }) => (
   </button>
 );
 
-export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin }) {
+export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, initialEmail = "", notice = "" }) {
   const [tab, setTab] = useState("login"); // "login" | "signup"
 
   // ── LOGIN STATE ────────────────────────────
-  const [loginEmail, setLoginEmail]     = useState("");
+  const [loginEmail, setLoginEmail]     = useState(initialEmail);
   const [loginPw, setLoginPw]           = useState("");
   const [loginErr, setLoginErr]         = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -75,19 +77,26 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
     setLoginLoading(false);
   };
 
-  // ── FORGOT (admin only) ────────────────────
+  // ── FORGOT PASSWORD ────────────────────────
+  // The admin's link goes to the admin inbox; a customer's covers both kinds of
+  // customer password (a "Create Account" sign-in and a collectors password).
   const handleForgot = async () => {
+    const email = loginEmail.trim().toLowerCase();
+    if (!email.includes("@")) { setReset("Type your email above first."); return; }
     setReset("sending");
-    try { await requestAdminReset(loginEmail); setReset("sent"); }
-    catch (e) { setReset(e.message); }
+    try {
+      if (isAdminEmail) await requestAdminReset(email);
+      else await storeCall("reset-request", { email });
+      setReset("sent");
+    } catch (e) { setReset(e.message); }
   };
 
   // ── SIGN UP ────────────────────────────────
   const handleSignup = async () => {
     if (!name.trim())                         { setSignupErr("Enter your name."); return; }
     if (!signupEmail.includes("@"))           { setSignupErr("Enter a valid email address."); return; }
-    if (signupPw.length < 6)                  { setSignupErr("Password must be at least 6 characters."); return; }
-    if (signupPw !== signupPw2)               { setSignupErr("Passwords don't match."); return; }
+    if (!pwRulesMet(signupPw))                { setSignupErr("That password does not meet all the requirements yet."); return; }
+    if (signupPw !== signupPw2)               { setSignupErr("Those two do not match."); return; }
 
     setSignupErr(""); setSignupLoading(true);
 
@@ -160,9 +169,10 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
         {/* ══════════════ LOGIN TAB ══════════════ */}
         {tab === "login" && step === "form" && (
           <>
+            {notice && <p style={{ color:"#2d6a4f", fontSize:13, marginBottom:14 }}>✓ {notice}</p>}
             <div className="fld">
               <label>Email</label>
-              <input type="email" value={loginEmail} onChange={e=>{ setLoginEmail(e.target.value); setLoginErr(""); }}
+              <input type="email" value={loginEmail} onChange={e=>{ setLoginEmail(e.target.value); setLoginErr(""); setReset(""); }}
                 placeholder="your@email.com" onKeyDown={e=>e.key==="Enter"&&handleLogin()} autoFocus />
             </div>
             <div className="fld">
@@ -170,16 +180,16 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
               <PasswordInput value={loginPw} onChange={e=>{ setLoginPw(e.target.value); setLoginErr(""); }}
                 placeholder="Password" onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
             </div>
-            {isAdminEmail && (
-              <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
-                {reset === "sent"
-                  ? <span style={{ color:"#2d6a4f" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
-                  : <button onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>
-                      {reset === "sending" ? "Sending…" : "Forgot password?"}
-                    </button>}
-                {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
-              </p>
-            )}
+            <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
+              {reset === "sent"
+                ? <span style={{ color:"#2d6a4f" }}>{isAdminEmail
+                    ? `✓ Reset link sent to ${ADMIN_EMAIL}. It works once, for 30 minutes.`
+                    : "✓ If that email has an account, a reset link is on its way. It works once, for 30 minutes."}</span>
+                : <button onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>
+                    {reset === "sending" ? "Sending…" : "Forgot password?"}
+                  </button>}
+              {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
+            </p>
             {loginErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{loginErr}</p>}
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:12 }}
               onClick={handleLogin} disabled={loginLoading}>
@@ -206,18 +216,19 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
                 placeholder="your@email.com" />
             </div>
             <div className="fld">
-              <label>Password <span style={{ fontWeight:300, textTransform:"none", letterSpacing:0 }}>(min. 6 chars)</span></label>
+              <label>Password</label>
               <PasswordInput value={signupPw} onChange={e=>{ setSignupPw(e.target.value); setSignupErr(""); }}
-                placeholder="Create a password" />
+                placeholder="Create a password" autoComplete="new-password" />
+              <PasswordRules value={signupPw} />
             </div>
             <div className="fld">
               <label>Confirm Password</label>
               <PasswordInput value={signupPw2} onChange={e=>{ setSignupPw2(e.target.value); setSignupErr(""); }}
-                placeholder="Repeat password" onKeyDown={e=>e.key==="Enter"&&handleSignup()} />
+                placeholder="Repeat password" autoComplete="new-password" onKeyDown={e=>e.key==="Enter"&&handleSignup()} />
             </div>
             {signupErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{signupErr}</p>}
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:12 }}
-              onClick={handleSignup} disabled={signupLoading}>
+              onClick={handleSignup} disabled={signupLoading || !!(signupPw && !pwRulesMet(signupPw))}>
               {signupLoading ? "Creating account…" : "Create Account →"}
             </button>
             <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>

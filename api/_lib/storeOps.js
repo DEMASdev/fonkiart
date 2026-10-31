@@ -2,6 +2,9 @@ import crypto from "crypto";
 import { InputError } from "./errors.js";
 import * as T from "./emails.js";
 import { bearer } from "./adminToken.js";
+import { checkPassword } from "./adminSecret.js";
+import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
+import { siteUrl } from "./site.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -232,8 +235,10 @@ export async function opLegacyLogin(db, body) {
   const { data: rows } = await db.from("Clients").select("id,name,email,password").eq("email", email).limit(1);
   const client = rows?.[0];
   if (!client?.password) return { ok: false };
-  const hashed = sha256hex(password);
   const safe = { id: client.id, name: client.name, email: client.email };
+  // Passwords saved by "Forgot password?" are scrypt hashes; the admin still saves sha256.
+  if (client.password.startsWith("scrypt$")) return checkPassword(password, client.password) ? { ok: true, client: safe } : { ok: false };
+  const hashed = sha256hex(password);
   if (client.password === hashed) return { ok: true, client: safe };
   if (client.password === password) {
     await db.from("Clients").update({ password: hashed }).eq("id", client.id);
@@ -276,4 +281,6 @@ export const STORE_OPS = {
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),
+  "reset-request": (db, req, mail) => opCustomerResetRequest(db, req.body || {}, mail, siteUrl()),
+  "reset-set": (db, req) => opCustomerResetSet(db, req.body || {}),
 };

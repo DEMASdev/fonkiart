@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
-import { adminHasToken } from "./lib/adminAuth";
+import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
+import { storeCall } from "./lib/store";
 import { adminDb } from "./lib/adminDb";
 import { loadData, saveData } from "./utils/helpers";
 import { NAV_ITEMS, DEFAULT_CATEGORIES, DEFAULT_STATE } from "./constants";
@@ -19,7 +20,7 @@ import ArtworkModal from "./components/ArtworkModal";
 import PriceInquiryModal from "./components/PriceInquiryModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import BuyerAuthModal from "./components/BuyerAuthModal";
-import AdminResetModal from "./components/AdminResetModal";
+import NewPasswordModal from "./components/NewPasswordModal";
 
 import InvoicePage from "./pages/InvoicePage";
 import HomePage from "./pages/HomePage";
@@ -46,13 +47,18 @@ export default function App() {
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
   const [deepModal, setDeepModal] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
-  // "#admin-reset=<token>" is the link in the admin password reset email. It opens
-  // over the home page, and the hash is cleared so the token doesn't linger.
-  const [adminResetToken, setAdminResetToken] = useState(() => (window.location.hash.match(/^#admin-reset=([A-Za-z0-9_-]{43})$/) || [])[1] || null);
-  const [page, setPage] = useState(() => (adminResetToken ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  // "#admin-reset=<token>" / "#reset=<token>" are the links in the admin and customer
+  // password reset emails. They open over the home page, and the hash is cleared so
+  // the token doesn't linger.
+  const [resetLink, setResetLink] = useState(() => {
+    const m = window.location.hash.match(/^#(admin-reset|reset)=([A-Za-z0-9_-]{43})$/);
+    return m ? { admin: m[1] === "admin-reset", token: m[2] } : null;
+  });
+  const [loginNotice, setLoginNotice] = useState(null);
+  const [page, setPage] = useState(() => (resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
   useEffect(() => {
-    if (adminResetToken) window.history.replaceState(null, "", window.location.pathname + window.location.search);
-  }, [adminResetToken]);
+    if (resetLink) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [resetLink]);
   const [pendingCategory, setPendingCategory] = useState(null);
   const goToCategory = (cat) => { setPendingCategory(cat); setPage("catalog"); };
   const goToPage = (p) => { if (p === "catalog") setPendingCategory(null); setPage(p); };
@@ -317,9 +323,14 @@ export default function App() {
         {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} />}
         {authModal && <AuthModal user={user} onClose={() => setAuthModal(false)} artworks={mergedData.items} />}
         {trackModal && <TrackOrderModal onClose={() => setTrackModal(false)} />}
-        {adminResetToken && <AdminResetModal token={adminResetToken} onClose={() => setAdminResetToken(null)}
-          onDone={() => { setAdminResetToken(null); setAdminAuthed(true); setPage("admin"); }} />}
-        {loginModal && <BuyerAuthModal onClose={() => setLoginModal(false)} onAdminLogin={() => { setAdminAuthed(true); setPage("admin"); setLoginModal(false); setSidebarOpen(false); }} onClientLogin={(client) => { setCollectorsClient(client); setPage("collectors"); setLoginModal(false); setSidebarOpen(false); }} />}
+        {resetLink?.admin && <NewPasswordModal title="New Admin Password" subtitle="Choose the password you'll use to sign in to the admin."
+          submitLabel="Save and open the admin →" onSubmit={(pw) => setAdminPassword(resetLink.token, pw)} onClose={() => setResetLink(null)}
+          onDone={() => { setResetLink(null); setAdminAuthed(true); setPage("admin"); }} />}
+        {resetLink && !resetLink.admin && <NewPasswordModal title="New Password" subtitle="Choose a new password for your Fonkiart account."
+          submitLabel="Save my new password →" onClose={() => setResetLink(null)}
+          onSubmit={async (pw) => { const r = await storeCall("reset-set", { token: resetLink.token, password: pw }); setLoginNotice({ email: r.email, text: "Password changed. Sign in with your new password." }); }}
+          onDone={() => { setResetLink(null); setLoginModal(true); }} />}
+        {loginModal && <BuyerAuthModal initialEmail={loginNotice?.email} notice={loginNotice?.text} onClose={() => { setLoginModal(false); setLoginNotice(null); }}onAdminLogin={() => { setAdminAuthed(true); setPage("admin"); setLoginModal(false); setSidebarOpen(false); }} onClientLogin={(client) => { setCollectorsClient(client); setPage("collectors"); setLoginModal(false); setSidebarOpen(false); }} />}
         <CookieBanner onContact={() => setPage("contact")} />
         <MarqueeStrip settings={data.settings} />
 

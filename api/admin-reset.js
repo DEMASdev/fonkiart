@@ -2,15 +2,10 @@ import { getServiceClient } from "./_lib/supabaseAdmin.js";
 import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
 import { opResetRequest, opResetSet } from "./_lib/adminSecret.js";
+import { siteUrl } from "./_lib/site.js";
 
 // "Forgot password?" for the admin: ?op=request emails a one-time link to the
 // admin inbox, ?op=set saves the new password from that link and signs in.
-// Links point at fonkiart.com in production and at the deployment on previews.
-function siteUrl() {
-  return process.env.VERCEL_ENV === "production" || !process.env.VERCEL_URL
-    ? "https://fonkiart.com"
-    : `https://${process.env.VERCEL_URL}`;
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
