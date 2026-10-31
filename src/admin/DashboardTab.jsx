@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { adminDb as supabase } from "../lib/adminDb";
 import AdminTasksWidget from "./AdminTasksWidget";
 
 const Stat = ({ label, value, sub, color }) => (

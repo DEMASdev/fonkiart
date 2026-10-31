@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { supabase, SUPABASE_URL } from "../lib/supabase";
+import { SUPABASE_URL } from "../lib/supabase";
+import { adminDb as supabase } from "../lib/adminDb";
 export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);

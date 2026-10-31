@@ -1,5 +1,6 @@
 import { useState, useEffect, Fragment } from "react";
-import { supabase, BREVO_SENDER } from "../lib/supabase";
+import { BREVO_SENDER } from "../lib/supabase";
+import { adminDb as supabase } from "../lib/adminDb";
 import { sendEmail } from "../utils/helpers";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];

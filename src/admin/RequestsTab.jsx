@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { supabase } from "../lib/supabase";
+import { adminDb as supabase } from "../lib/adminDb";
 
 export default function RequestsTab() {
   const [requests, setRequests] = useState([]);

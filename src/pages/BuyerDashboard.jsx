@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 const STATUS_COLOR = { pending:"#c9a96e", confirmed:"#1e3a52", shipped:"#2d6a4f", delivered:"var(--gold)" };
 const STATUS_LABEL = { pending:"Pending", confirmed:"Confirmed", shipped:"Shipped", delivered:"Delivered" };
@@ -19,30 +19,14 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
 
   const firstName = user?.user_metadata?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 
+  // The server checks the signed-in buyer, returns only their orders and profile,
+  // and creates the profile row on first login after signup.
   useEffect(() => {
-    if (!supabase || !user?.email) return;
-    const email = user.email.toLowerCase();
-
-    Promise.all([
-      supabase.from("Orders").select("*").eq("client_email", email).order("created_at", { ascending: false }),
-      supabase.from("Clients").select("*").eq("email", email).maybeSingle(),
-    ]).then(([ordersRes, clientRes]) => {
-      setOrders(ordersRes.data || []);
-      setClient(clientRes.data || null);
-
-      // Create Clients record if it doesn't exist yet (first login after signup)
-      if (!clientRes.data && user.user_metadata?.name) {
-        supabase.from("Clients").insert([{
-          name: user.user_metadata.name,
-          email,
-        }]).then(() => {
-          supabase.from("Clients").select("*").eq("email", email).maybeSingle()
-            .then(({ data }) => setClient(data));
-        });
-      }
-
-      setLoading(false);
-    });
+    if (!user?.email) return;
+    storeCall("buyer", {}, { signedIn: true })
+      .then(r => { setOrders(r.orders || []); setClient(r.client || null); })
+      .catch(e => console.warn("Account load:", e))
+      .finally(() => setLoading(false));
   }, [user]);
 
   return (

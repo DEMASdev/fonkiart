@@ -40,6 +40,10 @@ export function adminHasToken() {
   return !!localStorage.getItem(TOKEN_KEY);
 }
 
+export function adminTokenValue() {
+  return localStorage.getItem(TOKEN_KEY) || "";
+}
+
 export function adminLogout() {
   localStorage.removeItem(TOKEN_KEY);
 }

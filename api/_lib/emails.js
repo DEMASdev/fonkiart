@@ -1,0 +1,48 @@
+import { escapeHtml as e } from "./brevo.js";
+
+// Same HTML the browser used to build, moved to the server so a visitor can no
+// longer choose the recipient, subject or markup. Everything a visitor typed is escaped.
+
+const money = (n) => Number(n || 0).toLocaleString("en-US");
+const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
+const multiline = (s) => e(s).replace(/\r?\n/g, "<br/>");
+
+export function welcomeCoupon({ code, discount }) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:28px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Welcome to Fonkiart</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Thank you for joining. Here is your exclusive welcome coupon:</p><div style="background:#fff;border:2px dashed #c9a96e;padding:20px 24px;text-align:center;margin-bottom:24px;"><div style="font-size:28px;font-weight:600;letter-spacing:2px;color:#1c1a18;">${e(code)}</div><div style="font-size:13px;color:#7a6f63;margin-top:6px;">${e(discount)}% off your first purchase</div></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Enter this code at checkout. Valid on original art and prints. One use per customer.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`;
+}
+
+export function orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender }) {
+  const rows = items.map(i => `<p style="font-size:16px;font-weight:500;color:#1c1a18;margin-bottom:4px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:6px;">Thank you, ${e(firstName)}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:24px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Order Summary</p>${orderRef ? `<p style="font-size:11px;color:#8a8078;margin-bottom:8px;">Reference: <strong style="font-family:monospace;letter-spacing:.05em;">${e(orderRef)}</strong></p>` : ""}${rows}${total ? `<p style="font-size:22px;color:#c9a96e;font-family:Georgia,serif;margin-top:8px;">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-size:12px;color:#2d6a4f;">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : ""} ${addr ? `<p style="font-size:13px;color:#7a6f63;margin-top:10px;"><strong>Ship to:</strong> ${e(addr)}</p>` : ""}</div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Reply to this email and quote your reference number. You can also reach us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+}
+
+export function orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) {
+  const rows = items.map(i => `<p style="font-size:14px;color:#7a6f63;margin-bottom:4px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
+  const warning = saveFailed ? `<p style="font-size:14px;color:#c0392b;margin-bottom:16px;"><strong>⚠ This order could not be saved to the database. Add it by hand in the admin.</strong></p>` : "";
+  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">New Order Received</h2>${warning}${orderRef ? `<p style="font-family:monospace;font-size:14px;color:#c9a96e;margin-bottom:20px;">${e(orderRef)}</p>` : ""}${rows}${total ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;margin-top:6px;"><strong>Total:</strong> $${money(total)}${couponApplied ? ` (${e(discount)}% coupon applied)` : ""}</p>` : ""}<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Customer:</strong> ${e(fullName)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${e(email)}" style="color:#c9a96e;">${e(email)}</a></p>${phone ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Phone:</strong> ${e(phone)}</p>` : ""} ${addr ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Ship to:</strong> ${e(addr)}</p>` : ""}<p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
+}
+
+export function inquiryStore({ art, name, email, phone, message }) {
+  const details = [
+    art.category && `Category: ${e(art.category)}`,
+    art.medium && `Medium: ${e(art.medium)}`,
+    art.dimensions && `Dimensions: ${e(art.dimensions)}`,
+  ].filter(Boolean).join("<br/>");
+  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">Price Inquiry</h2><p style="font-family:monospace;font-size:13px;color:#c9a96e;margin-bottom:24px;">A customer is asking for pricing on one of your artworks.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Artwork</p><p style="font-size:20px;font-weight:500;color:#1c1a18;margin-bottom:8px;">${e(art.title)}</p>${details ? `<p style="font-size:13px;color:#7a6f63;line-height:1.8;">${details}</p>` : ""}${art.description ? `<p style="font-size:13px;color:#7a6f63;margin-top:8px;font-style:italic;">"${e(art.description)}"</p>` : ""}</div><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Customer</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Name:</strong> ${e(name)}</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${e(email)}" style="color:#c9a96e;">${e(email)}</a></p>${phone ? `<p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Phone:</strong> ${e(phone)}</p>` : ""}${message ? `<p style="font-size:14px;color:#1c1a18;margin-top:10px;"><strong>Message:</strong> ${multiline(message)}</p>` : ""}</div><p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
+}
+
+export function inquiryBuyer({ name, artTitle, sender }) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:24px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Thank you, ${e(firstWord(name))}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We received your inquiry about <strong>${e(artTitle)}</strong> and will get back to you shortly with pricing and availability.</p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Contact us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+}
+
+export function contactStore({ name, email, message }) {
+  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:20px;">New Contact Form Request</h2><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Name:</strong> ${e(name)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Email:</strong> ${e(email)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:16px;"><strong>Message:</strong></p><div style="background:#fff;border-left:3px solid #c9a96e;padding:14px 18px;font-size:14px;color:#1c1a18;line-height:1.7;">${multiline(message)}</div><p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
+}
+
+export function contactBuyer({ name, message, sender }) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Thank you, ${e(firstWord(name))}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We received your message and will get back to you within 24–48 hours.</p><div style="background:#fff;border:1px solid #ece7dd;padding:16px 20px;margin-bottom:24px;border-left:3px solid #c9a96e;"><p style="font-size:13px;color:#8a8078;margin-bottom:8px;font-style:italic;">Your message:</p><p style="font-size:14px;color:#1c1a18;line-height:1.7;">${multiline(message)}</p></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Reply to this email or reach us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+}
+
+export function invoiceApproved({ order }) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:16px;">Invoice Approved</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;"><strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.</p></div>`;
+}

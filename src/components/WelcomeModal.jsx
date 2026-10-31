@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
-import { generateCouponCode, sendEmail } from "../utils/helpers";
+import { storeCall } from "../lib/store";
 
 export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) {
   const [email, setEmail] = useState("");
@@ -16,30 +15,10 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
     if (!email || !email.includes("@")) { setErr("Please enter a valid email."); return; }
     setLoading(true);
     try {
-      let code = generateCouponCode();
-      let isReturning = false;
-      let isUsed = false;
-      if (supabase) {
-        const { data: existing } = await supabase.from("Leads").select("coupon_code,coupon_used").eq("email", email.toLowerCase()).maybeSingle();
-        if (existing) {
-          code = existing.coupon_code;
-          isReturning = true;
-          isUsed = !!existing.coupon_used;
-        } else {
-          const { error: dbErr } = await supabase.from("Leads").insert([{ email: email.toLowerCase(), source: "welcome-popup", coupon_code: code, coupon_used: false }]);
-          if (dbErr) { console.error("Supabase error:", dbErr); setErr("DB: " + dbErr.message); setLoading(false); return; }
-        }
-      }
-      setGeneratedCode(code);
-      setReturning(isReturning);
-      setAlreadyUsed(isUsed);
-      if (!isReturning) {
-        await sendEmail({
-          to: email,
-          subject: `Your ${discount}% Welcome Coupon — Fonkiart`,
-          htmlContent: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:28px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Welcome to Fonkiart</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Thank you for joining. Here is your exclusive welcome coupon:</p><div style="background:#fff;border:2px dashed #c9a96e;padding:20px 24px;text-align:center;margin-bottom:24px;"><div style="font-size:28px;font-weight:600;letter-spacing:2px;color:#1c1a18;">${code}</div><div style="font-size:13px;color:#7a6f63;margin-top:6px;">${discount}% off your first purchase</div></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Enter this code at checkout. Valid on original art and prints. One use per customer.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`,
-        });
-      }
+      const r = await storeCall("welcome", { email });
+      setGeneratedCode(r.code);
+      setReturning(!!r.returning);
+      setAlreadyUsed(!!r.used);
     } catch(e) { console.error("Error:", e); setErr("Error: " + e.message); setLoading(false); return; }
     setLoading(false);
     setSubmitted(true);

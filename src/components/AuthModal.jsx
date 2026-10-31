@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 export default function AuthModal({ user, onClose, artworks = [] }) {
   const [email, setEmail] = useState("");
@@ -13,12 +14,8 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
     try {
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) { setErr(error.message); setLoading(false); return; }
-      if (supabase) {
-        const { data: existing } = await supabase.from("Leads").select("id").eq("email", email.toLowerCase()).maybeSingle();
-        if (!existing) {
-          await supabase.from("Leads").insert([{ email: email.toLowerCase(), source: "collectors-request", coupon_code: null, coupon_used: false }]);
-        }
-      }
+      try { await storeCall("collectors", { email, source: "collectors-request" }); }
+      catch (e) { console.warn("Collectors request:", e); }
       setSent(true);
     } catch { setErr("Could not send link."); }
     setLoading(false);

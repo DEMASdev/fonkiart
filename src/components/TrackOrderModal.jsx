@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 export default function TrackOrderModal({ onClose }) {
   const [email, setEmail] = useState("");
@@ -9,12 +9,12 @@ export default function TrackOrderModal({ onClose }) {
 
   const searchOrders = async () => {
     if (!email || !email.includes("@")) { setErr("Enter a valid email."); return; }
-    if (!supabase) { setErr("Service not available."); return; }
     setLoading(true); setErr(""); setOrders(null);
-    const { data, error } = await supabase.from("Orders").select("id,item_title,status,amount,created_at").eq("client_email", email.toLowerCase().trim()).order("created_at", { ascending:false });
+    try {
+      const r = await storeCall("track", { email });
+      setOrders(r.orders || []);
+    } catch { setErr("Could not load orders."); }
     setLoading(false);
-    if (error) { setErr("Could not load orders."); return; }
-    setOrders(data || []);
   };
 
   const statusColor = { pending:"#f0d5a8", confirmed:"#1e3a52", shipped:"#2d6a4f", delivered:"var(--gold)" };

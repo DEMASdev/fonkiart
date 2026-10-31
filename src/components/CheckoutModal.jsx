@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase, BREVO_SENDER } from "../lib/supabase";
-import { sendEmail, formatOrderRef } from "../utils/helpers";
+import { BREVO_SENDER } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 export default function CheckoutModal({ items, settings, onClose, onSuccess, fullPage }) {
   const venmoHandle   = settings.venmoHandle   || "@fonkiart";
@@ -13,17 +13,12 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
   const [customer, setCustomer] = useState(blank);
   const [couponCode, setCouponCode] = useState("");
   const [couponStatus, setCouponStatus] = useState(null);
-  const [couponData, setCouponData] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [orderRef, setOrderRef] = useState("");
 
   // Predict the next sequential order number (Orders.id is auto-incrementing).
   useEffect(() => {
-    if (!supabase) return;
-    supabase.from("Orders").select("id").order("id", { ascending:false }).limit(1).then(({ data }) => {
-      const maxId = data && data.length ? data[0].id : 9;
-      setOrderRef(formatOrderRef(maxId + 1));
-    });
+    storeCall("next-ref").then(r => setOrderRef(r.ref)).catch(e => console.warn("Order ref:", e));
   }, []);
 
   const cv = (k,v) => setCustomer(fm=>({...fm,[k]:v}));
@@ -46,48 +41,43 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
   const applyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
-    if (!code || !supabase) return;
+    if (!code) return;
     if (!customer.email || !customer.email.includes("@")) { setCouponStatus("need-email"); return; }
     setCouponStatus("checking");
-    const { data, error } = await supabase.from("Leads").select("*").eq("coupon_code", code).single();
-    if (error || !data) { setCouponStatus("invalid"); return; }
-    if (data.coupon_used) { setCouponStatus("used"); return; }
-    if (data.email.toLowerCase() !== customer.email.trim().toLowerCase()) { setCouponStatus("wrong-email"); return; }
-    setCouponData(data); setCouponStatus("valid");
+    try {
+      const { status } = await storeCall("coupon", { code, email: customer.email });
+      setCouponStatus(status);
+    } catch { setCouponStatus("invalid"); }
   };
 
+  // The server saves the order, marks the coupon used and sends both emails.
+  // Returns false (with a message the buyer can act on) if it could not be reached.
   const saveOrder = async () => {
-    if (!supabase) return;
-    const addr = [customer.address, customer.city, customer.state, customer.zip, customer.country].filter(Boolean).join(", ");
-    const discountNote = couponStatus === "valid" ? ` · ${discount}% coupon applied` : "";
-    const notes = [`Order Ref: ${orderRef}`, fullName, customer.phone, addr].filter(Boolean).join(" · ") + discountNote;
-    const sendMail = async (to, subject, html) => { try { await sendEmail({ to, subject, htmlContent: html }); } catch(e) { console.warn("Email:", e); } };
-    const priceStr = effectivePrice ? `$${Number(effectivePrice).toLocaleString()}` : "";
-    const ref = orderRef;
-    const { data: existingClient } = await supabase.from("Clients").select("id").eq("email", customer.email).maybeSingle();
-    const rows = items.map(i => ({ client_email:customer.email, item_title:i.title, amount:itemEffective(i), status:"pending", notes }));
-    await supabase.from("Orders").insert(rows).select("id");
-    const itemsRowsHtml = items.map(i => `<p style="font-size:16px;font-weight:500;color:#1c1a18;margin-bottom:4px;">${i.title}${itemEffective(i) ? ` — $${Number(itemEffective(i)).toLocaleString()}` : ""}</p>`).join("");
-    const itemsRowsHtmlPlain = items.map(i => `<p style="font-size:14px;color:#7a6f63;margin-bottom:4px;">${i.title}${itemEffective(i) ? ` — $${Number(itemEffective(i)).toLocaleString()}` : ""}</p>`).join("");
-    await Promise.allSettled([
-      existingClient ? Promise.resolve() : supabase.from("Clients").insert([{ name:fullName, email:customer.email, phone:customer.phone||null, address:customer.address||null, city:customer.city||null, state:customer.state||null, zip:customer.zip||null, country:customer.country||null }]),
-      couponStatus === "valid" && couponData ? supabase.from("Leads").update({ coupon_used:true }).eq("id", couponData.id) : Promise.resolve(),
-      sendMail(customer.email, `Order Received — ${itemsLabel} · Fonkiart`,
-        `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:6px;">Thank you, ${customer.firstName}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:24px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Order Summary</p>${ref?`<p style="font-size:11px;color:#8a8078;margin-bottom:8px;">Reference: <strong style="font-family:monospace;letter-spacing:.05em;">${ref}</strong></p>`:""}${itemsRowsHtml}${effectivePrice?`<p style="font-size:22px;color:#c9a96e;font-family:Georgia,serif;margin-top:8px;">Total: ${priceStr}${couponStatus==="valid"?` &nbsp;<span style="font-size:12px;color:#2d6a4f;">✓ ${discount}% coupon applied</span>`:""}</p>`:""} ${addr?`<p style="font-size:13px;color:#7a6f63;margin-top:10px;"><strong>Ship to:</strong> ${addr}</p>`:""}</div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Reply to this email and quote your reference number. You can also reach us at <a href="mailto:${BREVO_SENDER}" style="color:#c9a96e;">${BREVO_SENDER}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`
-      ),
-      sendMail(BREVO_SENDER, `🎨 New Order ${ref}: ${itemsLabel} — ${fullName}`,
-        `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">New Order Received</h2>${ref?`<p style="font-family:monospace;font-size:14px;color:#c9a96e;margin-bottom:20px;">${ref}</p>`:""}${itemsRowsHtmlPlain}${effectivePrice?`<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;margin-top:6px;"><strong>Total:</strong> ${priceStr}${couponStatus==="valid"?` (${discount}% coupon applied)`:""}</p>`:""}<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Customer:</strong> ${fullName}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${customer.email}" style="color:#c9a96e;">${customer.email}</a></p>${customer.phone?`<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Phone:</strong> ${customer.phone}</p>`:""} ${addr?`<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Ship to:</strong> ${addr}</p>`:""}<p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`
-      ),
-    ]);
+    try {
+      await storeCall("order", {
+        customer,
+        orderRef,
+        total: effectivePrice,
+        couponCode: couponStatus === "valid" ? couponCode.trim().toUpperCase() : "",
+        items: items.map(i => ({ title: i.title, amount: itemEffective(i) })),
+      });
+      return true;
+    } catch (e) {
+      console.warn("Order:", e);
+      setCheckoutError(`We couldn't save your order. Please email ${BREVO_SENDER || "us"} with your order number ${orderRef}.`);
+      return false;
+    }
   };
 
   // markSold intentionally removed — Andy marks sold manually in Admin after verifying payment received
   const finish = () => { setDone(true); onSuccess?.(); };
-  const handleConfirmZelle   = async () => { setSaving(true); await saveOrder(); setSaving(false); finish(); };
-  const handleConfirmVenmo   = async () => { setSaving(true); await saveOrder(); setSaving(false); finish(); };
-  const handleConfirmCashApp = async () => { setSaving(true); await saveOrder(); setSaving(false); finish(); };
+  const confirmPaid = async () => { setSaving(true); const ok = await saveOrder(); setSaving(false); if (ok) finish(); };
+  const handleConfirmZelle   = confirmPaid;
+  const handleConfirmVenmo   = confirmPaid;
+  const handleConfirmCashApp = confirmPaid;
   const handleCard = async () => {
-    setSaving(true); await saveOrder(); setSaving(false);
+    setSaving(true); const ok = await saveOrder(); setSaving(false);
+    if (!ok) return;
     const link = (items.length === 1 && items[0].stripeLink) || settings.stripeLink;
     if (link) { window.open(link, "_blank"); finish(); }
     else alert("Card payment is being set up. Please use Zelle or contact Fonkiart directly.");
@@ -168,13 +158,13 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               </div>
               <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
               <div style={{ display:"flex", gap:8 }}>
-                <input value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);setCouponData(null);} }}
+                <input value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
                   placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
                   style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
                 />
                 {couponStatus !== "valid"
                   ? <button className="btn-s" onClick={applyCoupon} disabled={couponStatus==="checking"||!couponCode.trim()} style={{whiteSpace:"nowrap"}}>{couponStatus==="checking"?"Checking…":"Apply"}</button>
-                  : <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponData(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
+                  : <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
                 }
               </div>
               {couponStatus==="valid"       && <p style={{fontSize:12,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied — you save ${(basePrice-effectivePrice).toLocaleString()}</p>}
@@ -242,6 +232,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="card"    && <button className="stripe-btn"  onClick={handleCard}           disabled={saving}>{saving?"Saving…":"Pay Securely with Card →"}</button>}
+            {checkoutError && <p style={{ fontSize:12, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { adminLogin } from "../lib/adminAuth";
-import { hashPassword } from "../utils/helpers";
+import { storeCall } from "../lib/store";
 
 const TabBtn = ({ label, active, onClick }) => (
   <button onClick={onClick}
@@ -58,18 +58,11 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
       if (!error) { onClose(); return; } // onAuthStateChange handles routing
     } catch { /* fall through to legacy */ }
 
-    // Legacy fallback: manually set Clients table passwords (backwards compat)
+    // Legacy fallback: passwords set by hand on the Clients table (checked on the server,
+    // so the stored password never reaches the browser)
     try {
-      const { data: client } = await supabase.from("Clients").select("id,name,email,password")
-        .eq("email", loginEmail.trim().toLowerCase()).maybeSingle();
-      if (client?.password) {
-        const hashed = await hashPassword(loginPw);
-        if (client.password === hashed) { onClientLogin(client); return; }
-        if (client.password === loginPw) {
-          await supabase.from("Clients").update({ password: hashed }).eq("id", client.id);
-          onClientLogin(client); return;
-        }
-      }
+      const r = await storeCall("legacy-login", { email: loginEmail, password: loginPw });
+      if (r.ok && r.client) { onClientLogin(r.client); return; }
     } catch (e) { console.warn("Legacy login:", e); }
 
     setLoginErr("Incorrect email or password.");

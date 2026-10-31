@@ -3,6 +3,7 @@ import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
 import { adminHasToken } from "./lib/adminAuth";
+import { adminDb } from "./lib/adminDb";
 import { loadData, saveData } from "./utils/helpers";
 import { NAV_ITEMS, DEFAULT_CATEGORIES, DEFAULT_STATE } from "./constants";
 
@@ -122,7 +123,7 @@ export default function App() {
     const { navVisible, ...supabaseSettings } = settings;
     if (navVisible !== undefined) localStorage.setItem("fonkiart-nav-visible", JSON.stringify(navVisible));
     if (!supabase) return;
-    const { error } = await supabase.from("Settings").upsert({ id: 1, ...supabaseSettings, categories }, { onConflict: "id" });
+    const { error } = await adminDb.from("Settings").upsert({ id: 1, ...supabaseSettings, categories }, { onConflict: "id" });
     if (error) { console.error("Settings save:", error); throw error; }
   };
 
@@ -135,7 +136,7 @@ export default function App() {
         setData({ ...base, settings: remote.settings, categories: remote.categories });
       } else {
         setData(base);
-        if (supabase) saveSettings(base.settings, base.categories);
+        if (supabase) saveSettings(base.settings, base.categories).catch(() => {});
       }
     };
     init();
@@ -229,10 +230,10 @@ export default function App() {
     };
   };
 
-  const addArtwork    = async (entry) => { if (!supabase) return; const { data: row } = await supabase.from("Artworks").insert([cleanArtwork(entry)]).select().single(); setArtworks(prev => [row || entry, ...prev]); };
-  const editArtwork   = async (id, entry) => { if (!supabase) return; await supabase.from("Artworks").update(cleanArtwork(entry)).eq("id", id); setArtworks(prev => prev.map(a => a.id === id ? { ...a, ...entry } : a)); };
-  const deleteArtwork = async (id) => { if (!supabase) return; await supabase.from("Artworks").delete().eq("id", id); setArtworks(prev => prev.filter(a => a.id !== id)); };
-  const patchArtwork  = async (id, patch) => { if (!supabase) return; await supabase.from("Artworks").update(patch).eq("id", id); setArtworks(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a)); };
+  const addArtwork    = async (entry) => { if (!supabase) return; const { data: row } = await adminDb.from("Artworks").insert([cleanArtwork(entry)]).select().single(); setArtworks(prev => [row || entry, ...prev]); };
+  const editArtwork   = async (id, entry) => { if (!supabase) return; await adminDb.from("Artworks").update(cleanArtwork(entry)).eq("id", id); setArtworks(prev => prev.map(a => a.id === id ? { ...a, ...entry } : a)); };
+  const deleteArtwork = async (id) => { if (!supabase) return; await adminDb.from("Artworks").delete().eq("id", id); setArtworks(prev => prev.filter(a => a.id !== id)); };
+  const patchArtwork  = async (id, patch) => { if (!supabase) return; await adminDb.from("Artworks").update(patch).eq("id", id); setArtworks(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a)); };
 
   const mergedData = data ? { ...data, items: artworks.length > 0 ? artworks : (data.items || []) } : null;
 

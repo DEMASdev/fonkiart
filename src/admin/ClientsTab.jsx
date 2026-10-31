@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { supabase } from "../lib/supabase";
+import { adminDb as supabase } from "../lib/adminDb";
 import { hashPassword } from "../utils/helpers";
 export default function ClientsTab() {
   const [clients, setClients] = useState([]);

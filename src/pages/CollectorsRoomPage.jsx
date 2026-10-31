@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 import CheckoutModal from "../components/CheckoutModal";
 
 export default function CollectorsRoomPage({ user, artworks, settings, onLogout, onBack, isAdmin, onAdminEnter }) {
@@ -13,15 +13,16 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
   const [tab, setTab]           = useState("room");
 
   useEffect(() => {
-    if (!supabase || !user?.email) return;
-    supabase.from("Orders").select("*").eq("client_email", user.email).order("created_at",{ascending:false})
-      .then(({ data }) => setOrders(data || []));
+    if (!user?.email) return;
+    storeCall("buyer", {}, { signedIn: true })
+      .then(r => setOrders(r.orders || []))
+      .catch(e => console.warn("Collector orders:", e));
   }, [user]);
 
   const sendCommission = async () => {
     if (!commForm.name || !commForm.idea) return;
     try {
-      await supabase.from("Requests").insert([{ name:commForm.name, email:commForm.email, message:`[COLLECTORS COMMISSION] Budget: ${commForm.budget||"TBD"}\n\n${commForm.idea}`, status:"new" }]);
+      await storeCall("request", { kind: "commission", name: commForm.name, email: commForm.email, idea: commForm.idea, budget: commForm.budget });
       setCommSent(true);
     } catch(e) { console.warn("Commission request:", e); }
   };

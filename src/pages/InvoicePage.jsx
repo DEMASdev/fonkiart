@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase, BREVO_SENDER } from "../lib/supabase";
-import { sendEmail } from "../utils/helpers";
+import { BREVO_SENDER } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 export default function InvoicePage({ token }) {
   const [order, setOrder] = useState(null);
@@ -12,15 +12,11 @@ export default function InvoicePage({ token }) {
 
   useEffect(() => {
     const load = async () => {
-      if (!supabase) { setLoading(false); setNotFound(true); return; }
       try {
-        const [orderRes, settingsRes] = await Promise.all([
-          supabase.from("Orders").select("*").eq("invoice_token", token).single(),
-          supabase.from("Settings").select("*").eq("id", 1).single(),
-        ]);
-        if (orderRes.error || !orderRes.data) { setNotFound(true); }
-        else { setOrder(orderRes.data); setApproved(!!orderRes.data.invoice_approved); }
-        if (!settingsRes.error && settingsRes.data) setSettings(settingsRes.data);
+        const r = await storeCall("invoice", { token });
+        setOrder(r.order);
+        setApproved(!!r.order.invoice_approved);
+        setSettings(r.settings || {});
       } catch { setNotFound(true); }
       finally { setLoading(false); }
     };
@@ -28,15 +24,10 @@ export default function InvoicePage({ token }) {
   }, [token]);
 
   const handleApprove = async () => {
-    if (!supabase || !order || approved) return;
+    if (!order || approved) return;
     setApproving(true);
     try {
-      await supabase.from("Orders").update({ invoice_approved: true, status: "confirmed" }).eq("id", order.id);
-      await sendEmail({
-        to: BREVO_SENDER,
-        subject: `Invoice approved — ${order.item_title}`,
-        htmlContent: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:16px;">Invoice Approved</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;"><strong>${order.client_name || order.client_email}</strong> approved the invoice for <strong>${order.item_title}</strong> — $${Number(order.amount).toLocaleString()}.</p></div>`,
-      });
+      await storeCall("invoice-approve", { token });
       setApproved(true);
     } catch(e) { console.warn("Approve error:", e); }
     finally { setApproving(false); }

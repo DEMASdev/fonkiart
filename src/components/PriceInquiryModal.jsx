@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { supabase, BREVO_SENDER } from "../lib/supabase";
-import { sendEmail } from "../utils/helpers";
+import { storeCall } from "../lib/store";
 
 export default function PriceInquiryModal({ item, onClose }) {
   const blank = { name:"", email:"", phone:"", message:"" };
@@ -12,30 +11,9 @@ export default function PriceInquiryModal({ item, onClose }) {
 
   const send = async () => {
     setSending(true);
-    const details = [
-      item.category && `Category: ${item.category}`,
-      item.medium && `Medium: ${item.medium}`,
-      item.dimensions && `Dimensions: ${item.dimensions}`,
-    ].filter(Boolean).join("<br/>");
     try {
-      await Promise.allSettled([
-        supabase?.from("Requests").insert([{
-          name: form.name, email: form.email,
-          message: `Price inquiry for "${item.title}"${form.message ? ` — ${form.message}` : ""}. Phone: ${form.phone || "not provided"}.`,
-          status: "new"
-        }]),
-        sendEmail({
-          to: BREVO_SENDER,
-          subject: `Enquiry about ${item.title}`,
-          htmlContent: `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">Price Inquiry</h2><p style="font-family:monospace;font-size:13px;color:#c9a96e;margin-bottom:24px;">A customer is asking for pricing on one of your artworks.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Artwork</p><p style="font-size:20px;font-weight:500;color:#1c1a18;margin-bottom:8px;">${item.title}</p>${details ? `<p style="font-size:13px;color:#7a6f63;line-height:1.8;">${details}</p>` : ""}${item.description ? `<p style="font-size:13px;color:#7a6f63;margin-top:8px;font-style:italic;">"${item.description}"</p>` : ""}</div><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Customer</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Name:</strong> ${form.name}</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${form.email}" style="color:#c9a96e;">${form.email}</a></p>${form.phone ? `<p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Phone:</strong> ${form.phone}</p>` : ""}${form.message ? `<p style="font-size:14px;color:#1c1a18;margin-top:10px;"><strong>Message:</strong> ${form.message}</p>` : ""}</div><p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`,
-        }),
-        sendEmail({
-          to: form.email,
-          subject: `Your inquiry — ${item.title} · Fonkiart`,
-          htmlContent: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:24px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Thank you, ${form.name.split(" ")[0]}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We received your inquiry about <strong>${item.title}</strong> and will get back to you shortly with pricing and availability.</p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Contact us at <a href="mailto:${BREVO_SENDER}" style="color:#c9a96e;">${BREVO_SENDER}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`,
-        }),
-      ]);
-    } catch(e) { console.warn("Inquiry email:", e); }
+      await storeCall("request", { kind: "inquiry", artworkId: item.id, name: form.name, email: form.email, phone: form.phone, message: form.message });
+    } catch(e) { console.warn("Inquiry:", e); }
     setSending(false);
     setDone(true);
   };

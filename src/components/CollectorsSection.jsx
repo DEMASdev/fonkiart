@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { storeCall } from "../lib/store";
 
 export default function CollectorsSection() {
   const [email, setEmail] = useState("");
@@ -11,12 +11,7 @@ export default function CollectorsSection() {
     if (!email || !email.includes("@")) { setErr("Enter a valid email."); return; }
     setLoading(true);
     try {
-      if (supabase) {
-        const { data: existing } = await supabase.from("Leads").select("id").eq("email", email.toLowerCase()).maybeSingle();
-        if (!existing) {
-          await supabase.from("Leads").insert([{ email: email.toLowerCase(), source: "collectors-section", coupon_code: null, coupon_used: false }]);
-        }
-      }
+      await storeCall("collectors", { email, source: "collectors-section" });
     } catch(e) { console.warn("Collectors signup:", e); }
     setLoading(false);
     setSubmitted(true);
