@@ -4,6 +4,19 @@
 -- Every table in the public schema gets row security; nothing can be read or changed
 -- with the public key except the two read rules below. The server is unaffected.
 begin;
+-- Where the admin password lives once it is reset from the site ("Forgot password?").
+-- One row; the loop below locks it like every other table, so only the server reads it.
+create table if not exists public.admin_auth (
+  id int primary key default 1 check (id = 1),
+  password_hash text,
+  token_secret text,
+  reset_token_hash text,
+  reset_expires_at timestamptz,
+  reset_requested_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+insert into public.admin_auth (id) values (1) on conflict (id) do nothing;
+revoke all on public.admin_auth from anon, authenticated;
 do $$ declare t record; begin
   for t in select tablename from pg_tables where schemaname = 'public' loop
     execute format('alter table public.%I enable row level security', t.tablename);

@@ -1,18 +1,26 @@
 import { getServiceClient } from "./_lib/supabaseAdmin.js";
 import { isValidAdminToken, bearer } from "./_lib/adminToken.js";
+import { adminCredentials } from "./_lib/adminSecret.js";
 import { sendBrevo } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
 import { runQuery, signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: { message: "Method not allowed" } });
-  if (!isValidAdminToken(bearer(req), process.env.ADMIN_PASSWORD)) {
-    return res.status(401).json({ error: { message: "Admin login required" } });
-  }
   const db = getServiceClient();
   if (!db) {
     console.error("admin: SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL not configured");
     return res.status(503).json({ error: { message: "Database not configured" } });
+  }
+  let creds;
+  try {
+    creds = await adminCredentials(db);
+  } catch (e) {
+    console.error("admin:", e?.message || e);
+    return res.status(503).json({ error: { message: "Admin login unavailable, try again in a minute" } });
+  }
+  if (!creds || !isValidAdminToken(bearer(req), creds.secret)) {
+    return res.status(401).json({ error: { message: "Admin login required" } });
   }
   const body = req.body || {};
   try {

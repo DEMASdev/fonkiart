@@ -6,12 +6,13 @@ import * as store from "../api/_lib/storeOps.js";
 import { InputError } from "../api/_lib/errors.js";
 import { escapeHtml, senderAddress } from "../api/_lib/brevo.js";
 import { isServiceKey } from "../api/_lib/supabaseAdmin.js";
+import { ADMIN_EMAIL, hashPassword, checkPassword, adminCredentials, opResetRequest, opResetSet } from "../api/_lib/adminSecret.js";
 import * as T from "../api/_lib/emails.js";
 import { recordQuery } from "../src/lib/adminQuery.js";
 
 // Tiny in-memory stand-in for the supabase-js query builder: enough to run the
 // store's real logic and see exactly what it reads and writes.
-function fakeDb(tables = {}, { user = null } = {}) {
+function fakeDb(tables = {}, { user = null, fail = {} } = {}) {
   const writes = [];
   function from(table) {
     let op = "select", payload = null, lim = null, single = null;
@@ -31,7 +32,9 @@ function fakeDb(tables = {}, { user = null } = {}) {
     };
     const match = (r) => filters.every(([k, v]) => String(r[k]) === String(v));
     function run() {
+      if (fail[table]) return { data: null, error: fail[table] };
       const rows = (tables[table] ||= []);
+      if (op === "upsert") { writes.push({ table, op, payload }); [].concat(payload).forEach(r => { const hit = rows.find(x => x.id === r.id); if (hit) Object.assign(hit, r); else rows.push({ ...r }); }); return { data: null, error: null }; }
       if (op === "insert") { writes.push({ table, op, payload }); payload.forEach(r => rows.push({ id: rows.length + 100, ...r })); return { data: null, error: null }; }
       if (op === "update") { writes.push({ table, op, payload, filters: [...filters] }); rows.filter(match).forEach(r => Object.assign(r, payload)); return { data: null, error: null }; }
       let out = rows.filter(match).map(r => ({ ...r }));
@@ -220,3 +223,70 @@ test("server refuses the public key in place of the service key", () => {
   assert.equal(isServiceKey("sb_publishable_abc"), false);
   assert.equal(isServiceKey("not-a-key"), false);
 });
+
+// ── admin "Forgot password?" ────────────────────────────────
+const withEnvPassword = async (value, fn) => {
+  const saved = process.env.ADMIN_PASSWORD;
+  process.env.ADMIN_PASSWORD = value;
+  try { await fn(); } finally { saved === undefined ? delete process.env.ADMIN_PASSWORD : (process.env.ADMIN_PASSWORD = saved); }
+};
+const linkToken = (mail) => mail.sent.at(-1).htmlContent.match(/#admin-reset=([A-Za-z0-9_-]{43})"/)[1];
+
+test("admin password hash: the right password passes, wrong or malformed ones fail", () => {
+  const h = hashPassword("correct horse");
+  assert.match(h, /^scrypt\$/);
+  assert.equal(checkPassword("correct horse", h), true);
+  assert.equal(checkPassword("correct horsE", h), false);
+  assert.equal(checkPassword("correct horse", "plain-text"), false);
+  assert.equal(checkPassword(undefined, h), false);
+});
+
+test("admin login uses the env password until a reset, then only the stored one", () => withEnvPassword("env-pass", async () => {
+  const noTable = await adminCredentials(fakeDb({}, { fail: { admin_auth: { code: "PGRST205", message: "not in the schema cache" } } }));
+  assert.equal(noTable.check("env-pass"), true);
+  assert.equal(noTable.secret, "env-pass");
+  assert.equal((await adminCredentials(fakeDb({ admin_auth: [{ id: 1 }] }))).check("env-pass"), true);
+  const stored = await adminCredentials(fakeDb({ admin_auth: [{ id: 1, password_hash: hashPassword("new-pass-123"), token_secret: "s2" }] }));
+  assert.equal(stored.check("new-pass-123"), true);
+  assert.equal(stored.check("env-pass"), false);
+  assert.equal(stored.secret, "s2");
+  // Any other read error must not quietly fall back to the env password.
+  await assert.rejects(adminCredentials(fakeDb({}, { fail: { admin_auth: { code: "57014", message: "timeout" } } })));
+}));
+
+test("reset request: only the admin address gets a link, it's stored hashed, no repeat within 2 minutes", async () => {
+  const db = fakeDb({ admin_auth: [{ id: 1 }] });
+  const mail = mailbox();
+  assert.deepEqual(await opResetRequest(db, { email: "someone@else.com" }, mail, "https://fonkiart.com", 1_000_000), { ok: true });
+  assert.equal(mail.sent.length, 0);
+  assert.equal(db.writes.length, 0);
+  await opResetRequest(db, { email: " FonkiArt@gmail.com " }, mail, "https://fonkiart.com", 1_000_000);
+  assert.equal(mail.sent.length, 1);
+  assert.equal(mail.sent[0].to, ADMIN_EMAIL);
+  const token = linkToken(mail);
+  assert.equal(db.tables.admin_auth[0].reset_token_hash.length, 64);
+  assert.doesNotMatch(JSON.stringify(db.tables.admin_auth[0]), new RegExp(token));
+  await opResetRequest(db, { email: ADMIN_EMAIL }, mail, "https://fonkiart.com", 1_000_000 + 60_000);
+  assert.equal(mail.sent.length, 1);
+  const noTable = fakeDb({}, { fail: { admin_auth: { code: "PGRST205", message: "not in the schema cache" } } });
+  await assert.rejects(opResetRequest(noTable, { email: ADMIN_EMAIL }, mail, "https://fonkiart.com", 0), (e) => e instanceof InputError && e.status === 503);
+});
+
+test("reset link: works once, expires, needs 8+ characters, and signs out old sessions", () => withEnvPassword("env-pass", async () => {
+  const db = fakeDb({ admin_auth: [{ id: 1 }] });
+  const mail = mailbox();
+  const t0 = 5_000_000;
+  const oldSession = issueAdminToken((await adminCredentials(db)).secret, t0);
+  await opResetRequest(db, { email: ADMIN_EMAIL }, mail, "https://fonkiart.com", t0);
+  const token = linkToken(mail);
+  await assert.rejects(opResetSet(db, { token, password: "short" }, t0), InputError);
+  await assert.rejects(opResetSet(db, { token: "x".repeat(43), password: "long-enough-1" }, t0), /already used or replaced/);
+  await assert.rejects(opResetSet(db, { token, password: "long-enough-1" }, t0 + 31 * 60_000), /expired/);
+  const out = await opResetSet(db, { token, password: "long-enough-1" }, t0 + 60_000);
+  const creds = await adminCredentials(db);
+  assert.equal(creds.check("long-enough-1"), true);
+  assert.equal(creds.check("env-pass"), false);
+  assert.equal(isValidAdminToken(out.token, creds.secret, t0 + 120_000), true);
+  assert.equal(isValidAdminToken(oldSession, creds.secret, t0 + 120_000), false);
+  await assert.rejects(opResetSet(db, { token, password: "another-pass-2" }, t0 + 90_000), /already used or replaced/);
+}));

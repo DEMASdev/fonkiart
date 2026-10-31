@@ -36,6 +36,29 @@ export async function adminVerify() {
   }
 }
 
+// "Forgot password?": the server emails a one-time link to the admin inbox.
+export async function requestAdminReset(email) {
+  const res = await fetch("/api/admin-reset?op=request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "Couldn't send the reset email. Try again in a minute.");
+}
+
+// Saves the new password from the emailed link and signs straight in.
+export async function setAdminPassword(token, password) {
+  const res = await fetch("/api/admin-reset?op=set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.token) throw new Error(body.error || "Couldn't save the new password. Try again.");
+  localStorage.setItem(TOKEN_KEY, body.token);
+}
+
 export function adminHasToken() {
   return !!localStorage.getItem(TOKEN_KEY);
 }

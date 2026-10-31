@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { adminLogin } from "../lib/adminAuth";
+import { adminLogin, requestAdminReset } from "../lib/adminAuth";
 import { storeCall } from "../lib/store";
+import PasswordInput from "./PasswordInput";
+
+const ADMIN_EMAIL = "fonkiart@gmail.com";
+const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
 
 const TabBtn = ({ label, active, onClick }) => (
   <button onClick={onClick}
@@ -21,6 +25,8 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
   const [loginPw, setLoginPw]           = useState("");
   const [loginErr, setLoginErr]         = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [reset, setReset]               = useState(""); // "" | "sending" | "sent" | an error message
+  const isAdminEmail = loginEmail.trim().toLowerCase() === ADMIN_EMAIL;
 
   // ── SIGNUP STATE ───────────────────────────
   const [name, setName]                 = useState("");
@@ -44,7 +50,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
     setLoginErr(""); setLoginLoading(true);
 
     // Admin shortcut — checked server-side, never compared in the browser
-    if (loginEmail.trim().toLowerCase() === "fonkiart@gmail.com") {
+    if (isAdminEmail) {
       const isAdmin = await adminLogin(loginPw);
       if (isAdmin) { onAdminLogin(); return; }
     }
@@ -67,6 +73,13 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
 
     setLoginErr("Incorrect email or password.");
     setLoginLoading(false);
+  };
+
+  // ── FORGOT (admin only) ────────────────────
+  const handleForgot = async () => {
+    setReset("sending");
+    try { await requestAdminReset(loginEmail); setReset("sent"); }
+    catch (e) { setReset(e.message); }
   };
 
   // ── SIGN UP ────────────────────────────────
@@ -154,9 +167,19 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
             </div>
             <div className="fld">
               <label>Password</label>
-              <input type="password" value={loginPw} onChange={e=>{ setLoginPw(e.target.value); setLoginErr(""); }}
+              <PasswordInput value={loginPw} onChange={e=>{ setLoginPw(e.target.value); setLoginErr(""); }}
                 placeholder="Password" onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
             </div>
+            {isAdminEmail && (
+              <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
+                {reset === "sent"
+                  ? <span style={{ color:"#2d6a4f" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
+                  : <button onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>
+                      {reset === "sending" ? "Sending…" : "Forgot password?"}
+                    </button>}
+                {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
+              </p>
+            )}
             {loginErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{loginErr}</p>}
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:12 }}
               onClick={handleLogin} disabled={loginLoading}>
@@ -184,12 +207,12 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin })
             </div>
             <div className="fld">
               <label>Password <span style={{ fontWeight:300, textTransform:"none", letterSpacing:0 }}>(min. 6 chars)</span></label>
-              <input type="password" value={signupPw} onChange={e=>{ setSignupPw(e.target.value); setSignupErr(""); }}
+              <PasswordInput value={signupPw} onChange={e=>{ setSignupPw(e.target.value); setSignupErr(""); }}
                 placeholder="Create a password" />
             </div>
             <div className="fld">
               <label>Confirm Password</label>
-              <input type="password" value={signupPw2} onChange={e=>{ setSignupPw2(e.target.value); setSignupErr(""); }}
+              <PasswordInput value={signupPw2} onChange={e=>{ setSignupPw2(e.target.value); setSignupErr(""); }}
                 placeholder="Repeat password" onKeyDown={e=>e.key==="Enter"&&handleSignup()} />
             </div>
             {signupErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{signupErr}</p>}

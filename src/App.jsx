@@ -19,6 +19,7 @@ import ArtworkModal from "./components/ArtworkModal";
 import PriceInquiryModal from "./components/PriceInquiryModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import BuyerAuthModal from "./components/BuyerAuthModal";
+import AdminResetModal from "./components/AdminResetModal";
 
 import InvoicePage from "./pages/InvoicePage";
 import HomePage from "./pages/HomePage";
@@ -45,7 +46,13 @@ export default function App() {
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
   const [deepModal, setDeepModal] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
-  const [page, setPage] = useState(() => localStorage.getItem("fonkiart-page") || "home");
+  // "#admin-reset=<token>" is the link in the admin password reset email. It opens
+  // over the home page, and the hash is cleared so the token doesn't linger.
+  const [adminResetToken, setAdminResetToken] = useState(() => (window.location.hash.match(/^#admin-reset=([A-Za-z0-9_-]{43})$/) || [])[1] || null);
+  const [page, setPage] = useState(() => (adminResetToken ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  useEffect(() => {
+    if (adminResetToken) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [adminResetToken]);
   const [pendingCategory, setPendingCategory] = useState(null);
   const goToCategory = (cat) => { setPendingCategory(cat); setPage("catalog"); };
   const goToPage = (p) => { if (p === "catalog") setPendingCategory(null); setPage(p); };
@@ -310,6 +317,8 @@ export default function App() {
         {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} />}
         {authModal && <AuthModal user={user} onClose={() => setAuthModal(false)} artworks={mergedData.items} />}
         {trackModal && <TrackOrderModal onClose={() => setTrackModal(false)} />}
+        {adminResetToken && <AdminResetModal token={adminResetToken} onClose={() => setAdminResetToken(null)}
+          onDone={() => { setAdminResetToken(null); setAdminAuthed(true); setPage("admin"); }} />}
         {loginModal && <BuyerAuthModal onClose={() => setLoginModal(false)} onAdminLogin={() => { setAdminAuthed(true); setPage("admin"); setLoginModal(false); setSidebarOpen(false); }} onClientLogin={(client) => { setCollectorsClient(client); setPage("collectors"); setLoginModal(false); setSidebarOpen(false); }} />}
         <CookieBanner onContact={() => setPage("contact")} />
         <MarqueeStrip settings={data.settings} />
