@@ -6,13 +6,14 @@ export function oneLine(value) {
   return String(value ?? "").replace(/[\r\n]+/g, " ").trim();
 }
 
+// Previews only get the VITE_ copy of the sender address (public anyway).
 export function senderAddress() {
-  return process.env.BREVO_SENDER || "";
+  return process.env.BREVO_SENDER || process.env.VITE_BREVO_SENDER || "";
 }
 
 export async function sendBrevo({ to, subject, htmlContent, replyTo }) {
   const key = process.env.BREVO_API_KEY;
-  const sender = process.env.BREVO_SENDER;
+  const sender = senderAddress();
   if (!key || !sender) throw new Error("Email service not configured");
   const payload = {
     sender: { name: "Fonkiart", email: sender },

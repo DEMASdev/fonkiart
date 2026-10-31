@@ -4,7 +4,8 @@ import { issueAdminToken, isValidAdminToken, samePassword, bearer } from "../api
 import { validateChain, runQuery, adminEmail } from "../api/_lib/adminOps.js";
 import * as store from "../api/_lib/storeOps.js";
 import { InputError } from "../api/_lib/errors.js";
-import { escapeHtml } from "../api/_lib/brevo.js";
+import { escapeHtml, senderAddress } from "../api/_lib/brevo.js";
+import { isServiceKey } from "../api/_lib/supabaseAdmin.js";
 import * as T from "../api/_lib/emails.js";
 import { recordQuery } from "../src/lib/adminQuery.js";
 
@@ -195,4 +196,27 @@ test("emails escape whatever a visitor typed", () => {
   const html = T.contactStore({ name: "<img src=x onerror=alert(1)>", email: "a@b.co", message: "hi\n<script>" });
   assert.doesNotMatch(html, /<img|<script/);
   assert.match(html, /hi<br\/>&lt;script&gt;/);
+});
+
+test("sender falls back to the public address where BREVO_SENDER is missing", () => {
+  const saved = [process.env.BREVO_SENDER, process.env.VITE_BREVO_SENDER];
+  try {
+    delete process.env.BREVO_SENDER;
+    process.env.VITE_BREVO_SENDER = "shop@example.com";
+    assert.equal(senderAddress(), "shop@example.com");
+    process.env.BREVO_SENDER = "server@example.com";
+    assert.equal(senderAddress(), "server@example.com");
+  } finally {
+    ["BREVO_SENDER", "VITE_BREVO_SENDER"].forEach((k, i) => saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i]));
+  }
+});
+
+// ── server key ──────────────────────────────────────────────
+test("server refuses the public key in place of the service key", () => {
+  const jwt = (role) => ["x", Buffer.from(JSON.stringify({ role })).toString("base64url"), "sig"].join(".");
+  assert.equal(isServiceKey(jwt("service_role")), true);
+  assert.equal(isServiceKey(jwt("anon")), false);
+  assert.equal(isServiceKey("sb_secret_abc"), true);
+  assert.equal(isServiceKey("sb_publishable_abc"), false);
+  assert.equal(isServiceKey("not-a-key"), false);
 });
