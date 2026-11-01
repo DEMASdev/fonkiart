@@ -1,56 +1,80 @@
 import { useState } from "react";
 import CollectorsSection from "../components/CollectorsSection";
+import { img } from "../lib/img";
 
-export default function HomePage({ setPage, data }) {
-  const allImgs = (data?.items || []).filter(i => i.image);
-  // Shuffle once per mount via the useState initializer (the one place a
-  // render-path function is allowed to be impure) instead of Math.random()
-  // inside useMemo, which React's rules-of-react lint now flags.
-  const [slides] = useState(() => [...allImgs].sort(() => Math.random() - 0.5).slice(0, 3));
+// Second look (Andy, 11-01: "sharper cleaner more intuitive"): one strong piece of
+// art up top, the newest works right away, and categories you can see.
+const price = (item) => item.salePrice ? `$${Number(item.salePrice).toLocaleString()}`
+  : item.price ? `$${Number(item.price).toLocaleString()}` : "Price on request";
+
+export default function HomePage({ setPage, data, onView }) {
+  const works = (data?.items || []).filter(i => i.image);
+  const forSale = works.filter(i => !i.isSold && !i.isChildren);
+  // A random hero per visit: the dice roll happens once (useState initializer = the one
+  // impure spot allowed), the pick happens every render, so it still works when the
+  // artworks arrive after the page first draws.
+  const [roll] = useState(() => Math.random());
+  const hero = forSale[Math.floor(roll * forSale.length)] || works[0];
+  const latest = forSale.slice(0, 6);
+  const open = (item) => (onView ? onView(item) : setPage("catalog"));
+
+  const tiles = [
+    { label: "Original Art",     desc: "One-of-a-kind pieces", page: "catalog",   art: forSale[0] },
+    { label: "Fine Art Prints",  desc: "Prints & editions",    page: "artprints", art: forSale[1] || works[1] },
+    { label: "Special Orders",   desc: "Custom commissions",   page: "special",   art: forSale[2] || works[2] },
+    { label: "Children Benefit", desc: "Art for a cause",      page: "children",  art: works.find(i => i.isChildren) || works[3] },
+  ];
 
   return (
-    <div>
-      <div className="hero">
-        <div className="hero-left">
-          <p className="hero-eyebrow">Original Art & Fine Art Prints</p>
-          <h1 className="hero-title">Where <em>art</em><br />meets the soul</h1>
-          <p className="hero-sub">Curated works available for purchase. Each piece is original and ships worldwide.</p>
-          <div className="hero-buttons" style={{ display:"flex", gap:10, marginTop:20, flexWrap:"wrap" }}>
-            <button className="btn-p" onClick={() => setPage("catalog")} style={{ background:"var(--gold)", fontSize:13, letterSpacing:".18em", padding:"13px 28px" }}>Shop Now →</button>
-            <button className="btn-s" onClick={() => setPage("catalog")} style={{ color:"rgba(255,255,255,.6)", borderColor:"rgba(255,255,255,.25)", fontSize:11 }}>Shop the Collection</button>
+    <div className="v2-home">
+      <section className="v2-hero">
+        <div className="v2-hero-text">
+          <p className="v2-eyebrow">Original art · Isla Morada, Florida Keys</p>
+          <h1 className="v2-hero-title">Where <em>art</em> meets the soul</h1>
+          <p className="v2-hero-sub">One-of-a-kind paintings and fine art prints by Aliana Fonseca. Every piece ships worldwide.</p>
+          <div className="v2-hero-actions">
+            <button className="v2-btn" onClick={() => setPage("catalog")}>Shop the collection</button>
+            <button className="v2-link" onClick={() => setPage("special")}>Commission a piece →</button>
           </div>
         </div>
-        <div className="hero-right">
-          {slides.length === 0
-            ? <div style={{ gridColumn:"1/-1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
-            : slides.map((item) => (
-                <div key={item.id} className="hero-panel">
-                  <img src={item.image} alt={item.title} />
-                </div>
-              ))
-          }
-          <button className="hero-shop-btn" onClick={() => setPage("catalog")}>Shop the Collection →</button>
-        </div>
-      </div>
+        {hero && (
+          <button className="v2-hero-art" onClick={() => open(hero)}>
+            <img src={img(hero.image, 1080)} alt={hero.title} />
+            <span className="v2-hero-caption">“{hero.title}” · Aliana Fonseca</span>
+          </button>
+        )}
+      </section>
 
-      <div className="home-quicklinks" style={{ borderTop:"2px solid var(--border)", borderBottom:"1px solid var(--border)", display:"grid", gridTemplateColumns:"repeat(4,1fr)" }}>
-        {[
-          { label:"Original Art",     desc:"One-of-a-kind pieces",  page:"catalog" },
-          { label:"Fine Art Prints",  desc:"Art prints & editions",  page:"artprints" },
-          { label:"Special Orders",   desc:"Custom commissions",     page:"special" },
-          { label:"Children Benefit", desc:"Art for a cause",        page:"children" },
-        ].map((c, i) => (
-          <div key={c.label} onClick={() => setPage(c.page)} className="quicklink-item"
-            style={{ borderLeft: i > 0 ? "1px solid var(--border)" : "none" }}
-            onMouseEnter={e => e.currentTarget.style.background="#fdf9f4"}
-            onMouseLeave={e => e.currentTarget.style.background="transparent"}
-          >
-            <div className="quicklink-label">{c.label}</div>
-            <div className="quicklink-desc">{c.desc}</div>
-            <div className="quicklink-cta">Explore →</div>
+      {latest.length > 0 && (
+        <section className="v2-section">
+          <div className="v2-section-head">
+            <h2>New works</h2>
+            <button className="v2-link" onClick={() => setPage("catalog")}>See all →</button>
           </div>
-        ))}
-      </div>
+          <div className="v2-grid">
+            {latest.map(item => (
+              <button key={item.id} className="v2-card" onClick={() => open(item)}>
+                <span className="v2-card-img"><img src={img(item.image, 640)} alt={item.title} loading="lazy" /></span>
+                <span className="v2-card-title">{item.title}</span>
+                <span className="v2-card-price">{price(item)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="v2-section">
+        <div className="v2-section-head"><h2>Explore</h2></div>
+        <div className="v2-tiles">
+          {tiles.map(t => (
+            <button key={t.label} className="v2-tile" onClick={() => setPage(t.page)}>
+              {t.art && <span className="v2-tile-img"><img src={img(t.art.image, 640)} alt="" loading="lazy" /></span>}
+              <span className="v2-tile-label">{t.label}</span>
+              <span className="v2-tile-desc">{t.desc}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <CollectorsSection />
     </div>

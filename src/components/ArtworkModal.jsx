@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { img } from "../lib/img";
 
 export default function ArtworkModal({ item, onClose, onBuy, sold }) {
   const allImages = (item.images?.length > 0) ? item.images : (item.image ? [item.image] : []);
@@ -8,12 +9,12 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-gallery-wrap">
-          <img className="modal-img" src={allImages[imgIdx] || item.image} alt={item.title} style={{ cursor:"zoom-in", ...(sold ? {filter:"grayscale(20%)"} : {}) }} onClick={() => setZoomed(true)} />
+          <img className="modal-img" src={img(allImages[imgIdx] || item.image, 1600)} alt={item.title} style={{ cursor:"zoom-in", ...(sold ? {filter:"grayscale(20%)"} : {}) }} onClick={() => setZoomed(true)} />
           {allImages.length > 1 && (
             <div className="modal-thumbs">
               {allImages.map((url, i) => (
                 <button key={i} className={`modal-thumb${imgIdx===i?" active":""}`} onClick={e => { e.stopPropagation(); setImgIdx(i); }}>
-                  <img src={url} alt="" />
+                  <img src={img(url, 320)} alt="" />
                 </button>
               ))}
             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
+import { Menu, Package, LogIn, KeyRound } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
 import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
@@ -11,7 +11,6 @@ import { NAV_ITEMS, DEFAULT_CATEGORIES, DEFAULT_STATE } from "./constants";
 import CookieBanner from "./components/CookieBanner";
 import Footer from "./components/Footer";
 import MarqueeStrip from "./components/MarqueeStrip";
-import SocialIcons from "./components/SocialIcons";
 import FloatingCart from "./components/FloatingCart";
 import MobileBottomNav from "./components/MobileBottomNav";
 import WelcomeModal from "./components/WelcomeModal";
@@ -261,7 +260,6 @@ export default function App() {
 
   if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => setPage("collectors-room")} tab={adminTab} setTab={setAdminTab} />;
 
-  const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag } : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (
     <div className="layout">
@@ -296,16 +294,13 @@ export default function App() {
         <div className="topbar">
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
             <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
-            <SocialIcons settings={data.settings} className="social-icons-desktop" />
-            {page !== "home" && (
-              <div className="topbar-title"><currentNav.Icon size={16} />{currentNav.label}</div>
-            )}
+            <button className="v2-logo" onClick={() => setPage("home")}><span className="v2-logo-dot" />Fonkiart</button>
           </div>
-          {page === "home" && (
-            <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", fontFamily:"'Cormorant Garamond',serif", fontSize:20, fontWeight:600, letterSpacing:".14em", textTransform:"uppercase", color:"var(--ink)", display:"flex", alignItems:"center", gap:8, pointerEvents:"none" }}>
-              <div style={{ width:5, height:5, borderRadius:"50%", background:"var(--gold)", flexShrink:0 }} />Fonkiart
-            </div>
-          )}
+          <nav className="v2-nav">
+            {NAV_ITEMS.filter(({ id }) => id !== "home" && mergedData.settings.navVisible?.[id] !== false).slice(0, 6).map(({ id, label }) => (
+              <button key={id} className={`v2-nav-link${page === id ? " active" : ""}`} onClick={() => { if (id === "catalog") setPendingCategory(null); setPage(id); }}>{label}</button>
+            ))}
+          </nav>
           <div className="topbar-right">
             <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" className={cartPulse ? "cart-icon-pulse" : ""} style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--ink)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--ink)"}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
@@ -315,7 +310,6 @@ export default function App() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               {user && <span style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
             </button>
-            {page !== "home" && <button onClick={() => setPage("home")} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", color:"var(--gold)", display:"flex", alignItems:"center", gap:5, padding:0 }}>← Home</button>}
             {page === "home" && <button className="topbar-tag" onClick={() => goToPage("catalog")} style={{ cursor:"pointer", border:"none" }}>Shop Now</button>}
           </div>
         </div>
@@ -334,7 +328,7 @@ export default function App() {
         <CookieBanner onContact={() => setPage("contact")} />
         <MarqueeStrip settings={data.settings} />
 
-        {page === "home"     && <HomePage setPage={goToPage} data={mergedData} />}
+        {page === "home"     && <HomePage setPage={goToPage} data={mergedData} onView={setDeepModal} />}
         {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
         {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory="Art Prints" key="artprints" />}
         {page === "collections" && <CollectionsPage data={mergedData} setPage={goToPage} goToCategory={goToCategory} />}
