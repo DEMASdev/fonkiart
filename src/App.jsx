@@ -210,7 +210,7 @@ export default function App() {
 
   useEffect(() => {
     const titles = {
-      home:"Fonkiart — Original Art & Fine Art Prints | South Florida",
+      home:"Fonkiart — Original Art & Fine Art Prints | Isla Morada, Florida Keys",
       catalog:"Original Art — Fonkiart", cart:"Your Cart — Fonkiart", collections:"Collections — Fonkiart", artprints:"Art Prints — Fonkiart", new:"New Collections — Fonkiart",
       specials:"Specials — Fonkiart", archive:"Past Works — Fonkiart",
       special:"Special Orders — Fonkiart", auctions:"Auctions — Fonkiart",
