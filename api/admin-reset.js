@@ -3,6 +3,7 @@ import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
 import { opResetRequest, opResetSet } from "./_lib/adminSecret.js";
 import { siteUrl } from "./_lib/site.js";
+import { withRandomArt } from "./_lib/emails.js";
 
 // "Forgot password?" for the admin: ?op=request emails a one-time link to the
 // admin inbox, ?op=set saves the new password from that link and signs in.
@@ -18,7 +19,8 @@ export default async function handler(req, res) {
   }
   try {
     if (op === "request") {
-      return res.status(200).json(await opResetRequest(db, req.body || {}, { sender: senderAddress(), send: sendBrevo }, siteUrl()));
+      const send = async (m) => sendBrevo({ ...m, htmlContent: await withRandomArt(db, m.htmlContent) });
+      return res.status(200).json(await opResetRequest(db, req.body || {}, { sender: senderAddress(), send }, siteUrl()));
     }
     return res.status(200).json(await opResetSet(db, req.body || {}));
   } catch (e) {

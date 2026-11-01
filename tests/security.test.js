@@ -368,3 +368,25 @@ test("customer reset link: sets the sign-in and the collectors password, works o
   assert.equal((await store.opLegacyLogin(db, { email: "ana@x.com", password: "Wrong-pass-1" })).ok, false);
   await assert.rejects(opCustomerResetSet(db, { token, password: "Another-pass-2" }, 90_000), /already used or replaced/);
 });
+
+// ── email look: a random piece of Aliana's art ───────────────
+test("customer emails get a random piece of Aliana's art (never a children's piece) and still send without one", async () => {
+  const db = fakeDb({ Artworks: [
+    { id: 1, title: "Kid art", image: "https://x/kid.jpg", isChildren: true },
+    { id: 2, title: "Pink <palms>", image: "https://x/palms.jpg", isChildren: false },
+    { id: 3, title: "No picture yet", image: null, isChildren: false },
+  ] });
+  const html = T.welcomeCoupon({ code: "FK-1", discount: 15 });
+  assert.match(html, /<!--ART-->/);
+  for (let i = 0; i < 10; i++) {
+    const out = await T.withRandomArt(db, html);
+    assert.match(out, /palms\.jpg/);
+    assert.match(out, /Pink &lt;palms&gt;/);
+    assert.doesNotMatch(out, /kid\.jpg|<!--ART-->|<palms>/);
+  }
+  // Shop alerts keep the look but no picture.
+  assert.doesNotMatch(T.contactStore({ name: "a", email: "b@c.de", message: "m" }), /<!--ART-->/);
+  // No art, or the database is down: the email still goes, just without the picture.
+  assert.doesNotMatch(await T.withRandomArt(fakeDb({ Artworks: [] }), html), /<!--ART-->|<img/);
+  assert.doesNotMatch(await T.withRandomArt(fakeDb({}, { fail: { Artworks: { code: "x", message: "down" } } }), html), /<!--ART-->|<img/);
+});

@@ -1,33 +1,155 @@
+import crypto from "crypto";
 import { escapeHtml as e } from "./brevo.js";
 
-// Same HTML the browser used to build, moved to the server so a visitor can no
-// longer choose the recipient, subject or markup. Everything a visitor typed is escaped.
+// Every Fonkiart email, built on the server so a visitor can't choose the
+// recipient, subject or markup. Everything a visitor typed is escaped.
+// One look for all of them (Andy, 2026-11-01): the site's white, pink and gold,
+// and in every email to a customer a random piece of Aliana's art, dropped into
+// ART_SLOT by withRandomArt() when the email is sent.
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
 const multiline = (s) => e(s).replace(/\r?\n/g, "<br/>");
 
-export function adminReset({ link, minutes }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Reset your admin password</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Someone asked to reset the Fonkiart admin password. If it was you, choose a new one here:</p><p style="text-align:center;margin-bottom:24px;"><a href="${e(link)}" style="display:inline-block;background:#1c1a18;color:#fdfcf8;padding:14px 28px;text-decoration:none;font-size:14px;letter-spacing:.08em;">Choose a new password</a></p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">The link works once and expires in ${e(minutes)} minutes. If you didn't ask for this, ignore this email and your password stays the same.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`;
+const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", pink: "#DF88B7", blush: "#ffcdf4", soft: "#fff4fb", red: "#c0392b", green: "#2d6a4f" };
+const SERIF = "Georgia,'Times New Roman',serif";
+const SANS = "Arial,Helvetica,sans-serif";
+const SITE = "https://fonkiart.com";
+
+export const ART_SLOT = "<!--ART-->";
+
+function frame(heading, body, { art = true } = {}) {
+  return `<div style="margin:0;padding:24px 12px;background:${C.blush};">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
+    + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
+    + `<a href="${SITE}" style="font-family:${SERIF};font-size:24px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
+    + `<div style="font-family:${SANS};font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
+    + `<tr><td style="padding:30px 28px 8px;font-family:${SANS};font-size:15px;line-height:1.7;color:${C.ink};">`
+    + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:28px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</td></tr>`
+    + (art ? ART_SLOT : "")
+    + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:12px;line-height:1.8;color:${C.muted};">`
+    + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · South Florida</td></tr>`
+    + `</table></div>`;
 }
 
-export function customerReset({ link, minutes }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Reset your password</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Someone asked to reset the password for your Fonkiart account. If it was you, choose a new one here:</p><p style="text-align:center;margin-bottom:24px;"><a href="${e(link)}" style="display:inline-block;background:#1c1a18;color:#fdfcf8;padding:14px 28px;text-decoration:none;font-size:14px;letter-spacing:.08em;">Choose a new password</a></p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">The link works once and expires in ${e(minutes)} minutes. If you didn't ask for this, ignore this email and your password stays the same.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`;
+const p = (html) => `<p style="margin:0 0 16px;">${html}</p>`;
+const small = (html) => `<p style="margin:0 0 12px;font-size:13px;line-height:1.7;color:${C.muted};">${html}</p>`;
+const link = (href, label) => `<a href="${e(href)}" style="color:${C.gold};">${label}</a>`;
+const signoff = small("— Fonkiart");
+const button = (href, label) => `<p style="text-align:center;margin:8px 0 24px;"><a href="${e(href)}" style="display:inline-block;background:${C.gold};color:#ffffff;padding:14px 30px;text-decoration:none;font-family:${SANS};font-size:13px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;">${label}</a></p>`;
+const codeBox = (code, note) => `<div style="background:${C.soft};border:2px dashed ${C.line};padding:18px 24px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:28px;font-weight:bold;letter-spacing:4px;color:${C.ink};">${code}</div>${note ? `<div style="font-size:13px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
+const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
+const field = (label, html) => `<p style="margin:0 0 6px;font-size:14px;"><strong>${label}:</strong> ${html}</p>`;
+const footnote = `<p style="margin:20px 0 0;font-size:12px;color:${C.muted};">Sent from fonkiart.com</p>`;
+
+export function artRow(art) {
+  const url = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
+  return `<tr><td style="padding:8px 28px 22px;">`
+    + `<a href="${e(url)}" style="text-decoration:none;"><img src="${e(art.image)}" alt="${e(art.title)}, original art by Aliana" width="464" style="display:block;width:100%;max-width:464px;height:auto;border:0;"></a>`
+    + `<p style="margin:12px 0 2px;text-align:center;font-family:${SERIF};font-style:italic;font-size:16px;color:${C.ink};">“${e(art.title)}”</p>`
+    + `<p style="margin:0;text-align:center;font-family:${SANS};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana · <a href="${e(url)}" style="color:${C.gold};text-decoration:none;">See it in the shop →</a></p>`
+    + `</td></tr>`;
+}
+
+// A random piece of Aliana's own art (not the children's pieces), or null.
+export async function pickArt(db) {
+  const { data, error } = await db.from("Artworks").select("id,title,image,isChildren");
+  if (error || !Array.isArray(data)) return null;
+  const pool = data.filter(a => a.image && !a.isChildren);
+  return pool.length ? pool[crypto.randomInt(pool.length)] : null;
+}
+
+// Fills ART_SLOT at send time. The art never stops an email: no art, no row.
+export async function withRandomArt(db, html) {
+  if (!String(html).includes(ART_SLOT)) return html;
+  let art;
+  try { art = await pickArt(db); } catch { art = null; }
+  return html.replace(ART_SLOT, art ? artRow(art) : "");
+}
+
+// The emails Supabase sends itself, in the same look: paste the result into
+// Supabase > Authentication > Emails > Templates. It keeps Supabase's own
+// {{ .ConfirmationURL }} / {{ .Token }}, and its picture comes from /api/art.
+export function supabaseTemplate({ heading, intro, buttonLabel, withCode = false }) {
+  const art = `<tr><td style="padding:8px 28px 22px;"><a href="${SITE}" style="text-decoration:none;"><img src="${SITE}/api/art" alt="Original art by Aliana" width="464" style="display:block;width:100%;max-width:464px;height:auto;border:0;"></a>`
+    + `<p style="margin:12px 0 0;text-align:center;font-family:${SANS};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana · <a href="${SITE}" style="color:${C.gold};text-decoration:none;">See more in the shop →</a></p></td></tr>`;
+  return frame(heading,
+    p(intro)
+    + button("{{ .ConfirmationURL }}", buttonLabel)
+    + (withCode ? `<p style="margin:0 0 8px;text-align:center;font-size:14px;color:${C.muted};">Or type this code on the site:</p>` + codeBox("{{ .Token }}") : "")
+    + small("If you didn't ask for this, just ignore this email.")
+    + signoff).replace(ART_SLOT, art);
+}
+
+// ── to customers (with art) ──────────────────────────────────
+
+export function adminReset({ link: href, minutes }) {
+  return frame("Reset your admin password",
+    p("Someone asked to reset the Fonkiart admin password. If it was you, choose a new one here:")
+    + button(href, "Choose a new password")
+    + small(`The link works once and expires in ${e(minutes)} minutes. If you didn't ask for this, ignore this email and your password stays the same.`)
+    + signoff);
+}
+
+export function customerReset({ link: href, minutes }) {
+  return frame("Reset your password",
+    p("Someone asked to reset the password for your Fonkiart account. If it was you, choose a new one here:")
+    + button(href, "Choose a new password")
+    + small(`The link works once and expires in ${e(minutes)} minutes. If you didn't ask for this, ignore this email and your password stays the same.`)
+    + signoff);
 }
 
 export function welcomeCoupon({ code, discount }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:28px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Welcome to Fonkiart</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Thank you for joining. Here is your exclusive welcome coupon:</p><div style="background:#fff;border:2px dashed #c9a96e;padding:20px 24px;text-align:center;margin-bottom:24px;"><div style="font-size:28px;font-weight:600;letter-spacing:2px;color:#1c1a18;">${e(code)}</div><div style="font-size:13px;color:#7a6f63;margin-top:6px;">${e(discount)}% off your first purchase</div></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Enter this code at checkout. Valid on original art and prints. One use per customer.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`;
+  return frame("Welcome to Fonkiart",
+    p("Thank you for joining. Here is your exclusive welcome coupon:")
+    + codeBox(e(code), `${e(discount)}% off your first purchase`)
+    + small("Enter this code at checkout. Valid on original art and prints. One use per customer.")
+    + signoff);
 }
 
 export function orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender }) {
-  const rows = items.map(i => `<p style="font-size:16px;font-weight:500;color:#1c1a18;margin-bottom:4px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:6px;">Thank you, ${e(firstName)}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:24px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Order Summary</p>${orderRef ? `<p style="font-size:11px;color:#8a8078;margin-bottom:8px;">Reference: <strong style="font-family:monospace;letter-spacing:.05em;">${e(orderRef)}</strong></p>` : ""}${rows}${total ? `<p style="font-size:22px;color:#c9a96e;font-family:Georgia,serif;margin-top:8px;">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-size:12px;color:#2d6a4f;">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : ""} ${addr ? `<p style="font-size:13px;color:#7a6f63;margin-top:10px;"><strong>Ship to:</strong> ${e(addr)}</p>` : ""}</div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Reply to this email and quote your reference number. You can also reach us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+  const rows = items.map(i => `<p style="margin:0 0 4px;font-size:16px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
+  const summary = (orderRef ? `<p style="margin:0 0 8px;font-size:12px;color:${C.muted};">Reference: <strong style="font-family:monospace;letter-spacing:.05em;color:${C.ink};">${e(orderRef)}</strong></p>` : "")
+    + rows
+    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:22px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:12px;color:${C.green};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
+    + (addr ? `<p style="margin:10px 0 0;font-size:13px;color:${C.muted};"><strong>Ship to:</strong> ${e(addr)}</p>` : "");
+  return frame(`Thank you, ${e(firstName)}!`,
+    p("Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.")
+    + panel("Order Summary", summary)
+    + small(`Questions? Reply to this email and quote your reference number. You can also reach us at ${link(`mailto:${sender}`, e(sender))}.`)
+    + signoff);
 }
 
+export function inquiryBuyer({ name, artTitle, sender }) {
+  return frame(`Thank you, ${e(firstWord(name))}!`,
+    p(`We received your inquiry about <strong>${e(artTitle)}</strong> and will get back to you shortly with pricing and availability.`)
+    + small(`Questions? Contact us at ${link(`mailto:${sender}`, e(sender))}.`)
+    + signoff);
+}
+
+export function contactBuyer({ name, message, sender }) {
+  return frame(`Thank you, ${e(firstWord(name))}!`,
+    p("We received your message and will get back to you within 24–48 hours.")
+    + panel("Your message", `<p style="margin:0;font-size:14px;">${multiline(message)}</p>`)
+    + small(`Questions? Reply to this email or reach us at ${link(`mailto:${sender}`, e(sender))}.`)
+    + signoff);
+}
+
+// ── to the shop (same look, no art) ──────────────────────────
+
 export function orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) {
-  const rows = items.map(i => `<p style="font-size:14px;color:#7a6f63;margin-bottom:4px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
-  const warning = saveFailed ? `<p style="font-size:14px;color:#c0392b;margin-bottom:16px;"><strong>⚠ This order could not be saved to the database. Add it by hand in the admin.</strong></p>` : "";
-  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">New Order Received</h2>${warning}${orderRef ? `<p style="font-family:monospace;font-size:14px;color:#c9a96e;margin-bottom:20px;">${e(orderRef)}</p>` : ""}${rows}${total ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;margin-top:6px;"><strong>Total:</strong> $${money(total)}${couponApplied ? ` (${e(discount)}% coupon applied)` : ""}</p>` : ""}<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Customer:</strong> ${e(fullName)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${e(email)}" style="color:#c9a96e;">${e(email)}</a></p>${phone ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Phone:</strong> ${e(phone)}</p>` : ""} ${addr ? `<p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Ship to:</strong> ${e(addr)}</p>` : ""}<p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
+  const rows = items.map(i => `<p style="margin:0 0 4px;font-size:14px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
+  const warning = saveFailed ? `<p style="margin:0 0 16px;font-size:14px;color:${C.red};"><strong>⚠ This order could not be saved to the database. Add it by hand in the admin.</strong></p>` : "";
+  return frame("New Order Received",
+    warning
+    + (orderRef ? `<p style="margin:0 0 16px;font-family:monospace;font-size:14px;color:${C.gold};">${e(orderRef)}</p>` : "")
+    + rows
+    + (total ? `<p style="margin:6px 0 12px;font-size:14px;"><strong>Total:</strong> $${money(total)}${couponApplied ? ` (${e(discount)}% coupon applied)` : ""}</p>` : "")
+    + field("Customer", e(fullName))
+    + field("Email", link(`mailto:${email}`, e(email)))
+    + (phone ? field("Phone", e(phone)) : "")
+    + (addr ? field("Ship to", e(addr)) : "")
+    + footnote, { art: false });
 }
 
 export function inquiryStore({ art, name, email, phone, message }) {
@@ -36,21 +158,28 @@ export function inquiryStore({ art, name, email, phone, message }) {
     art.medium && `Medium: ${e(art.medium)}`,
     art.dimensions && `Dimensions: ${e(art.dimensions)}`,
   ].filter(Boolean).join("<br/>");
-  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:4px;">Price Inquiry</h2><p style="font-family:monospace;font-size:13px;color:#c9a96e;margin-bottom:24px;">A customer is asking for pricing on one of your artworks.</p><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Artwork</p><p style="font-size:20px;font-weight:500;color:#1c1a18;margin-bottom:8px;">${e(art.title)}</p>${details ? `<p style="font-size:13px;color:#7a6f63;line-height:1.8;">${details}</p>` : ""}${art.description ? `<p style="font-size:13px;color:#7a6f63;margin-top:8px;font-style:italic;">"${e(art.description)}"</p>` : ""}</div><div style="background:#fff;border:1px solid #ece7dd;padding:20px 24px;margin-bottom:20px;"><p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8078;margin-bottom:12px;">Customer</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Name:</strong> ${e(name)}</p><p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Email:</strong> <a href="mailto:${e(email)}" style="color:#c9a96e;">${e(email)}</a></p>${phone ? `<p style="font-size:14px;color:#1c1a18;margin-bottom:6px;"><strong>Phone:</strong> ${e(phone)}</p>` : ""}${message ? `<p style="font-size:14px;color:#1c1a18;margin-top:10px;"><strong>Message:</strong> ${multiline(message)}</p>` : ""}</div><p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
-}
-
-export function inquiryBuyer({ name, artTitle, sender }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:24px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Thank you, ${e(firstWord(name))}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We received your inquiry about <strong>${e(artTitle)}</strong> and will get back to you shortly with pricing and availability.</p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Contact us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+  return frame("Price Inquiry",
+    small("A customer is asking for pricing on one of your artworks.")
+    + panel("Artwork", `<p style="margin:0 0 8px;font-size:20px;">${e(art.title)}</p>`
+      + (details ? `<p style="margin:0;font-size:13px;line-height:1.8;color:${C.muted};">${details}</p>` : "")
+      + (art.description ? `<p style="margin:8px 0 0;font-size:13px;font-style:italic;color:${C.muted};">"${e(art.description)}"</p>` : ""))
+    + panel("Customer", field("Name", e(name))
+      + field("Email", link(`mailto:${email}`, e(email)))
+      + (phone ? field("Phone", e(phone)) : "")
+      + (message ? `<p style="margin:10px 0 0;font-size:14px;"><strong>Message:</strong> ${multiline(message)}</p>` : ""))
+    + footnote, { art: false });
 }
 
 export function contactStore({ name, email, message }) {
-  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:32px;background:#fdfcf8;"><h2 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:20px;">New Contact Form Request</h2><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Name:</strong> ${e(name)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:6px;"><strong>Email:</strong> ${e(email)}</p><p style="font-size:14px;color:#7a6f63;margin-bottom:16px;"><strong>Message:</strong></p><div style="background:#fff;border-left:3px solid #c9a96e;padding:14px 18px;font-size:14px;color:#1c1a18;line-height:1.7;">${multiline(message)}</div><p style="font-size:12px;color:#aaa;margin-top:24px;">Sent from fonkiart.com</p></div>`;
-}
-
-export function contactBuyer({ name, message, sender }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:26px;font-weight:300;color:#1c1a18;margin-bottom:8px;">Thank you, ${e(firstWord(name))}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We received your message and will get back to you within 24–48 hours.</p><div style="background:#fff;border:1px solid #ece7dd;padding:16px 20px;margin-bottom:24px;border-left:3px solid #c9a96e;"><p style="font-size:13px;color:#8a8078;margin-bottom:8px;font-style:italic;">Your message:</p><p style="font-size:14px;color:#1c1a18;line-height:1.7;">${multiline(message)}</p></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Reply to this email or reach us at <a href="mailto:${e(sender)}" style="color:#c9a96e;">${e(sender)}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`;
+  return frame("New Contact Form Request",
+    field("Name", e(name))
+    + field("Email", e(email))
+    + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:${C.soft};font-size:14px;line-height:1.7;">${multiline(message)}</div>`
+    + footnote, { art: false });
 }
 
 export function invoiceApproved({ order }) {
-  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:22px;font-weight:300;color:#1c1a18;margin-bottom:16px;">Invoice Approved</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;"><strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.</p></div>`;
+  return frame("Invoice Approved",
+    p(`<strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.`)
+    + footnote, { art: false });
 }

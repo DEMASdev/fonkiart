@@ -2,6 +2,7 @@ import { getServiceClient } from "./_lib/supabaseAdmin.js";
 import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
 import { STORE_OPS } from "./_lib/storeOps.js";
+import { withRandomArt } from "./_lib/emails.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -14,7 +15,8 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "Store not configured" });
   }
   try {
-    return res.status(200).json(await run(db, req, { sender: senderAddress(), send: sendBrevo }));
+    const send = async (m) => sendBrevo({ ...m, htmlContent: await withRandomArt(db, m.htmlContent) });
+    return res.status(200).json(await run(db, req, { sender: senderAddress(), send }));
   } catch (e) {
     if (e instanceof InputError) return res.status(e.status).json({ error: e.message });
     console.error(`store ${op}:`, e?.message || e);
