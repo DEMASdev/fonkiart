@@ -42,13 +42,22 @@ const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:1
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:14px;"><strong>${label}:</strong> ${html}</p>`;
 const footnote = `<p style="margin:20px 0 0;font-size:12px;color:${C.muted};">Sent from fonkiart.com</p>`;
 
-export function artRow(art) {
-  const url = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
+// The picture sits on the left at a third of the width, its words beside it
+// (Andy, 11-01: "to the left, at 1/3 of the size").
+function artBlock({ href, image, alt, title, linkLabel }) {
   return `<tr><td style="padding:8px 28px 22px;">`
-    + `<a href="${e(url)}" style="text-decoration:none;"><img src="${e(art.image)}" alt="${e(art.title)}, original art by Aliana" width="464" style="display:block;width:100%;max-width:464px;height:auto;border:0;"></a>`
-    + `<p style="margin:12px 0 2px;text-align:center;font-family:${SERIF};font-style:italic;font-size:16px;color:${C.ink};">“${e(art.title)}”</p>`
-    + `<p style="margin:0;text-align:center;font-family:${SANS};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana · <a href="${e(url)}" style="color:${C.gold};text-decoration:none;">See it in the shop →</a></p>`
-    + `</td></tr>`;
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>`
+    + `<td width="33%" style="width:33%;vertical-align:middle;padding:0 18px 0 0;"><a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="150" style="display:block;width:100%;max-width:150px;height:auto;border:0;"></a></td>`
+    + `<td style="vertical-align:middle;font-family:${SANS};">`
+    + (title ? `<p style="margin:0 0 4px;font-family:${SERIF};font-style:italic;font-size:17px;color:${C.ink};">“${e(title)}”</p>` : "")
+    + `<p style="margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
+    + `<a href="${e(href)}" style="font-size:12px;font-weight:bold;letter-spacing:.1em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a>`
+    + `</td></tr></table></td></tr>`;
+}
+
+export function artRow(art) {
+  const href = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
+  return artBlock({ href, image: art.image, alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
 }
 
 // A random piece of Aliana's own art (not the children's pieces), or null.
@@ -71,8 +80,7 @@ export async function withRandomArt(db, html) {
 // Supabase > Authentication > Emails > Templates. It keeps Supabase's own
 // {{ .ConfirmationURL }} / {{ .Token }}, and its picture comes from /api/art.
 export function supabaseTemplate({ heading, intro, buttonLabel, withCode = false }) {
-  const art = `<tr><td style="padding:8px 28px 22px;"><a href="${SITE}" style="text-decoration:none;"><img src="${SITE}/api/art" alt="Original art by Aliana" width="464" style="display:block;width:100%;max-width:464px;height:auto;border:0;"></a>`
-    + `<p style="margin:12px 0 0;text-align:center;font-family:${SANS};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana · <a href="${SITE}" style="color:${C.gold};text-decoration:none;">See more in the shop →</a></p></td></tr>`;
+  const art = artBlock({ href: SITE, image: `${SITE}/api/art`, alt: "Original art by Aliana", title: "", linkLabel: "See more in the shop →" });
   return frame(heading,
     p(intro)
     + button("{{ .ConfirmationURL }}", buttonLabel)
