@@ -20,7 +20,7 @@ export const ART_SLOT = "<!--ART-->";
 
 function frame(heading, body) {
   return `<div style="margin:0;padding:24px 12px;background:#ffffff;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:2px solid ${C.gold};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
     + `<a href="${SITE}" style="font-family:${SERIF};font-size:24px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
     + `<div style="font-family:${SANS};font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
