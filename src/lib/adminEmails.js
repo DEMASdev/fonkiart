@@ -3,7 +3,7 @@
 // of Aliana's art (api/_lib/emails.js), so only the heading and the inside live
 // here. Anything that came from a customer (name, notes, titles) is escaped.
 
-const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", soft: "#fff4fb" };
+const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const small = (html) => `<p style="margin:0 0 12px;font-size:13px;line-height:1.7;color:${C.muted};">${html}</p>`;
@@ -39,7 +39,7 @@ export function couponEmail({ code, discount }) {
   return {
     heading: "A Gift From Fonkiart",
     content: `<p style="margin:0 0 16px;">We have a special offer just for you:</p>`
-      + `<div style="background:${C.soft};border:2px dashed ${C.line};padding:18px 24px;text-align:center;margin:0 0 20px;"><div style="font-family:Georgia,serif;font-size:28px;font-weight:bold;letter-spacing:4px;color:${C.ink};">${esc(code)}</div><div style="font-size:13px;color:${C.muted};margin-top:6px;">${esc(discount)}% off your purchase</div></div>`
+      + `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 24px;text-align:center;margin:0 0 20px;"><div style="font-family:Georgia,serif;font-size:28px;font-weight:bold;letter-spacing:4px;color:${C.ink};">${esc(code)}</div><div style="font-size:13px;color:${C.muted};margin-top:6px;">${esc(discount)}% off your purchase</div></div>`
       + small("Enter this code at checkout. One use only.") + small("— Fonkiart"),
   };
 }

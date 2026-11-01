@@ -11,7 +11,7 @@ const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
 const multiline = (s) => e(s).replace(/\r?\n/g, "<br/>");
 
-const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", pink: "#DF88B7", blush: "#ffcdf4", soft: "#fff4fb", red: "#c0392b", green: "#2d6a4f" };
+const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", pink: "#DF88B7", red: "#c0392b", green: "#2d6a4f" };
 const SERIF = "Georgia,'Times New Roman',serif";
 const SANS = "Arial,Helvetica,sans-serif";
 const SITE = "https://fonkiart.com";
@@ -19,7 +19,7 @@ const SITE = "https://fonkiart.com";
 export const ART_SLOT = "<!--ART-->";
 
 function frame(heading, body) {
-  return `<div style="margin:0;padding:24px 12px;background:${C.blush};">`
+  return `<div style="margin:0;padding:24px 12px;background:#ffffff;">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
     + `<a href="${SITE}" style="font-family:${SERIF};font-size:24px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
@@ -40,7 +40,7 @@ const small = (html) => `<p style="margin:0 0 12px;font-size:13px;line-height:1.
 const link = (href, label) => `<a href="${e(href)}" style="color:${C.gold};">${label}</a>`;
 const signoff = small("— Fonkiart");
 const button = (href, label) => `<p style="text-align:center;margin:8px 0 24px;"><a href="${e(href)}" style="display:inline-block;background:${C.gold};color:#ffffff;padding:14px 30px;text-decoration:none;font-family:${SANS};font-size:13px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;">${label}</a></p>`;
-const codeBox = (code, note) => `<div style="background:${C.soft};border:2px dashed ${C.line};padding:18px 24px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:28px;font-weight:bold;letter-spacing:4px;color:${C.ink};">${code}</div>${note ? `<div style="font-size:13px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
+const codeBox = (code, note) => `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 24px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:28px;font-weight:bold;letter-spacing:4px;color:${C.ink};">${code}</div>${note ? `<div style="font-size:13px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
 const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:14px;"><strong>${label}:</strong> ${html}</p>`;
 const footnote = `<p style="margin:20px 0 0;font-size:12px;color:${C.muted};">Sent from fonkiart.com</p>`;
@@ -189,7 +189,7 @@ export function contactStore({ name, email, message }) {
   return frame("New Contact Form Request",
     field("Name", e(name))
     + field("Email", e(email))
-    + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:${C.soft};font-size:14px;line-height:1.7;">${multiline(message)}</div>`
+    + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:#ffffff;font-size:14px;line-height:1.7;">${multiline(message)}</div>`
     + footnote);
 }
 
