@@ -54,7 +54,9 @@ export default function App() {
     return m ? { admin: m[1] === "admin-reset", token: m[2] } : null;
   });
   const [loginNotice, setLoginNotice] = useState(null);
-  const [page, setPage] = useState(() => (resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  // The test copies under fonkiart.com/new/ share the live site's saved page, so someone
+  // last in the admin would land on its login there; they always open on Home instead.
+  const [page, setPage] = useState(() => (resetLink || import.meta.env.BASE_URL !== "/" ? "home" : localStorage.getItem("fonkiart-page") || "home"));
   useEffect(() => {
     if (resetLink) window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [resetLink]);
