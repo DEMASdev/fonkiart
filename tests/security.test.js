@@ -10,6 +10,7 @@ import { ADMIN_EMAIL, hashPassword, checkPassword, adminCredentials, opResetRequ
 import { opCustomerResetRequest, opCustomerResetSet } from "../api/_lib/customerReset.js";
 import * as serverPw from "../api/_lib/pwRules.js";
 import * as browserPw from "../src/lib/pwRules.js";
+import * as AE from "../src/lib/adminEmails.js";
 import * as T from "../api/_lib/emails.js";
 import { recordQuery } from "../src/lib/adminQuery.js";
 
@@ -384,9 +385,26 @@ test("customer emails get a random piece of Aliana's art (never a children's pie
     assert.match(out, /Pink &lt;palms&gt;/);
     assert.doesNotMatch(out, /kid\.jpg|<!--ART-->|<palms>/);
   }
-  // Shop alerts keep the look but no picture.
-  assert.doesNotMatch(T.contactStore({ name: "a", email: "b@c.de", message: "m" }), /<!--ART-->/);
+  // Shop alerts get a picture too ("the picture to the left in all emails").
+  assert.match(T.contactStore({ name: "a", email: "b@c.de", message: "m" }), /<!--ART-->/);
   // No art, or the database is down: the email still goes, just without the picture.
   assert.doesNotMatch(await T.withRandomArt(fakeDb({ Artworks: [] }), html), /<!--ART-->|<img/);
   assert.doesNotMatch(await T.withRandomArt(fakeDb({}, { fail: { Artworks: { code: "x", message: "down" } } }), html), /<!--ART-->|<img/);
+});
+
+test("admin-written emails (invoice, status, coupon) get the shared frame and a picture, customer text escaped", async () => {
+  const sent = [];
+  const mail = { send: async (m) => { sent.push(m); } };
+  const inv = AE.invoiceEmail({ invNum: "INV-1", invDate: "November 1, 2026", firstName: "<b>Ana</b>", itemTitle: "Pink <palms>", notes: "", dueDate: "", amount: 450, link: "https://fonkiart.com/?invoice=abc", sender: "support@fonkiart.com" });
+  assert.match(inv.content, /&lt;b&gt;Ana&lt;\/b&gt;/);
+  assert.match(inv.content, /Pink &lt;palms&gt;/);
+  await adminEmail(mail, { to: "ana@x.com", subject: "Your invoice", ...inv });
+  assert.match(sent[0].htmlContent, /FONKIART/);
+  assert.match(sent[0].htmlContent, /<!--ART-->/);
+  assert.match(sent[0].htmlContent, /Review &amp; Approve/);
+  assert.match(AE.couponEmail({ code: "FK-<x>", discount: 15 }).content, /FK-&lt;x&gt;/);
+  assert.match(AE.statusEmail({ name: "<i>Bo</i>", message: "Shipped", sender: "s@f.com" }).heading, /&lt;i&gt;Bo/);
+  // A ready-made htmlContent still goes out exactly as written.
+  await adminEmail(mail, { to: "ana@x.com", subject: "x", htmlContent: "<p>plain</p>" });
+  assert.equal(sent[1].htmlContent, "<p>plain</p>");
 });

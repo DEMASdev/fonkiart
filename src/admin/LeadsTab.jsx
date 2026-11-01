@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { adminDb as supabase } from "../lib/adminDb";
 import { generateCouponCode, sendEmail } from "../utils/helpers";
+import { couponEmail } from "../lib/adminEmails";
 
 export default function LeadsTab({ discount = 15 }) {
   const [leads, setLeads] = useState([]);
@@ -47,7 +48,7 @@ export default function LeadsTab({ discount = 15 }) {
         await sendEmail({
           to: email,
           subject: "Your Exclusive Coupon — Fonkiart",
-          htmlContent: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:28px;font-weight:300;color:#1c1a18;margin-bottom:8px;">A Gift From Fonkiart</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">We have a special offer just for you:</p><div style="background:#fff;border:2px dashed #c9a96e;padding:20px 24px;text-align:center;margin-bottom:24px;"><div style="font-size:28px;font-weight:600;letter-spacing:2px;color:#1c1a18;">${code}</div><div style="font-size:13px;color:#7a6f63;margin-top:6px;">${discount}% off your purchase</div></div><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Enter this code at checkout. One use only.</p><p style="color:#7a6f63;font-size:13px;">— Fonkiart</p></div>`,
+          ...couponEmail({ code, discount }),
         });
       } catch(e) { console.warn("Email:", e); }
     }

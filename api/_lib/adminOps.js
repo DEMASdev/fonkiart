@@ -1,4 +1,5 @@
 import { InputError } from "./errors.js";
+import { adminFrame } from "./emails.js";
 
 // The admin screens still describe their queries the way supabase-js does
 // (from().select().eq()...); the browser sends that description here and the
@@ -59,7 +60,10 @@ function recipients(to) {
 
 export async function adminEmail(mail, body) {
   const subject = typeof body.subject === "string" ? body.subject.slice(0, 300) : "";
-  const htmlContent = typeof body.htmlContent === "string" ? body.htmlContent : "";
+  // A heading + the inside get the shared Fonkiart frame; a ready-made htmlContent goes as is.
+  const htmlContent = typeof body.heading === "string" && typeof body.content === "string"
+    ? adminFrame(body.heading, body.content)
+    : typeof body.htmlContent === "string" ? body.htmlContent : "";
   if (!subject || !htmlContent || htmlContent.length > 200_000) throw new InputError("Bad email");
   const replyTo = body.replyTo && EMAIL_RE.test(String(body.replyTo)) ? String(body.replyTo) : undefined;
   await mail.send({ to: recipients(body.to), subject, htmlContent, replyTo });

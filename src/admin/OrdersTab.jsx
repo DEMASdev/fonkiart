@@ -2,6 +2,7 @@ import { useState, useEffect, Fragment } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { adminDb as supabase } from "../lib/adminDb";
 import { sendEmail } from "../utils/helpers";
+import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -30,32 +31,17 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const fmtInvNum = (id) => `INV-${String(id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
   const fmtDate   = (iso) => iso ? new Date(iso).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
 
-  const buildInvoiceEmail = (order, link) => {
-    const invNum  = fmtInvNum(order.id);
-    const invDate = fmtDate(order.created_at || new Date().toISOString());
-    const dueStr  = order.due_date ? `<tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Due Date</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:13px;color:#1c1a18;text-align:right;">${fmtDate(order.due_date + "T00:00:00")}</td></tr>` : "";
-    const notesStr = order.notes ? `<tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Notes</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:13px;color:#1c1a18;text-align:right;">${order.notes}</td></tr>` : "";
-    const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
-    return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:40px 32px;background:#fdfcf8;">
-<div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid #ece7dd;">
-  <h1 style="font-family:'Georgia',serif;font-size:26px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#1c1a18;margin:0 0 4px;">Fonkiart</h1>
-  <p style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8a8078;margin:0;">Original Art &amp; Fine Art Prints</p>
-</div>
-<div style="display:flex;justify-content:space-between;margin-bottom:24px;">
-  <span style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Invoice ${invNum}</span>
-  <span style="font-size:12px;color:#8a8078;">${invDate}</span>
-</div>
-<p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:8px;">Hi ${firstName},</p>
-<p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:28px;">You have a new invoice from Fonkiart. Click below to review the details and approve your order.</p>
-<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-  <tr><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#8a8078;">Artwork / Item</td><td style="padding:10px 0;border-bottom:1px solid #ece7dd;font-size:15px;color:#1c1a18;text-align:right;">${order.item_title}</td></tr>
-  ${notesStr}${dueStr}
-  <tr><td style="padding:14px 0 0;font-size:14px;font-weight:600;color:#1c1a18;">Total Due</td><td style="padding:14px 0 0;font-size:24px;color:#c9a96e;font-weight:600;text-align:right;">$${Number(order.amount).toLocaleString()}</td></tr>
-</table>
-<div style="text-align:center;margin:32px 0;"><a href="${link}" style="display:inline-block;background:#1e3a52;color:#fff;padding:15px 40px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;font-family:Georgia,serif;">Review &amp; Approve →</a></div>
-<p style="color:#8a8078;font-size:12px;line-height:1.7;text-align:center;">Questions? Reply to this email or contact us at <a href="mailto:${BREVO_SENDER}" style="color:#c9a96e;">${BREVO_SENDER}</a></p>
-</div>`;
-  };
+  const buildInvoiceEmail = (order, link) => invoiceEmail({
+    invNum: fmtInvNum(order.id),
+    invDate: fmtDate(order.created_at || new Date().toISOString()),
+    firstName: order.client_name ? order.client_name.split(" ")[0] : "there",
+    itemTitle: order.item_title,
+    notes: order.notes,
+    dueDate: order.due_date ? fmtDate(order.due_date + "T00:00:00") : "",
+    amount: order.amount,
+    link,
+    sender: BREVO_SENDER,
+  });
   const f = (k,v) => setForm(fm=>({...fm,[k]:v}));
   const m = (k,v) => setManual(fm=>({...fm,[k]:v}));
   const cu = (k,v) => setClientUpdate(fm=>({...fm,[k]:v}));
@@ -106,7 +92,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       }]).select().single();
       if (orderErr) throw orderErr;
       const order = { ...orderData, client_name: name, created_at: new Date().toISOString() };
-      await sendEmail({ to: email, subject: `Invoice ${fmtInvNum(order.id)} — ${inv.item_title} · Fonkiart`, htmlContent: buildInvoiceEmail(order, link) });
+      await sendEmail({ to: email, subject: `Invoice ${fmtInvNum(order.id)} — ${inv.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
       await load();
       setInv(invBlank); setSendingInvoice(false);
       showMsg(`Invoice sent to ${email}`);
@@ -123,7 +109,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setResending(r => ({...r, [order.id]: true}));
     try {
       const link = `${window.location.origin}/?invoice=${order.invoice_token}`;
-      await sendEmail({ to: order.client_email, subject: `Invoice ${fmtInvNum(order.id)} — ${order.item_title} · Fonkiart`, htmlContent: buildInvoiceEmail(order, link) });
+      await sendEmail({ to: order.client_email, subject: `Invoice ${fmtInvNum(order.id)} — ${order.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
       showMsg(`Invoice resent to ${order.client_email}`);
     } catch { showMsg("Error resending invoice."); }
     finally { setResending(r => ({...r, [order.id]: false})); }
@@ -147,16 +133,16 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const client = clients.find(c => c.email === order.client_email);
     const name = client?.name?.split(" ")[0] || "there";
     const msgs = {
-      confirmed: { sub:`Your order is confirmed — ${order.item_title}`, body:`Great news! Your order for <strong>${order.item_title}</strong> has been confirmed. We'll notify you once it ships.` },
-      shipped:   { sub:`Your order has shipped — ${order.item_title}`,   body:`Your order for <strong>${order.item_title}</strong> is on its way! Fonkiart will follow up with any tracking details.` },
-      delivered: { sub:`Order delivered — ${order.item_title}`,           body:`Your order for <strong>${order.item_title}</strong> has been marked as delivered. We hope you love it!` },
+      confirmed: { sub:`Your order is confirmed — ${order.item_title}`, body:`Great news! Your order for <strong>${esc(order.item_title)}</strong> has been confirmed. We'll notify you once it ships.` },
+      shipped:   { sub:`Your order has shipped — ${order.item_title}`,   body:`Your order for <strong>${esc(order.item_title)}</strong> is on its way! Fonkiart will follow up with any tracking details.` },
+      delivered: { sub:`Order delivered — ${order.item_title}`,           body:`Your order for <strong>${esc(order.item_title)}</strong> has been marked as delivered. We hope you love it!` },
     };
     const m = msgs[status]; if (!m) return;
     try {
       await sendEmail({
         to: order.client_email,
         subject: m.sub,
-        htmlContent: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:32px;background:#fdfcf8;"><h1 style="font-size:24px;font-weight:300;color:#1c1a18;margin-bottom:6px;">Hi ${name}!</h1><p style="color:#7a6f63;font-size:15px;line-height:1.7;margin-bottom:24px;">${m.body}</p><p style="color:#7a6f63;font-size:13px;line-height:1.7;">Questions? Contact us at <a href="mailto:${BREVO_SENDER}" style="color:#c9a96e;">${BREVO_SENDER}</a>.</p><p style="color:#7a6f63;font-size:13px;margin-top:16px;">— Fonkiart</p></div>`,
+        ...statusEmail({ name, message: m.body, sender: BREVO_SENDER }),
       });
     } catch(e) { console.warn("Status email:", e); }
   };

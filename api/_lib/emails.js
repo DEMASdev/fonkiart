@@ -4,8 +4,8 @@ import { escapeHtml as e } from "./brevo.js";
 // Every Fonkiart email, built on the server so a visitor can't choose the
 // recipient, subject or markup. Everything a visitor typed is escaped.
 // One look for all of them (Andy, 2026-11-01): the site's white, pink and gold,
-// and in every email to a customer a random piece of Aliana's art, dropped into
-// ART_SLOT by withRandomArt() when the email is sent.
+// and in every email a random piece of Aliana's art, dropped into ART_SLOT by
+// withRandomArt() when the email is sent ("the picture to the left in all emails").
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
@@ -18,7 +18,7 @@ const SITE = "https://fonkiart.com";
 
 export const ART_SLOT = "<!--ART-->";
 
-function frame(heading, body, { art = true } = {}) {
+function frame(heading, body) {
   return `<div style="margin:0;padding:24px 12px;background:${C.blush};">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
@@ -26,9 +26,9 @@ function frame(heading, body, { art = true } = {}) {
     + `<div style="font-family:${SANS};font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
     + `<tr><td style="padding:30px 28px 8px;font-family:${SANS};font-size:15px;line-height:1.7;color:${C.ink};">`
     + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:28px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</td></tr>`
-    + (art ? ART_SLOT : "")
+    + ART_SLOT
     + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:12px;line-height:1.8;color:${C.muted};">`
-    + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · South Florida</td></tr>`
+    + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys</td></tr>`
     + `</table></div>`;
 }
 
@@ -89,7 +89,7 @@ export function supabaseTemplate({ heading, intro, buttonLabel, withCode = false
     + signoff).replace(ART_SLOT, art);
 }
 
-// ── to customers (with art) ──────────────────────────────────
+// ── to customers ─────────────────────────────────────────────
 
 export function adminReset({ link: href, minutes }) {
   return frame("Reset your admin password",
@@ -143,7 +143,13 @@ export function contactBuyer({ name, message, sender }) {
     + signoff);
 }
 
-// ── to the shop (same look, no art) ──────────────────────────
+// Emails written in the admin (invoice, order status, coupon): the admin sends
+// the heading and the inside, the server puts them in the same frame.
+export function adminFrame(heading, content) {
+  return frame(heading, content);
+}
+
+// ── to the shop ──────────────────────────────────────────────
 
 export function orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) {
   const rows = items.map(i => `<p style="margin:0 0 4px;font-size:14px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
@@ -157,7 +163,7 @@ export function orderStore({ orderRef, items, total, couponApplied, discount, fu
     + field("Email", link(`mailto:${email}`, e(email)))
     + (phone ? field("Phone", e(phone)) : "")
     + (addr ? field("Ship to", e(addr)) : "")
-    + footnote, { art: false });
+    + footnote);
 }
 
 export function inquiryStore({ art, name, email, phone, message }) {
@@ -175,7 +181,7 @@ export function inquiryStore({ art, name, email, phone, message }) {
       + field("Email", link(`mailto:${email}`, e(email)))
       + (phone ? field("Phone", e(phone)) : "")
       + (message ? `<p style="margin:10px 0 0;font-size:14px;"><strong>Message:</strong> ${multiline(message)}</p>` : ""))
-    + footnote, { art: false });
+    + footnote);
 }
 
 export function contactStore({ name, email, message }) {
@@ -183,11 +189,11 @@ export function contactStore({ name, email, message }) {
     field("Name", e(name))
     + field("Email", e(email))
     + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:${C.soft};font-size:14px;line-height:1.7;">${multiline(message)}</div>`
-    + footnote, { art: false });
+    + footnote);
 }
 
 export function invoiceApproved({ order }) {
   return frame("Invoice Approved",
     p(`<strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.`)
-    + footnote, { art: false });
+    + footnote);
 }
