@@ -1,5 +1,5 @@
 import { getServiceClient } from "./_lib/supabaseAdmin.js";
-import { pickArt } from "./_lib/emails.js";
+import { pickArt, emailImage } from "./_lib/emails.js";
 
 // The picture in the emails Supabase sends itself (the new-account code, the
 // collectors' login code). Their templates can't run code, so their <img> points
@@ -13,6 +13,6 @@ export default async function handler(req, res) {
   }
   res.statusCode = 302;
   res.setHeader("Cache-Control", "no-store, max-age=0");
-  res.setHeader("Location", art?.image || "https://fonkiart.com/favicon.png");
+  res.setHeader("Location", art?.image ? emailImage(art.image) : "https://fonkiart.com/favicon.png");
   return res.end();
 }

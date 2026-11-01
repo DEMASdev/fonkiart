@@ -24,12 +24,17 @@ function frame(heading, body) {
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
     + `<a href="${SITE}" style="font-family:${SERIF};font-size:27px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
     + `<div style="font-family:${SANS};font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
-    + `<tr><td style="padding:30px 28px 14px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>`
+    // Picture and message are two inline-blocks: side by side when the email is
+    // wide, picture on top when it isn't (phones) — no media queries, which many
+    // mail apps ignore. Outlook gets the same two columns from the [if mso] table.
+    + `<tr><td style="padding:30px 28px 14px;font-size:0;text-align:center;">`
+    + `<!--[if mso]><table role="presentation" width="536" cellpadding="0" cellspacing="0"><tr><![endif]-->`
     + ART_SLOT
-    + `<td style="vertical-align:top;font-family:${SANS};font-size:18px;line-height:1.7;color:${C.ink};">`
-    + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:31px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</td>`
-    + `</tr></table></td></tr>`
+    + `<!--[if mso]><td width="360" valign="top"><![endif]-->`
+    + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:360px;text-align:left;font-family:${SANS};font-size:18px;line-height:1.7;color:${C.ink};">`
+    + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:31px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</div>`
+    + `<!--[if mso]></td></tr></table><![endif]-->`
+    + `</td></tr>`
     + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:15px;line-height:1.8;color:${C.muted};">`
     + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys</td></tr>`
     + `</table></div>`;
@@ -46,19 +51,27 @@ const field = (label, html) => `<p style="margin:0 0 6px;font-size:17px;"><stron
 const footnote = `<p style="margin:20px 0 0;font-size:15px;color:${C.muted};">Sent from fonkiart.com</p>`;
 
 // The picture runs down the left third of every email, beside the message
-// (Andy, 11-01: "to the left, at 1/3 of the size" / "the picture to the left in all emails").
+// (Andy, 11-01: "to the left, at 1/3 of the size" / "the picture to the left in all emails"),
+// and sits on top of it on a phone ("picture on top on phones").
 function artCell({ href, image, alt, title, linkLabel }) {
-  return `<td width="33%" style="width:33%;vertical-align:top;padding:6px 22px 0 0;">`
-    + `<a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="170" style="display:block;width:100%;max-width:170px;height:auto;border:0;"></a>`
+  return `<!--[if mso]><td width="176" valign="top"><![endif]-->`
+    + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:176px;text-align:left;">`
+    + `<div style="padding:6px 20px 18px 0;">`
+    + `<a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="156" style="display:block;width:100%;max-width:156px;height:auto;border:0;"></a>`
     + (title ? `<p style="margin:10px 0 2px;font-family:${SERIF};font-style:italic;font-size:17px;line-height:1.4;color:${C.ink};">“${e(title)}”</p>` : "")
     + `<p style="margin:${title ? "0" : "10px 0 0"};font-family:${SANS};font-size:13px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
     + `<p style="margin:6px 0 0;font-family:${SANS};font-size:14px;line-height:1.5;"><a href="${e(href)}" style="font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a></p>`
-    + `</td>`;
+    + `</div></div>`
+    + `<!--[if mso]></td><![endif]-->`;
 }
+
+// The originals are full-size photos (up to 24 MB); emails get a 320px copy made
+// by Vercel's image service (vercel.json "images" allows the Supabase bucket).
+export const emailImage = (url) => `${SITE}/_vercel/image?url=${encodeURIComponent(url)}&w=320&q=75`;
 
 export function artRow(art) {
   const href = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
-  return artCell({ href, image: art.image, alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
+  return artCell({ href, image: emailImage(art.image), alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
 }
 
 // A random piece of Aliana's own art (not the children's pieces), or null.
