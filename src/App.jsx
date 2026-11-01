@@ -41,6 +41,10 @@ import BuyerDashboard from "./pages/BuyerDashboard";
 
 import AdminPage from "./admin/AdminPage";
 
+// The shopping pages and Contact sit in the header's menu row; every page is still in
+// the side menu behind the ☰ button.
+const V3_NAV = ["home", "catalog", "collections", "artprints", "new", "specials", "contact"];
+
 export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
@@ -292,15 +296,13 @@ export default function App() {
 
       <div className="content">
         <div className="topbar">
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
-            <button className="v2-logo" onClick={() => setPage("home")}><span className="v2-logo-dot" />Fonkiart</button>
+          <div className="v3-bar-side">
+            <button className="hamburger" title="Menu" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
           </div>
-          <nav className="v2-nav">
-            {NAV_ITEMS.filter(({ id }) => id !== "home" && mergedData.settings.navVisible?.[id] !== false).slice(0, 6).map(({ id, label }) => (
-              <button key={id} className={`v2-nav-link${page === id ? " active" : ""}`} onClick={() => { if (id === "catalog") setPendingCategory(null); setPage(id); }}>{label}</button>
-            ))}
-          </nav>
+          <button className="v3-logo" onClick={() => setPage("home")}>
+            <span className="v3-logo-name">Fonkiart</span>
+            <span className="v3-logo-sub">Isla Morada · Florida Keys</span>
+          </button>
           <div className="topbar-right">
             <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" className={cartPulse ? "cart-icon-pulse" : ""} style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--ink)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--ink)"}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
@@ -312,6 +314,11 @@ export default function App() {
             </button>
             {page === "home" && <button className="topbar-tag" onClick={() => goToPage("catalog")} style={{ cursor:"pointer", border:"none" }}>Shop Now</button>}
           </div>
+          <nav className="v3-nav">
+            {NAV_ITEMS.filter(({ id }) => V3_NAV.includes(id) && mergedData.settings.navVisible?.[id] !== false).map(({ id, label }) => (
+              <button key={id} className={`v3-nav-link${page === id ? " active" : ""}`} onClick={() => { if (id === "catalog") setPendingCategory(null); setPage(id); }}>{label}</button>
+            ))}
+          </nav>
         </div>
 
         {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} />}
