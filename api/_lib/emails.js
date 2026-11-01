@@ -20,13 +20,16 @@ export const ART_SLOT = "<!--ART-->";
 
 function frame(heading, body) {
   return `<div style="margin:0;padding:24px 12px;background:${C.blush};">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid ${C.line};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
     + `<a href="${SITE}" style="font-family:${SERIF};font-size:24px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
     + `<div style="font-family:${SANS};font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
-    + `<tr><td style="padding:30px 28px 8px;font-family:${SANS};font-size:15px;line-height:1.7;color:${C.ink};">`
-    + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:28px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</td></tr>`
+    + `<tr><td style="padding:30px 28px 14px;">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>`
     + ART_SLOT
+    + `<td style="vertical-align:top;font-family:${SANS};font-size:15px;line-height:1.7;color:${C.ink};">`
+    + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:28px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</td>`
+    + `</tr></table></td></tr>`
     + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:12px;line-height:1.8;color:${C.muted};">`
     + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys</td></tr>`
     + `</table></div>`;
@@ -42,22 +45,20 @@ const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:1
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:14px;"><strong>${label}:</strong> ${html}</p>`;
 const footnote = `<p style="margin:20px 0 0;font-size:12px;color:${C.muted};">Sent from fonkiart.com</p>`;
 
-// The picture sits on the left at a third of the width, its words beside it
-// (Andy, 11-01: "to the left, at 1/3 of the size").
-function artBlock({ href, image, alt, title, linkLabel }) {
-  return `<tr><td style="padding:8px 28px 22px;">`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>`
-    + `<td width="33%" style="width:33%;vertical-align:middle;padding:0 18px 0 0;"><a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="150" style="display:block;width:100%;max-width:150px;height:auto;border:0;"></a></td>`
-    + `<td style="vertical-align:middle;font-family:${SANS};">`
-    + (title ? `<p style="margin:0 0 4px;font-family:${SERIF};font-style:italic;font-size:17px;color:${C.ink};">“${e(title)}”</p>` : "")
-    + `<p style="margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
-    + `<a href="${e(href)}" style="font-size:12px;font-weight:bold;letter-spacing:.1em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a>`
-    + `</td></tr></table></td></tr>`;
+// The picture runs down the left third of every email, beside the message
+// (Andy, 11-01: "to the left, at 1/3 of the size" / "the picture to the left in all emails").
+function artCell({ href, image, alt, title, linkLabel }) {
+  return `<td width="33%" style="width:33%;vertical-align:top;padding:6px 22px 0 0;">`
+    + `<a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="170" style="display:block;width:100%;max-width:170px;height:auto;border:0;"></a>`
+    + (title ? `<p style="margin:10px 0 2px;font-family:${SERIF};font-style:italic;font-size:14px;line-height:1.4;color:${C.ink};">“${e(title)}”</p>` : "")
+    + `<p style="margin:${title ? "0" : "10px 0 0"};font-family:${SANS};font-size:10px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
+    + `<p style="margin:6px 0 0;font-family:${SANS};font-size:11px;line-height:1.5;"><a href="${e(href)}" style="font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a></p>`
+    + `</td>`;
 }
 
 export function artRow(art) {
   const href = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
-  return artBlock({ href, image: art.image, alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
+  return artCell({ href, image: art.image, alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
 }
 
 // A random piece of Aliana's own art (not the children's pieces), or null.
@@ -80,7 +81,7 @@ export async function withRandomArt(db, html) {
 // Supabase > Authentication > Emails > Templates. It keeps Supabase's own
 // {{ .ConfirmationURL }} / {{ .Token }}, and its picture comes from /api/art.
 export function supabaseTemplate({ heading, intro, buttonLabel, withCode = false }) {
-  const art = artBlock({ href: SITE, image: `${SITE}/api/art`, alt: "Original art by Aliana", title: "", linkLabel: "See more in the shop →" });
+  const art = artCell({ href: SITE, image: `${SITE}/api/art`, alt: "Original art by Aliana", title: "", linkLabel: "See more in the shop →" });
   return frame(heading,
     p(intro)
     + button("{{ .ConfirmationURL }}", buttonLabel)
