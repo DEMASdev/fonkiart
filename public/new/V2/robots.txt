@@ -1,0 +1,13 @@
+# Fonkiart — robots.txt
+# Updated automatically on each build via scripts/update-sitemap.js
+
+User-agent: *
+Allow: /
+
+# Block admin panel from indexing
+Disallow: /admin
+
+# Common crawl budget savers
+Disallow: /*.json$
+
+Sitemap: https://fonkiart.vercel.app/sitemap.xml
