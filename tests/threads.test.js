@@ -186,7 +186,14 @@ test("email replies setup: creates Brevo's inbound webhook once, with the key in
   assert.equal(made2, 1);
 
   const refused = async () => ({ ok: false, status: 403, json: async () => ({ message: "Not available on your plan" }) });
-  assert.deepEqual(await adminInboundSetup(refused), { ok: false, message: "Not available on your plan" });
+  assert.deepEqual(await adminInboundSetup(refused), { ok: false, message: "Not available on your plan (create 403; check 403)" });
+  // Whatever the check answers (here a 400), it still tries to create.
+  let made3 = 0;
+  const oddCheck = async (url, opts = {}) => (opts.method === "POST"
+    ? (made3++, { ok: true, json: async () => ({ id: 3 }) })
+    : { ok: false, status: 400, json: async () => ({ code: "invalid_parameter", message: "Webhook record does not exist" }) });
+  assert.deepEqual(await adminInboundSetup(oddCheck), { ok: true, already: false });
+  assert.equal(made3, 1);
 }));
 
 test("the public door knows the three new actions and passes them through", async () => {

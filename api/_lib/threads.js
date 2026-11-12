@@ -108,9 +108,8 @@ export async function adminInboundSetup(fetchImpl = fetch) {
   const headers = { accept: "application/json", "api-key": apiKey, "content-type": "application/json" };
   const list = await fetchImpl("https://api.brevo.com/v3/webhooks?type=inbound", { headers });
   const listed = await list.json().catch(() => ({}));
-  // With no inbound webhook yet, Brevo answers 404 "Webhook record does not exist":
-  // that means "none yet", so go on and create it.
-  if (!list.ok && list.status !== 404) return { ok: false, message: listed.message || `Brevo answered ${list.status}` };
+  // Only a clean list that already holds our address means "done". Any other answer
+  // (Brevo says "Webhook record does not exist" when there are none) → try to create.
   if (list.ok && (listed.webhooks || []).some(w => w.url === url)) return { ok: true, already: true };
   const made = await fetchImpl("https://api.brevo.com/v3/webhooks", {
     method: "POST",
@@ -118,7 +117,10 @@ export async function adminInboundSetup(fetchImpl = fetch) {
     body: JSON.stringify({ type: "inbound", events: ["inboundEmailProcessed"], url, domain: REPLY_DOMAIN, description: "Fonkiart request replies" }),
   });
   const out = await made.json().catch(() => ({}));
-  if (!made.ok) return { ok: false, message: out.message || `Brevo answered ${made.status}` };
+  if (!made.ok) {
+    console.warn("inbound setup:", list.status, JSON.stringify(listed).slice(0, 300), made.status, JSON.stringify(out).slice(0, 300));
+    return { ok: false, message: `${out.message || "no message"} (create ${made.status}${out.code ? ` ${out.code}` : ""}; check ${list.status}${listed.code ? ` ${listed.code}` : ""})` };
+  }
   return { ok: true, already: false };
 }
 
