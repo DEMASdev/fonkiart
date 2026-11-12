@@ -12,9 +12,9 @@ import { siteUrl } from "./site.js";
 // reply.fonkiart.com's MX points at Brevo, which posts each email to op=inbound.
 
 export const REPLY_DOMAIN = "reply.fonkiart.com";
-// Stays false until an email sent to REPLY_DOMAIN has been seen landing in the log.
-// While false, replies to our emails go to the shop's own address, exactly as before.
-export const INBOUND_ON = false;
+// On since 2026-11-12, after Brevo accepted the inbound webhook ("Email replies connected").
+// Set it back to false to send replies to the shop's own address, as before.
+export const INBOUND_ON = true;
 
 // Hex, so the token survives mail systems that lower-case the address it rides in.
 const TOKEN_RE = /^[a-f0-9]{40}$/;

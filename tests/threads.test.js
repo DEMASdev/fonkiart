@@ -59,8 +59,7 @@ test("admin reply: emails the customer their private link, keeps the message, Ne
   assert.equal(email.to, "ana@example.com");
   assert.ok(email.htmlContent.includes(`https://fonkiart.com/?thread=${token}`));
   assert.ok(email.htmlContent.includes("&lt;b&gt;Send&lt;/b&gt;") && !email.htmlContent.includes("<b>Send</b>"), "the answer is escaped");
-  assert.equal(INBOUND_ON, false);
-  assert.equal(email.replyTo, "shop@fonkiart.com", "until email replies are switched on, replies go to the shop");
+  assert.equal(email.replyTo, INBOUND_ON ? `r-${token}@reply.fonkiart.com` : "shop@fonkiart.com", "a reply by email comes back to this conversation");
   const [m] = db.tables.RequestMessages;
   assert.equal(m.request_id, "r1"); assert.equal(m.direction, "out"); assert.equal(m.via, "site");
   assert.equal(m.email_message_id, "<m1@smtp-relay.mailin.fr>");
