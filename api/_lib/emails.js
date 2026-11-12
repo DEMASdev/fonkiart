@@ -157,6 +157,16 @@ export function contactBuyer({ name, message, sender }) {
     + signoff);
 }
 
+// The shop's answer to a request, written in the admin; the button opens the
+// customer's private conversation page.
+export function requestReply({ name, message, link: href }) {
+  return frame(`Hi ${e(firstWord(name) || "there")},`,
+    `<div style="margin:0 0 20px;">${multiline(message)}</div>`
+    + button(href, "Reply on fonkiart.com")
+    + small("Or simply reply to this email. Your whole conversation with us is kept on that page.")
+    + signoff);
+}
+
 // Emails written in the admin (invoice, order status, coupon): the admin sends
 // the heading and the inside, the server puts them in the same frame.
 export function adminFrame(heading, content) {
@@ -209,5 +219,24 @@ export function contactStore({ name, email, message }) {
 export function invoiceApproved({ order }) {
   return frame("Invoice Approved",
     p(`<strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.`)
+    + footnote);
+}
+
+export function requestReplyStore({ name, email, message, via }) {
+  return frame("New reply to a request",
+    field("From", `${e(name || "—")}${email ? ` · ${link(`mailto:${email}`, e(email))}` : ""}`)
+    + field("Came in", via === "email" ? "by email" : "on fonkiart.com")
+    + `<div style="margin:14px 0 16px;padding:14px 18px;border-left:3px solid ${C.gold};background:#ffffff;font-size:17px;line-height:1.7;">${multiline(message)}</div>`
+    + small("It's saved with the request. Answer it in the admin, under Requests, so the whole conversation stays in one place.")
+    + footnote);
+}
+
+// An email to the reply address that matched no request: passed on so it isn't lost.
+export function inboundUnmatched({ from, subject, text }) {
+  return frame("Email that matched no request",
+    p("This came in through the reply address but didn't match any request, so it isn't saved anywhere. Here it is in full.")
+    + field("From", e(from || "unknown"))
+    + field("Subject", e(subject))
+    + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:#ffffff;font-size:17px;line-height:1.7;">${multiline(text)}</div>`
     + footnote);
 }

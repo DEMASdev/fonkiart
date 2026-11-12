@@ -28,4 +28,6 @@ export async function sendBrevo({ to, subject, htmlContent, replyTo }) {
     body: JSON.stringify(payload),
   });
   if (!r.ok) throw new Error(`Brevo ${r.status}: ${await r.text().catch(() => "")}`);
+  // { messageId } — kept with a request's reply so the customer's answer can be matched to it.
+  return r.json().catch(() => ({}));
 }

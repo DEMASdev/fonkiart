@@ -37,3 +37,10 @@ export async function adminSendEmail(message) {
   const r = await callAdmin({ kind: "email", ...message });
   if (r.error) throw new Error(r.error.message || "Email failed");
 }
+
+// Admin actions that aren't plain table queries (request conversations, email setup).
+export async function adminAction(kind, payload = {}) {
+  const r = await callAdmin({ kind, ...payload });
+  if (r.error) throw new Error(r.error.message || "Something went wrong");
+  return r;
+}

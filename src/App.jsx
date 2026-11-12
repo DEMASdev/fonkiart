@@ -23,6 +23,7 @@ import BuyerAuthModal from "./components/BuyerAuthModal";
 import NewPasswordModal from "./components/NewPasswordModal";
 
 import InvoicePage from "./pages/InvoicePage";
+import ThreadPage from "./pages/ThreadPage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
 import CollectionsPage from "./pages/CollectionsPage";
@@ -44,6 +45,7 @@ import AdminPage from "./admin/AdminPage";
 
 export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
+  const [threadToken]  = useState(() => new URLSearchParams(window.location.search).get("thread"));
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
   const [deepModal, setDeepModal] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
@@ -251,6 +253,7 @@ export default function App() {
   const mergedData = data ? { ...data, items: artworks.length > 0 ? artworks : (data.items || []) } : null;
 
   if (invoiceToken) return <InvoicePage token={invoiceToken} />;
+  if (threadToken) return <ThreadPage token={threadToken} />;
   if (!mergedData) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"#8a8078" }}>Loading Fonkiart…</div>;
 
   if (page === "buyer-dashboard" && user) return <BuyerDashboard user={user} onLogout={async () => { await supabase.auth.signOut(); setUser(null); setPage("home"); }} onBack={() => setPage("home")} />;
