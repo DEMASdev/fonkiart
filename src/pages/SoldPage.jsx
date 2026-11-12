@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
+import Pic from "../components/Pic";
 
 export default function SoldPage({ data }) {
   const [selected, setSelected] = useState(null);
@@ -17,7 +18,7 @@ export default function SoldPage({ data }) {
           : <div className="gallery-grid">
               {items.map(item => (
                 <div key={item.id} className="card" onClick={() => setSelected(item)}>
-                  <img src={item.image} alt={item.title} loading="lazy" style={{filter:"grayscale(30%)"}} />
+                  <Pic src={item.image} w={640} alt={item.title} loading="lazy" style={{filter:"grayscale(30%)"}} />
                   <div style={{ position:"absolute", inset:0, background:"rgba(10,8,6,.45)", display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none" }}>
                     <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:13, letterSpacing:".25em", textTransform:"uppercase", color:"rgba(255,255,255,.75)", border:"1px solid rgba(255,255,255,.3)", padding:"5px 16px" }}>Sold</span>
                   </div>

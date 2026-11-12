@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { storeCall } from "../lib/store";
+import Pic from "./Pic";
 
 export default function AuthModal({ user, onClose, artworks = [] }) {
   const [email, setEmail] = useState("");
@@ -32,7 +33,7 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
             const art = previewImgs[i];
             return (
               <div key={i} className="wg-item">
-                {art ? <img src={art.image} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)",width:"100%",height:"100%" }} />}
+                {art ? <Pic src={art.image} w={640} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)",width:"100%",height:"100%" }} />}
               </div>
             );
           })}

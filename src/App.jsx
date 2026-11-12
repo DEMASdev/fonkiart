@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
@@ -168,6 +168,15 @@ export default function App() {
     else localStorage.removeItem("fonkiart-collectors-client");
   }, [collectorsClient]);
 
+  // Every page (and every admin section) opens at the top. Without this the
+  // browser kept the old scroll position, so a menu tap from far down one page
+  // landed far down the next — Andy, 2026-11-12: "big bug". Layout effect, so
+  // the new page is never painted at the old position first.
+  useEffect(() => {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  }, []);
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, [page, adminTab]);
+
   // Browser back/forward support — without this, navigating into a page
   // (e.g. Admin) never adds a history entry, so the back button leaves the
   // site entirely (or does nothing) instead of returning to the prior page.
@@ -284,7 +293,7 @@ export default function App() {
           <div style={{ borderTop:"2px solid var(--border)", margin:"8px 0" }} />
           <button className="nav-item" onClick={() => { setTrackModal(true); setSidebarOpen(false); }}><Package size={19} />Track My Order</button>
           <button className="nav-item" onClick={() => { goAccount(); setSidebarOpen(false); }}>
-            <LogIn size={19} />
+            <LogIn size={23} />
             {user?.user_metadata?.role === "buyer"
               ? user.user_metadata?.name?.split(" ")[0] || "My Account"
               : collectorsClient ? collectorsClient.name?.split(" ")[0] || "My Account"
@@ -315,7 +324,7 @@ export default function App() {
               {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:"calc(50% - 19px)", right:"calc(50% - 21px)" }}>{cart.length}</span>}
             </button>
             <button onClick={goAccount} title="My Account" aria-label="My Account" className="topbar-icon-btn topbar-account">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               {user && <span style={{ position:"absolute", bottom:"calc(50% - 11px)", right:"calc(50% - 11px)", width:8, height:8, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
             </button>
             {page !== "home" && <button className="topbar-home-btn" onClick={() => setPage("home")} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", color:"var(--gold)", display:"flex", alignItems:"center", gap:5, padding:0 }}>← Home</button>}

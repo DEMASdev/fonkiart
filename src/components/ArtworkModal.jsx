@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Pic from "./Pic";
 
 export default function ArtworkModal({ item, onClose, onBuy, sold }) {
   const allImages = (item.images?.length > 0) ? item.images : (item.image ? [item.image] : []);
@@ -8,12 +9,12 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-gallery-wrap">
-          <img className="modal-img" src={allImages[imgIdx] || item.image} alt={item.title} style={{ cursor:"zoom-in", ...(sold ? {filter:"grayscale(20%)"} : {}) }} onClick={() => setZoomed(true)} />
+          <Pic className="modal-img" src={allImages[imgIdx] || item.image} w={1600} q={80} alt={item.title} style={{ cursor:"zoom-in", ...(sold ? {filter:"grayscale(20%)"} : {}) }} onClick={() => setZoomed(true)} />
           {allImages.length > 1 && (
             <div className="modal-thumbs">
               {allImages.map((url, i) => (
                 <button key={i} className={`modal-thumb${imgIdx===i?" active":""}`} onClick={e => { e.stopPropagation(); setImgIdx(i); }}>
-                  <img src={url} alt="" />
+                  <Pic src={url} w={320} alt="" />
                 </button>
               ))}
             </div>
@@ -56,7 +57,7 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
       {zoomed && (
         <div className="modal-zoom-bg" onClick={e => { e.stopPropagation(); setZoomed(false); }}>
           <button className="modal-zoom-close" onClick={e => { e.stopPropagation(); setZoomed(false); }}>✕</button>
-          <img className="modal-zoom-img" src={allImages[imgIdx] || item.image} alt={item.title} onClick={e => e.stopPropagation()} />
+          <Pic className="modal-zoom-img" src={allImages[imgIdx] || item.image} w={1600} q={85} alt={item.title} onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>

@@ -12,7 +12,7 @@ export default function MarqueeStrip({ settings }) {
           </span>
         ))}
       </div>
-      <SocialIcons settings={settings} className="marquee-social" iconClassName="marquee-social-icon" size={17} />
+      <SocialIcons settings={settings} className="marquee-social" iconClassName="marquee-social-icon" size={20} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { mouseHover } from "../utils/hover";
+import Pic from "./Pic";
 
 export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOpen, onView, onViewCart }) {
   return (
@@ -20,7 +21,7 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
                 </div>
               ) : cart.map(item => (
                 <div key={item.id} className="cart-drawer-item">
-                  <img src={item.image} alt={item.title} style={{ cursor: onView ? "pointer" : "default" }} onClick={() => onView && onView(item)} />
+                  <Pic src={item.image} w={320} alt={item.title} style={{ cursor: onView ? "pointer" : "default" }} onClick={() => onView && onView(item)} />
                   <div>
                     <div className="cart-drawer-title" style={{ cursor: onView ? "pointer" : "default" }} onClick={() => onView && onView(item)}>{item.title}</div>
                     <div className="cart-drawer-price">

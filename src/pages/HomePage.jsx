@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CollectorsSection from "../components/CollectorsSection";
 import { mouseHover } from "../utils/hover";
+import Pic from "../components/Pic";
 
 export default function HomePage({ setPage, data }) {
   const allImgs = (data?.items || []).filter(i => i.image);
@@ -26,7 +27,7 @@ export default function HomePage({ setPage, data }) {
             ? <div style={{ gridColumn:"1/-1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
             : slides.map((item) => (
                 <div key={item.id} className="hero-panel">
-                  <img src={item.image} alt={item.title} />
+                  <Pic src={item.image} w={1080} alt={item.title} />
                 </div>
               ))
           }

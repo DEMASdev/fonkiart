@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { storeCall } from "../lib/store";
+import Pic from "./Pic";
 
 export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) {
   const [email, setEmail] = useState("");
@@ -35,13 +36,13 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="welcome-modal" onClick={e => e.stopPropagation()}>
-        <button className="welcome-close-x" aria-label="Close" onClick={onClose}>✕</button>
+        <button className="welcome-close-x" aria-label="Close" onClick={onClose}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div className="welcome-gallery">
           {Array.from({ length: 3 }).map((_, i) => {
             const art = previewImgs[i];
             return (
               <div key={i} className="wg-item">
-                {art ? <img src={art.image} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)",width:"100%",height:"100%" }} />}
+                {art ? <Pic src={art.image} w={640} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)",width:"100%",height:"100%" }} />}
               </div>
             );
           })}

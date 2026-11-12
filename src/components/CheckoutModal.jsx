@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
+import Pic from "./Pic";
 
 export default function CheckoutModal({ items, settings, onClose, onSuccess, fullPage }) {
   const venmoHandle   = settings.venmoHandle   || "@fonkiart";
@@ -112,7 +113,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
         <div className="checkout-items" style={{ marginBottom:24 }}>
           {items.map(i => (
             <div key={i.id} className="checkout-item-row">
-              {i.image && <img src={i.image} alt={i.title} className="checkout-item-thumb" />}
+              {i.image && <Pic src={i.image} w={320} alt={i.title} className="checkout-item-thumb" />}
               <p className="checkout-sub" style={{ margin:0 }}>
                 {i.title}{itemEffective(i) ? ` · $${Number(itemEffective(i)).toLocaleString()}` : ""}
                 {couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}

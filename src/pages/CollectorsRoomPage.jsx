@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { storeCall } from "../lib/store";
 import CheckoutModal from "../components/CheckoutModal";
 import { mouseHover } from "../utils/hover";
+import Pic from "../components/Pic";
 
 export default function CollectorsRoomPage({ user, artworks, settings, onLogout, onBack, isAdmin, onAdminEnter }) {
   const exclusiveWorks = artworks.filter(a => a.isCollectorsOnly && !a.isSold);
@@ -72,7 +73,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                   <div key={item.id} onClick={() => setSelected(item)} style={{ background:CR.card, border:`1px solid ${CR.border}`, cursor:"pointer", transition:"border-color .2s" }}
                     {...mouseHover({ borderColor:CR.gold }, { borderColor:CR.border })}>
                     <div style={{ aspectRatio:"4/3", overflow:"hidden", background:"#0a0908" }}>
-                      {item.image && <img src={item.image} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover", transition:"transform .4s" }} {...mouseHover({ transform:"scale(1.04)" }, { transform:"scale(1)" })} />}
+                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover", transition:"transform .4s" }} {...mouseHover({ transform:"scale(1.04)" }, { transform:"scale(1)" })} />}
                     </div>
                     <div style={{ padding:"18px 20px" }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, marginBottom:4 }}>{item.title}</div>
@@ -107,7 +108,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                   <div key={item.id} style={{ background:CR.card, border:`1px solid ${CR.gold}`, cursor:"pointer" }} onClick={() => setCheckout(item)}>
                     <div style={{ background:CR.gold, color:"#fff", padding:"6px 16px", fontSize:10, letterSpacing:".2em", textTransform:"uppercase", textAlign:"center" }}>Early Access · Collectors Only</div>
                     <div style={{ aspectRatio:"4/3", overflow:"hidden", background:"#0a0908" }}>
-                      {item.image && <img src={item.image} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />}
+                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />}
                     </div>
                     <div style={{ padding:"18px 20px" }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, marginBottom:4 }}>{item.title}</div>
@@ -184,7 +185,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
       {selected && (
         <div className="lock-scroll" style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.92)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"clamp(12px, 4vw, 24px)", overflowY:"auto", overscrollBehavior:"contain" }} onClick={() => setSelected(null)}>
           <div className="cr-modal" onClick={e=>e.stopPropagation()}>
-            <img className="cr-modal-img" src={selected.image} alt={selected.title} />
+            <Pic className="cr-modal-img" src={selected.image} w={1080} alt={selected.title} />
             <div className="cr-modal-info">
               <button className="cr-close" aria-label="Close" onClick={() => setSelected(null)} style={{ alignSelf:"flex-end", background:"none", border:`1px solid ${CR.border}`, color:CR.muted, width:32, height:32, cursor:"pointer", borderRadius:"50%", fontSize:14, marginBottom:20 }}>✕</button>
               <p style={{ fontSize:11, letterSpacing:".2em", textTransform:"uppercase", color:CR.gold, marginBottom:8 }}>{selected.category}</p>

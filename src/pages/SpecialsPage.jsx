@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
+import Pic from "../components/Pic";
 
 export default function SpecialsPage({ data, addToCart, cart }) {
   const [selected, setSelected] = useState(null);
@@ -17,7 +18,7 @@ export default function SpecialsPage({ data, addToCart, cart }) {
           : <div className="gallery-grid">
               {items.map(item => (
                 <div key={item.id} className="card" onClick={() => setSelected(item)}>
-                  <img src={item.image} alt={item.title} loading="lazy" />
+                  <Pic src={item.image} w={640} alt={item.title} loading="lazy" />
                   {item.isChildren && <div className="card-children">❤️</div>}
                   {item.isSold && <div className="card-badge" style={{top:10,background:"#1c1a18",color:"#fff",letterSpacing:".14em"}}>Sold</div>}
                   {!item.isSold && <div className="card-badge card-badge-sale" style={{top:10}}>Sale</div>}

@@ -87,7 +87,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .social-icons { display:flex;align-items:center;gap:8px;padding-left:14px;border-left:1px solid var(--border); }
 .social-icon {
   display:flex;align-items:center;justify-content:center;
-  width:32px;height:32px;border-radius:50%;
+  width:38px;height:38px;border-radius:50%;
   color:var(--ink);background:var(--cream);
   border:1px solid var(--border);
   transition:color .2s,background .2s,border-color .2s;
@@ -356,8 +356,8 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .wg-item:nth-child(1) { width:82%;height:46%;top:3%;left:6%;transform:rotate(-4deg);z-index:1; }
 .wg-item:nth-child(2) { width:78%;height:44%;top:30%;left:16%;transform:rotate(3deg);z-index:2; }
 .wg-item:nth-child(3) { width:80%;height:45%;top:54%;left:5%;transform:rotate(-2deg);z-index:3; }
-.welcome-close-x { position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.5);font-size:18px;line-height:1;transition:color .2s;z-index:10; }
-.welcome-close-x:hover { color:#fff; }
+.welcome-close-x { position:absolute;top:10px;right:10px;width:40px;height:40px;padding:0;border-radius:50%;background:#fff;border:2px solid var(--ink);color:var(--ink);box-shadow:0 2px 12px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s,color .2s;z-index:10; }
+.welcome-close-x:hover { background:var(--ink);color:#fff; }
 .welcome-form-side { display:flex;flex-direction:column; }
 .welcome-top { background:var(--sidebar-bg);padding:22px 24px 18px;display:flex;align-items:center;gap:16px; }
 .welcome-pct-wrap { flex-shrink:0; }
@@ -410,8 +410,8 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   .topbar-right a { display:none; }
   .topbar-right { gap:10px; }
   .social-icons { gap:5px;padding-left:8px; }
-  .social-icon { width:26px;height:26px; }
-  .social-icon svg { width:15px;height:15px; }
+  .social-icon { width:31px;height:31px; }
+  .social-icon svg { width:18px;height:18px; }
   .social-icons-desktop { display:none; }
     .topbar-tag { display:none; }
   .marquee-social {
@@ -664,7 +664,7 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
 /* Top-bar icon buttons: one 44px hit area each. */
 .topbar-icon-btn { position:relative;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:color .2s; }
 .topbar-cart { color:var(--ink); }
-.topbar-account { color:var(--muted); }
+.topbar-account { color:var(--ink); }
 @media (hover:hover) { .topbar-icon-btn:hover { color:var(--accent); } }
 .topbar-left { display:flex;align-items:center;gap:14px;min-width:0; }
 .topbar-title { min-width:0; }
@@ -679,7 +679,7 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
   .topbar-icon-btn { min-width:44px;min-height:44px; }
   .topbar-home-btn { min-height:44px; }
   .marquee-social { gap:18px;padding-right:max(10px, env(safe-area-inset-right, 0px)); }
-  .marquee-social-icon { width:26px;height:26px; }
+  .marquee-social-icon { width:28px;height:28px;border-color:#fff; }
   .cookie-banner { bottom:calc(60px + env(safe-area-inset-bottom, 0px)); }
 
   /* Catalog: search, sort and the result count wrap instead of pushing sideways. */
@@ -698,7 +698,7 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
   .modal-bg { padding:12px; }
   .modal-close { width:44px;height:44px; }
   .modal-zoom-close { width:44px;height:44px;top:max(16px, env(safe-area-inset-top, 0px));right:16px; }
-  .welcome-close-x { width:44px;height:44px;top:0;right:0;font-size:20px; }
+  .welcome-close-x { width:44px;height:44px;top:8px;right:8px; }
   /* Artwork window: it grows and the backdrop scrolls, so "Add to Cart" is always
      reachable; the close button stays pinned to the corner of the screen. */
   .modal { max-height:none;overflow:visible; }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
 import CheckoutModal from "../components/CheckoutModal";
+import Pic from "../components/Pic";
 
 export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage }) {
   const [checkout, setCheckout] = useState(false);
@@ -45,7 +46,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
           <div className="cart-page-items">
             {cart.map(item => (
               <div key={item.id} className="cart-page-item">
-                <img src={item.image} alt={item.title} onClick={() => setSelected(item)} />
+                <Pic src={item.image} w={320} alt={item.title} onClick={() => setSelected(item)} />
                 <div className="cart-page-item-info">
                   <div className="cart-page-item-cat">{item.category}</div>
                   <div className="cart-page-item-title" onClick={() => setSelected(item)}>{item.title}</div>
@@ -76,7 +77,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
           <div className="gallery-grid">
             {suggestions.map(item => (
               <div key={item.id} className="card" onClick={() => setSelected(item)}>
-                <img src={item.image} alt={item.title} loading="lazy" />
+                <Pic src={item.image} w={640} alt={item.title} loading="lazy" />
                 <div className="card-over">
                   <div className="card-cat">{item.category}</div>
                   <div className="card-title">{item.title}</div>

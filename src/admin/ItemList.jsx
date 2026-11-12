@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SUPABASE_URL } from "../lib/supabase";
 import { adminDb as supabase } from "../lib/adminDb";
+import Pic from "../components/Pic";
 export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -47,7 +48,7 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
       </div>
       {paged.map(item => (
         <div key={item.id} className="admin-item">
-          <img src={item.image} alt={item.title} />
+          <Pic src={item.image} w={320} alt={item.title} />
           <div style={{ flex:1 }}>
             <div className="ai-title">{item.title}</div>
             <div className="ai-meta">{item.category}{item.price?` · $${item.price}`:""}{item.salePrice?` · SALE $${item.salePrice}`:""}{item.medium?` · ${item.medium}`:""}{item.dimensions?` · ${item.dimensions}`:""}{item.isNew?" · NEW":""}{item.isSold?" · SOLD":""}{item.isChildren?" · ❤️ Children":""}</div>

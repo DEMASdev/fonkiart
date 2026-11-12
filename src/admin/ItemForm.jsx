@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { adminDb as supabase } from "../lib/adminDb";
 import { mouseHover } from "../utils/hover";
+import Pic from "../components/Pic";
 export default function ItemForm({ data, updateData, addArtwork, editArtwork, editItem, setEditItem }) {
   const blank = { title:"", description:"", medium:"", dimensions:"", category:data.categories[0]||"", price:"", salePrice:"", images:[], image:"", isNew:false, isSold:false, isChildren:false, isCollectorsOnly:false, isEarlyAccess:false, stripeLink:"" };
   const [form, setForm] = useState(blank);
@@ -75,7 +76,7 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
           position:"fixed",inset:0,background:"rgba(0,0,0,.82)",zIndex:9999,
           display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"
         }}>
-          <img src={previewImg} alt="Preview" style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain",border:"2px solid var(--gold)",boxShadow:"0 8px 48px rgba(0,0,0,.6)"}} />
+          <Pic src={previewImg} w={1600} alt="Preview" style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain",border:"2px solid var(--gold)",boxShadow:"0 8px 48px rgba(0,0,0,.6)"}} />
           <button onClick={() => setPreviewImg(null)} aria-label="Close preview" style={{
             position:"fixed",top:24,right:24,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",
             color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:16,
@@ -91,7 +92,7 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
         <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
           {form.images.map((url, i) => (
             <div key={i} className="photo-tile" style={{position:"relative",width:220,height:220,flexShrink:0,cursor:"zoom-in"}} onClick={() => setPreviewImg(url)}>
-              <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",border:"2px solid var(--border)",display:"block",transition:"border-color .2s"}}
+              <Pic src={url} w={640} style={{width:"100%",height:"100%",objectFit:"cover",border:"2px solid var(--border)",display:"block",transition:"border-color .2s"}}
                 {...mouseHover({ borderColor:"var(--gold)" }, { borderColor:"var(--border)" })}
                 alt={`photo ${i+1}`} />
               <button className="photo-remove" aria-label="Remove photo" onClick={e => { e.stopPropagation(); handleRemovePhoto(i); }} style={{
