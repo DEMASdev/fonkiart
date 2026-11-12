@@ -39,7 +39,7 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
         </div>
         <div className="welcome-form-side">
           <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 10px 0" }}>
-            <button onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", background:"rgba(0,0,0,.12)", border:"none", cursor:"pointer", color:"var(--ink)", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+            <button className="auth-close" aria-label="Close" onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", background:"rgba(0,0,0,.12)", border:"none", cursor:"pointer", color:"var(--ink)", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
           </div>
           <div className="welcome-top" style={{ padding:"14px 20px 12px" }}>
             <div className="welcome-top-text" style={{ width:"100%" }}>

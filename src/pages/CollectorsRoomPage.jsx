@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { storeCall } from "../lib/store";
 import CheckoutModal from "../components/CheckoutModal";
+import { mouseHover } from "../utils/hover";
 
 export default function CollectorsRoomPage({ user, artworks, settings, onLogout, onBack, isAdmin, onAdminEnter }) {
   const exclusiveWorks = artworks.filter(a => a.isCollectorsOnly && !a.isSold);
@@ -31,28 +32,28 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
 
   return (
     <div style={{ minHeight:"100vh", background:CR.bg, color:CR.text, fontFamily:"'DM Sans',sans-serif" }}>
-      <div style={{ position:"sticky", top:0, zIndex:100, background:CR.bg, borderBottom:`1px solid ${CR.border}`, padding:"0 40px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, fontWeight:600, letterSpacing:".18em", textTransform:"uppercase", color:CR.gold, display:"flex", alignItems:"center", gap:10 }}>
+      <div style={{ position:"sticky", top:0, zIndex:100, background:CR.bg, borderBottom:`1px solid ${CR.border}`, padding:"8px clamp(16px, 4vw, 40px)", minHeight:60, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"6px 16px" }}>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:"clamp(15px, 4.6vw, 20px)", fontWeight:600, letterSpacing:".18em", textTransform:"uppercase", color:CR.gold, display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:6, height:6, borderRadius:"50%", background:CR.gold }} />
           Private Collectors Room
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-          {isAdmin && <button onClick={onAdminEnter} style={{ background:"none", border:`1px solid ${CR.gold}`, color:CR.gold, padding:"6px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase" }}>Admin Panel</button>}
-          <span style={{ fontSize:12, color:CR.muted }}>{user?.email}</span>
-          <button onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:CR.muted, fontSize:12, letterSpacing:".08em" }}>← Back to Site</button>
-          <button onClick={onLogout} style={{ background:"none", border:`1px solid ${CR.border}`, color:CR.muted, padding:"6px 14px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".08em", textTransform:"uppercase" }}>Sign Out</button>
+        <div style={{ display:"flex", alignItems:"center", gap:"4px 14px", flexWrap:"wrap", minWidth:0 }}>
+          {isAdmin && <button className="tap" onClick={onAdminEnter} style={{ background:"none", border:`1px solid ${CR.gold}`, color:CR.gold, padding:"6px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase" }}>Admin Panel</button>}
+          <span style={{ fontSize:12, color:CR.muted, overflowWrap:"anywhere" }}>{user?.email}</span>
+          <button className="tap" onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:CR.muted, fontSize:12, letterSpacing:".08em" }}>← Back to Site</button>
+          <button className="tap" onClick={onLogout} style={{ background:"none", border:`1px solid ${CR.border}`, color:CR.muted, padding:"6px 14px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".08em", textTransform:"uppercase" }}>Sign Out</button>
         </div>
       </div>
 
-      <div style={{ padding:"0 40px", borderBottom:`1px solid ${CR.border}`, display:"flex" }}>
+      <div style={{ padding:"0 clamp(4px, 3vw, 40px)", borderBottom:`1px solid ${CR.border}`, display:"flex", flexWrap:"wrap" }}>
         {[["room","Private Collection"],["early","Early Access"],["commission","Commission"],["orders","My Collection"]].map(([id,label]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background:"none", border:"none", borderBottom:`2px solid ${tab===id?CR.gold:"transparent"}`, color:tab===id?CR.gold:CR.muted, padding:"16px 24px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".1em", textTransform:"uppercase", transition:"all .2s" }}>
+          <button key={id} onClick={() => setTab(id)} style={{ background:"none", border:"none", borderBottom:`2px solid ${tab===id?CR.gold:"transparent"}`, color:tab===id?CR.gold:CR.muted, padding:"16px clamp(10px, 3vw, 24px)", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".1em", textTransform:"uppercase", transition:"all .2s" }}>
             {label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding:"48px 40px" }}>
+      <div style={{ padding:"clamp(28px, 6vw, 48px) clamp(16px, 4vw, 40px)" }}>
         {tab === "room" && (
           <>
             <div style={{ marginBottom:40 }}>
@@ -66,19 +67,19 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                 <p style={{ fontSize:14 }}>Exclusive works are being curated for this space. Check back soon.</p>
               </div>
             ) : (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:24 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(min(260px,100%),1fr))", gap:24 }}>
                 {exclusiveWorks.map(item => (
                   <div key={item.id} onClick={() => setSelected(item)} style={{ background:CR.card, border:`1px solid ${CR.border}`, cursor:"pointer", transition:"border-color .2s" }}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=CR.gold} onMouseLeave={e=>e.currentTarget.style.borderColor=CR.border}>
+                    {...mouseHover({ borderColor:CR.gold }, { borderColor:CR.border })}>
                     <div style={{ aspectRatio:"4/3", overflow:"hidden", background:"#0a0908" }}>
-                      {item.image && <img src={item.image} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover", transition:"transform .4s" }} onMouseEnter={e=>e.target.style.transform="scale(1.04)"} onMouseLeave={e=>e.target.style.transform="scale(1)"} />}
+                      {item.image && <img src={item.image} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover", transition:"transform .4s" }} {...mouseHover({ transform:"scale(1.04)" }, { transform:"scale(1)" })} />}
                     </div>
                     <div style={{ padding:"18px 20px" }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, marginBottom:4 }}>{item.title}</div>
                       <div style={{ fontSize:12, color:CR.muted, marginBottom:12 }}>{item.category}</div>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                         <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:CR.gold }}>{item.price ? `$${Number(item.salePrice||item.price).toLocaleString()}` : "Price on Request"}</div>
-                        <button onClick={e=>{e.stopPropagation();setCheckout(item);}} style={{ background:CR.gold, color:"#fff", border:"none", padding:"8px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase" }}>Acquire</button>
+                        <button className="tap" onClick={e=>{e.stopPropagation();setCheckout(item);}} style={{ background:CR.gold, color:"#fff", border:"none", padding:"8px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase" }}>Acquire</button>
                       </div>
                     </div>
                   </div>
@@ -101,7 +102,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                 <p style={{ fontSize:14 }}>When new works drop, you'll see them here first.</p>
               </div>
             ) : (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:24 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(min(260px,100%),1fr))", gap:24 }}>
                 {earlyAccess.map(item => (
                   <div key={item.id} style={{ background:CR.card, border:`1px solid ${CR.gold}`, cursor:"pointer" }} onClick={() => setCheckout(item)}>
                     <div style={{ background:CR.gold, color:"#fff", padding:"6px 16px", fontSize:10, letterSpacing:".2em", textTransform:"uppercase", textAlign:"center" }}>Early Access · Collectors Only</div>
@@ -134,7 +135,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                 {[["name","Your Name","text",commForm.name,"name"],["email","Your Email","email",commForm.email,"email"],["budget","Budget (optional)","text",commForm.budget,"budget"]].map(([id,label,type,val,key]) => (
                   <div key={id}>
                     <label style={{ fontSize:11, letterSpacing:".12em", textTransform:"uppercase", color:CR.muted, display:"block", marginBottom:6 }}>{label}</label>
-                    <input type={type} value={val} onChange={e=>setCommForm(f=>({...f,[key]:e.target.value}))}
+                    <input type={type} autoCapitalize={type === "email" ? "none" : undefined} value={val} onChange={e=>setCommForm(f=>({...f,[key]:e.target.value}))}
                       style={{ width:"100%", background:CR.card, border:`1px solid ${CR.border}`, color:CR.text, padding:"12px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:14, outline:"none", boxSizing:"border-box" }}
                       onFocus={e=>e.target.style.borderColor=CR.gold} onBlur={e=>e.target.style.borderColor=CR.border} />
                   </div>
@@ -165,8 +166,8 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                 {orders.map(o => (
-                  <div key={o.id} style={{ background:CR.card, border:`1px solid ${CR.border}`, padding:"18px 24px", display:"grid", gridTemplateColumns:"1fr auto auto", gap:24, alignItems:"center" }}>
-                    <div>
+                  <div key={o.id} style={{ background:CR.card, border:`1px solid ${CR.border}`, padding:"18px clamp(14px, 4vw, 24px)", display:"flex", flexWrap:"wrap", gap:"10px 24px", alignItems:"center" }}>
+                    <div style={{ flex:"1 1 200px", minWidth:0 }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:18, marginBottom:3 }}>{o.item_title}</div>
                       <div style={{ fontSize:12, color:CR.muted }}>{new Date(o.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>
                     </div>
@@ -181,11 +182,11 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
       </div>
 
       {selected && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.92)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }} onClick={() => setSelected(null)}>
-          <div style={{ background:CR.card, maxWidth:800, width:"100%", display:"grid", gridTemplateColumns:"1fr 1fr", maxHeight:"90vh", overflow:"hidden" }} onClick={e=>e.stopPropagation()}>
-            <img src={selected.image} alt={selected.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-            <div style={{ padding:36, display:"flex", flexDirection:"column", overflowY:"auto" }}>
-              <button onClick={() => setSelected(null)} style={{ alignSelf:"flex-end", background:"none", border:`1px solid ${CR.border}`, color:CR.muted, width:32, height:32, cursor:"pointer", borderRadius:"50%", fontSize:14, marginBottom:20 }}>✕</button>
+        <div className="lock-scroll" style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.92)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"clamp(12px, 4vw, 24px)", overflowY:"auto", overscrollBehavior:"contain" }} onClick={() => setSelected(null)}>
+          <div className="cr-modal" onClick={e=>e.stopPropagation()}>
+            <img className="cr-modal-img" src={selected.image} alt={selected.title} />
+            <div className="cr-modal-info">
+              <button className="cr-close" aria-label="Close" onClick={() => setSelected(null)} style={{ alignSelf:"flex-end", background:"none", border:`1px solid ${CR.border}`, color:CR.muted, width:32, height:32, cursor:"pointer", borderRadius:"50%", fontSize:14, marginBottom:20 }}>✕</button>
               <p style={{ fontSize:11, letterSpacing:".2em", textTransform:"uppercase", color:CR.gold, marginBottom:8 }}>{selected.category}</p>
               <h2 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:32, fontWeight:300, marginBottom:8, color:CR.text }}>{selected.title}</h2>
               {selected.medium && <p style={{ fontSize:13, color:CR.muted, marginBottom:6 }}>{selected.medium}{selected.dimensions?` · ${selected.dimensions}`:""}</p>}

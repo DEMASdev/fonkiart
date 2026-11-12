@@ -29,16 +29,16 @@ export default function ContactPage({ data }) {
         <div className="contact-info">
           <h2>We'd love to hear from you</h2>
           <p>Whether you're interested in purchasing a piece, placing a special order, or just want to say hello — Fonkiart is always happy to connect.</p>
-          <div className="contact-detail"><Mail size={16} />{data.settings.zelleContact}</div>
-          <div className="contact-detail"><Heart size={16} />Open to commissions & collaborations</div>
+          <div className="contact-detail"><Mail size={19} />{data.settings.zelleContact}</div>
+          <div className="contact-detail"><Heart size={19} />Open to commissions & collaborations</div>
         </div>
         <div className="contact-form-box">
           <h3>Send a Message</h3>
           {sent
             ? <div className="ok-msg" style={{ fontSize:15 }}>✓ Message sent! We'll be in touch soon.</div>
             : <>
-                <div className="fld"><label>Name</label><input value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Your name" /></div>
-                <div className="fld"><label>Email</label><input value={form.email} onChange={e=>f("email",e.target.value)} placeholder="your@email.com" /></div>
+                <div className="fld"><label>Name</label><input autoComplete="name" value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Your name" /></div>
+                <div className="fld"><label>Email</label><input type="email" autoComplete="email" autoCapitalize="none" value={form.email} onChange={e=>f("email",e.target.value)} placeholder="your@email.com" /></div>
                 <div className="fld"><label>Message</label><textarea value={form.message} onChange={e=>f("message",e.target.value)} placeholder="Tell us what you have in mind…" style={{ minHeight:120 }} /></div>
                 {formErr && <div className="warn-msg" style={{marginBottom:12}}>{formErr}</div>}
                 <button className="btn-p" style={{ width:"100%" }} onClick={handleSend} disabled={loading}>{loading ? "Sending…" : "Send Message"}</button>

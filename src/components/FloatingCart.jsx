@@ -1,3 +1,5 @@
+import { mouseHover } from "../utils/hover";
+
 export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOpen, onView, onViewCart }) {
   return (
     <>
@@ -7,7 +9,7 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
           <div className="cart-drawer">
             <div className="cart-drawer-head">
               <span>Your Cart ({cart.length})</span>
-              <button onClick={() => setCartOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1, padding:0 }}>✕</button>
+              <button onClick={() => setCartOpen(false)} aria-label="Close cart" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1, padding:0, width:44, height:44, marginRight:-12, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
             </div>
             <div className="cart-drawer-body">
               {cart.length === 0 ? (
@@ -26,9 +28,8 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
                     </div>
                   </div>
                   <button onClick={() => removeFromCart(item.id)}
-                    style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:18, lineHeight:1, padding:0, transition:"color .2s" }}
-                    onMouseEnter={e=>e.currentTarget.style.color="#c0392b"}
-                    onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:18, lineHeight:1, padding:0, width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", transition:"color .2s" }}
+                    {...mouseHover({ color:"#c0392b" }, { color:"var(--muted)" })}
                     title="Remove">✕</button>
                 </div>
               ))}
@@ -36,7 +37,7 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
             {cart.length > 0 && (
               <div className="cart-drawer-foot">
                 <button className="cart-drawer-view-btn" onClick={() => { setCartOpen(false); onViewCart && onViewCart(); }}>View Cart</button>
-                <button style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
+                <button className="tap" style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
                   onClick={() => { cart.forEach(i => removeFromCart(i.id)); }}>Clear Cart</button>
               </div>
             )}

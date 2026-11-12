@@ -9,6 +9,7 @@ import ClientsTab from "./ClientsTab";
 import ItemForm from "./ItemForm";
 import ItemList from "./ItemList";
 import SettingsForm, { SETTINGS_SECTIONS as SETTINGS_FORM_SECTIONS } from "./SettingsForm";
+import { mouseHover, mouseOnly } from "../utils/hover";
 
 const Badge = ({ n }) => n > 0
   ? <span style={{ background:"#c0392b", color:"#fff", borderRadius:10, fontSize:10, padding:"1px 6px", marginLeft:6, fontWeight:600 }}>{n}</span>
@@ -37,7 +38,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
     <div className="admin-wrap">
       <div className="admin-top">
         <span className="admin-top-title">Fonkiart · Admin Panel</span>
-        <div style={{ display:"flex", gap:10 }}>
+        <div className="admin-top-actions" style={{ display:"flex", gap:10 }}>
           <button className="btn-s" onClick={onViewRoom}>🔑 Collectors Room</button>
           <button className="btn-s" onClick={onBack}>← Back to Site</button>
           <button className="btn-s" onClick={onLogout}>Logout</button>
@@ -49,7 +50,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
             {label}
           </button>
         ))}
-        <div style={{ position:"relative" }} onMouseEnter={() => setOrdersHover(true)} onMouseLeave={() => setOrdersHover(false)}>
+        <div style={{ position:"relative" }} onPointerEnter={mouseOnly(() => setOrdersHover(true))} onPointerLeave={mouseOnly(() => setOrdersHover(false))}>
           <button className={`admin-tab${tab==="orders"?" active":""}`} onClick={() => { setTabAndSave("orders"); setOrdersAction(null); }}>
             Orders<Badge n={badges.orders} />
           </button>
@@ -58,8 +59,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
               {[["view","📋 View Orders"],["invoice","✉ Send Invoice"],["add","+ Add Order"]].map(([k,label]) => (
                 <button key={k} onClick={() => { setTabAndSave("orders"); setOrdersAction(k==="view" ? null : k); setOrdersHover(false); }}
                   style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", color:"var(--ink)", letterSpacing:".04em" }}
-                  onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
-                  onMouseLeave={e => e.currentTarget.style.background="none"}>
+                  {...mouseHover({ background:"var(--cream)" }, { background:"none" })}>
                   {label}
                 </button>
               ))}
@@ -72,15 +72,14 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
             {id==="requests" && <Badge n={badges.requests} />}
           </button>
         ))}
-        <div style={{ position:"relative" }} onMouseEnter={() => setSettingsHover(true)} onMouseLeave={() => setSettingsHover(false)}>
+        <div style={{ position:"relative" }} onPointerEnter={mouseOnly(() => setSettingsHover(true))} onPointerLeave={mouseOnly(() => setSettingsHover(false))}>
           <button className={`admin-tab${tab==="settings"?" active":""}`} onClick={() => setTabAndSave("settings")}>Settings</button>
           {settingsHover && (
             <div style={{ position:"absolute", top:"100%", left:0, background:"#fff", border:"1px solid var(--border)", minWidth:200, zIndex:600, boxShadow:"0 4px 16px rgba(0,0,0,.1)", marginTop:1 }}>
               {SETTINGS_SECTIONS.map(([k, label]) => (
                 <button key={k} onClick={() => { if(k==="tasks"){ setTabAndSave("dashboard"); setSettingsHover(false); } else { setTabAndSave("settings"); setSettingsJumpTo(k); setSettingsHover(false); } }}
                   style={{ display:"block", width:"100%", padding:"10px 16px", background:"none", border:"none", borderBottom:"1px solid var(--border)", cursor:"pointer", textAlign:"left", color:"var(--ink)", letterSpacing:".04em" }}
-                  onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
-                  onMouseLeave={e => e.currentTarget.style.background="none"}>
+                  {...mouseHover({ background:"var(--cream)" }, { background:"none" })}>
                   {label}
                 </button>
               ))}

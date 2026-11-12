@@ -187,7 +187,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         <div className="crm-add-form" style={{maxWidth:"100%",borderTop:"3px solid var(--sidebar-bg)"}}>
           <h3 style={{marginBottom:4}}>Send Invoice to Client</h3>
           <p style={{color:"var(--muted)",marginBottom:20}}>Client receives an email with a link to approve and pay.</p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
+          <div className="crm-2col" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
 
             {/* LEFT — Client */}
             <div>
@@ -213,8 +213,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     <div className="fld"><label>First Name *</label><input value={inv.newFirst} onChange={e=>iv("newFirst",e.target.value)} placeholder="Jane" /></div>
                     <div className="fld"><label>Last Name</label><input value={inv.newLast} onChange={e=>iv("newLast",e.target.value)} placeholder="Smith" /></div>
                   </div>
-                  <div className="fld"><label>Email *</label><input value={inv.newEmail} onChange={e=>iv("newEmail",e.target.value)} placeholder="jane@email.com" /></div>
-                  <div className="fld"><label>Phone</label><input value={inv.newPhone} onChange={e=>iv("newPhone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+                  <div className="fld"><label>Email *</label><input type="email" autoCapitalize="none" value={inv.newEmail} onChange={e=>iv("newEmail",e.target.value)} placeholder="jane@email.com" /></div>
+                  <div className="fld"><label>Phone</label><input type="tel" value={inv.newPhone} onChange={e=>iv("newPhone",e.target.value)} placeholder="+1 305 000 0000" /></div>
                 </>
               )}
             </div>
@@ -288,7 +288,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             </div>
           </div>
 
-          <div style={{borderTop:"1px solid var(--border)",marginTop:24,paddingTop:20,display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{borderTop:"1px solid var(--border)",marginTop:24,paddingTop:20,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
             <button className="btn-p" onClick={sendInvoice} disabled={invSending}>
               {invSending ? "Sending…" : "Send Invoice →"}
             </button>
@@ -300,7 +300,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       {adding && (
         <div className="crm-add-form" style={{maxWidth:"100%"}}>
           <h3>New Order</h3>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32,marginTop:8}}>
+          <div className="crm-2col" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32,marginTop:8}}>
 
             {/* LEFT — Client */}
             <div>
@@ -323,7 +323,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
               {selectedClient && missingFields.length > 0 && (
                 <div style={{background:"#fffbf0",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:8}}>
                   <p style={{color:"var(--muted)",marginBottom:12}}>⚠ Some info is missing for this client. Fill in what you know:</p>
-                  {missingFields.includes("phone") && <div className="fld"><label>Phone</label><input value={clientUpdate.phone||""} onChange={e=>cu("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>}
+                  {missingFields.includes("phone") && <div className="fld"><label>Phone</label><input type="tel" value={clientUpdate.phone||""} onChange={e=>cu("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>}
                   {missingFields.includes("address") && <div className="fld"><label>Street Address</label><input value={clientUpdate.address||""} onChange={e=>cu("address",e.target.value)} placeholder="123 Main St" /></div>}
                   {(missingFields.includes("city")||missingFields.includes("state")) && (
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -346,8 +346,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     <div className="fld"><label>Last Name</label><input value={manual.last} onChange={e=>m("last",e.target.value)} placeholder="Smith" /></div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <div className="fld"><label>Email *</label><input value={manual.email} onChange={e=>m("email",e.target.value)} placeholder="jane@email.com" /></div>
-                    <div className="fld"><label>Phone</label><input value={manual.phone} onChange={e=>m("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+                    <div className="fld"><label>Email *</label><input type="email" autoCapitalize="none" value={manual.email} onChange={e=>m("email",e.target.value)} placeholder="jane@email.com" /></div>
+                    <div className="fld"><label>Phone</label><input type="tel" value={manual.phone} onChange={e=>m("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
                   </div>
                   <p style={{letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",margin:"12px 0 10px",borderBottom:"1px solid var(--border)",paddingBottom:8}}>Shipping Address</p>
                   <div className="fld"><label>Street Address</label><input value={manual.address} onChange={e=>m("address",e.target.value)} placeholder="123 Main St" /></div>
@@ -403,9 +403,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       )}
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
         <input className="crm-search" style={{marginBottom:0,flex:1,minWidth:200}} placeholder="Search by name, email or artwork…" value={search} onChange={e=>setSearch(e.target.value)} />
-        <div style={{display:"flex",gap:4,flexShrink:0}}>
+        <div className="chip-row" style={{display:"flex",gap:4,flexShrink:0}}>
           {[["all","All"],["pending","Pending"],["confirmed","Confirmed"],["shipped","Shipped"],["delivered","Delivered"]].map(([val,label])=>(
-            <button key={val} onClick={()=>setStatusFilter(val)}
+            <button key={val} className="tap" onClick={()=>setStatusFilter(val)}
               style={{border:`1px solid ${statusFilter===val?"var(--ink)":"var(--border)"}`,background:statusFilter===val?"var(--ink)":"none",color:statusFilter===val?"#fff":"var(--muted)",padding:"5px 12px",letterSpacing:".08em",cursor:"pointer"}}>
               {label}{statusFilter!==val&&statusCounts[val]!==undefined?` (${statusCounts[val]})`:statusFilter===val?` (${statusCounts[val]})`:""}</button>
           ))}
@@ -413,12 +413,12 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       </div>
       {loading ? <p className="crm-empty">Loading…</p>
         : filtered.length===0 ? <p className="crm-empty">No orders match this filter.</p>
-        : <table className="crm-table">
+        : <table className="crm-table crm-cards">
             <thead><tr><th>Ref</th><th>Client</th><th>Artwork</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
             <tbody>{filtered.map(o=>(
               <Fragment key={o.id}>
                 <tr>
-                  <td style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
+                  <td data-label="Ref" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div>{o.invoice_token ? fmtInvNum(o.id) : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (
                       <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
@@ -426,29 +426,29 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                       </div>
                     )}
                   </td>
-                  <td>
+                  <td data-label="Client" className="crm-wide">
                     {(o.client_name || clientName(o.client_email)) && <div style={{fontWeight:500}}>{o.client_name || clientName(o.client_email)}</div>}
                     <div style={{color:"var(--muted)"}}>{o.client_email}</div>
                   </td>
-                  <td>{o.item_title}</td>
-                  <td>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
-                  <td>
+                  <td data-label="Artwork" className="crm-wide">{o.item_title}</td>
+                  <td data-label="Amount">{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
+                  <td data-label="Status">
                     <select value={o.status||"pending"} onChange={e=>updateStatus(o.id,e.target.value)}
                       style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
                       <option value="pending">Pending</option><option value="confirmed">Confirmed</option>
                       <option value="shipped">Shipped</option><option value="delivered">Delivered</option>
                     </select>
                   </td>
-                  <td>{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
-                  <td>
+                  <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
+                  <td className="crm-wide">
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                      {o.notes && <button onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
+                      {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                       {o.invoice_token && (<>
-                        <button onClick={()=>{ const link=`${window.location.origin}/?invoice=${o.invoice_token}`; navigator.clipboard.writeText(link).then(()=>alert("Invoice link copied!")); }}
+                        <button className="tap" onClick={()=>{ const link=`${window.location.origin}/?invoice=${o.invoice_token}`; navigator.clipboard.writeText(link).then(()=>alert("Invoice link copied!")); }}
                           style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>
                           🔗 Link
                         </button>
-                        <button onClick={()=>resendInvoice(o)} disabled={resending[o.id]}
+                        <button className="tap" onClick={()=>resendInvoice(o)} disabled={resending[o.id]}
                           style={{background:"none",border:"1px solid var(--border)",cursor:resending[o.id]?"not-allowed":"pointer",padding:"3px 8px",color:"var(--muted)",opacity:resending[o.id]?0.5:1}}>
                           {resending[o.id] ? "…" : "✉ Resend"}
                         </button>
@@ -458,7 +458,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   </td>
                 </tr>
                 {expanded[o.id] && o.notes && (
-                  <tr>
+                  <tr className="crm-detail">
                     <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px",borderTop:"none"}}>
                       <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:6}}>Order Details</p>
                       <p style={{color:"var(--ink)",lineHeight:1.7}}>{o.notes}</p>

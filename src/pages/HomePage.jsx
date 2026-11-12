@@ -1,5 +1,6 @@
 import { useState } from "react";
 import CollectorsSection from "../components/CollectorsSection";
+import { mouseHover } from "../utils/hover";
 
 export default function HomePage({ setPage, data }) {
   const allImgs = (data?.items || []).filter(i => i.image);
@@ -42,8 +43,7 @@ export default function HomePage({ setPage, data }) {
         ].map((c, i) => (
           <div key={c.label} onClick={() => setPage(c.page)} className="quicklink-item"
             style={{ borderLeft: i > 0 ? "1px solid var(--border)" : "none" }}
-            onMouseEnter={e => e.currentTarget.style.background="#fdf9f4"}
-            onMouseLeave={e => e.currentTarget.style.background="transparent"}
+            {...mouseHover({ background:"#fdf9f4" }, { background:"transparent" })}
           >
             <div className="quicklink-label">{c.label}</div>
             <div className="quicklink-desc">{c.desc}</div>

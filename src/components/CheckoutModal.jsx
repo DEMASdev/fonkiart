@@ -141,24 +141,24 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
             <div style={{ borderTop:"1px solid var(--border)", paddingTop:18, marginBottom:4 }}>
               <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>First Name *</label><input value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
-                <div className="fld"><label>Last Name *</label><input value={customer.lastName} onChange={e=>cv("lastName",e.target.value)} placeholder="Smith" /></div>
+                <div className="fld"><label>First Name *</label><input autoComplete="given-name" value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
+                <div className="fld"><label>Last Name *</label><input autoComplete="family-name" value={customer.lastName} onChange={e=>cv("lastName",e.target.value)} placeholder="Smith" /></div>
               </div>
-              <div className="fld"><label>Email *</label><input value={customer.email} onChange={e=>cv("email",e.target.value)} placeholder="jane@email.com" /></div>
-              <div className="fld"><label>Phone</label><input value={customer.phone} onChange={e=>cv("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+              <div className="fld"><label>Email *</label><input type="email" autoComplete="email" autoCapitalize="none" value={customer.email} onChange={e=>cv("email",e.target.value)} placeholder="jane@email.com" /></div>
+              <div className="fld"><label>Phone</label><input type="tel" autoComplete="tel" value={customer.phone} onChange={e=>cv("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
               <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"12px 0 10px" }}>Shipping Address</p>
-              <div className="fld"><label>Street</label><input value={customer.address} onChange={e=>cv("address",e.target.value)} placeholder="123 Main St" /></div>
+              <div className="fld"><label>Street</label><input autoComplete="street-address" value={customer.address} onChange={e=>cv("address",e.target.value)} placeholder="123 Main St" /></div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>City</label><input value={customer.city} onChange={e=>cv("city",e.target.value)} placeholder="Miami" /></div>
-                <div className="fld"><label>State</label><input value={customer.state} onChange={e=>cv("state",e.target.value)} placeholder="FL" /></div>
+                <div className="fld"><label>City</label><input autoComplete="address-level2" value={customer.city} onChange={e=>cv("city",e.target.value)} placeholder="Miami" /></div>
+                <div className="fld"><label>State</label><input autoComplete="address-level1" value={customer.state} onChange={e=>cv("state",e.target.value)} placeholder="FL" /></div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>ZIP</label><input value={customer.zip} onChange={e=>cv("zip",e.target.value)} placeholder="33101" /></div>
-                <div className="fld"><label>Country</label><input value={customer.country} onChange={e=>cv("country",e.target.value)} placeholder="USA" /></div>
+                <div className="fld"><label>ZIP</label><input autoComplete="postal-code" inputMode="numeric" value={customer.zip} onChange={e=>cv("zip",e.target.value)} placeholder="33101" /></div>
+                <div className="fld"><label>Country</label><input autoComplete="country-name" value={customer.country} onChange={e=>cv("country",e.target.value)} placeholder="USA" /></div>
               </div>
               <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
               <div style={{ display:"flex", gap:8 }}>
-                <input value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
+                <input autoCapitalize="characters" autoComplete="off" value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
                   placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
                   style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
                 />
@@ -180,7 +180,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
         {step === 2 && (
           <>
-            <button onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>
+            <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>
             {method === "zelle" && (
               <div className="pay-detail">
                 <h4>Send via Zelle</h4>

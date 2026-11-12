@@ -7,11 +7,11 @@ export default function PasswordInput({ style, ...props }) {
   const label = show ? "Hide password" : "Show password";
   return (
     <div style={{ position:"relative" }}>
-      <input {...props} type={show ? "text" : "password"} style={{ ...style, paddingRight:42 }} />
+      <input {...props} type={show ? "text" : "password"} style={{ ...style, paddingRight:46 }} />
       <button type="button" onClick={() => setShow(s => !s)} aria-label={label} title={label}
-        style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
-          cursor:"pointer", color:"var(--muted)", padding:4, display:"flex", alignItems:"center" }}>
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
+          cursor:"pointer", color:"var(--muted)", padding:0, width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        {show ? <EyeOff size={22} /> : <Eye size={22} />}
       </button>
     </div>
   );

@@ -185,7 +185,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
                 ? <span style={{ color:"#2d6a4f" }}>{isAdminEmail
                     ? `✓ Reset link sent to ${ADMIN_EMAIL}. It works once, for 30 minutes.`
                     : "✓ If that email has an account, a reset link is on its way. It works once, for 30 minutes."}</span>
-                : <button onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>
+                : <button className="tap" onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>
                     {reset === "sending" ? "Sending…" : "Forgot password?"}
                   </button>}
               {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
@@ -197,7 +197,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
             </button>
             <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
               No account?{" "}
-              <button onClick={() => setTab("signup")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Create one free</button>
+              <button className="tap" onClick={() => setTab("signup")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Create one free</button>
             </p>
           </>
         )}
@@ -233,7 +233,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
             </button>
             <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
               Already have an account?{" "}
-              <button onClick={() => setTab("login")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Sign in</button>
+              <button className="tap" onClick={() => setTab("login")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Sign in</button>
             </p>
           </>
         )}
@@ -261,6 +261,8 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
                 value={verifyCode}
                 onChange={e => { setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 8)); setVerifyErr(""); }}
                 placeholder="Enter your code"
+                className="otp-input"
+                autoComplete="one-time-code"
                 autoFocus
                 style={{ textAlign:"center", fontSize:22, letterSpacing:"0.3em", fontFamily:"monospace" }}
                 onKeyDown={e => e.key === "Enter" && handleVerify()}
@@ -276,7 +278,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
 
             <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
               Didn't get the email?{" "}
-              <button onClick={handleResend} disabled={resending}
+              <button className="tap" onClick={handleResend} disabled={resending}
                 style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>
                 {resending ? "Sending…" : resent ? "✓ Sent!" : "Resend code"}
               </button>

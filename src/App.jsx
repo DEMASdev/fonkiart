@@ -278,30 +278,30 @@ export default function App() {
         <nav className="sidebar-nav">
           {NAV_ITEMS.filter(({ id }) => mergedData.settings.navVisible?.[id] !== false).map(({ id, label, Icon }) => (
             <button key={id} className={`nav-item${page === id ? " active" : ""}`} onClick={() => { if (id === "catalog") setPendingCategory(null); setPage(id); setSidebarOpen(false); }}>
-              <Icon size={16} />{label}
+              <Icon size={19} />{label}
             </button>
           ))}
           <div style={{ borderTop:"2px solid var(--border)", margin:"8px 0" }} />
-          <button className="nav-item" onClick={() => { setTrackModal(true); setSidebarOpen(false); }}><Package size={16} />Track My Order</button>
+          <button className="nav-item" onClick={() => { setTrackModal(true); setSidebarOpen(false); }}><Package size={19} />Track My Order</button>
           <button className="nav-item" onClick={() => { goAccount(); setSidebarOpen(false); }}>
-            <LogIn size={16} />
+            <LogIn size={19} />
             {user?.user_metadata?.role === "buyer"
               ? user.user_metadata?.name?.split(" ")[0] || "My Account"
               : collectorsClient ? collectorsClient.name?.split(" ")[0] || "My Account"
               : "Login / Sign Up"}
           </button>
-          <button className="nav-item" onClick={() => { setAuthModal(true); setSidebarOpen(false); }}><KeyRound size={16} />Request Access</button>
+          <button className="nav-item" onClick={() => { setAuthModal(true); setSidebarOpen(false); }}><KeyRound size={19} />Request Access</button>
         </nav>
         <div className="sidebar-bottom" />
       </aside>
 
       <div className="content">
         <div className="topbar">
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}><Menu size={20} /></button>
+          <div className="topbar-left">
+            <button className="hamburger" aria-label="Menu" onClick={() => setSidebarOpen(o => !o)}><Menu size={24} /></button>
             <SocialIcons settings={data.settings} className="social-icons-desktop" />
             {page !== "home" && (
-              <div className="topbar-title"><currentNav.Icon size={16} />{currentNav.label}</div>
+              <div className="topbar-title"><currentNav.Icon size={19} style={{ flexShrink:0 }} /><span className="topbar-title-text">{currentNav.label}</span></div>
             )}
           </div>
           {page === "home" && (
@@ -310,15 +310,15 @@ export default function App() {
             </div>
           )}
           <div className="topbar-right">
-            <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" className={cartPulse ? "cart-icon-pulse" : ""} style={{ position:"relative", background:"none", border:"none", cursor:"pointer", color:"var(--ink)", display:"flex", alignItems:"center", transition:"color .2s", padding:0 }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--ink)"}>
+            <button onClick={() => setCartOpen(o => !o)} title="Shopping Cart" aria-label="Shopping Cart" className={`topbar-icon-btn topbar-cart${cartPulse ? " cart-icon-pulse" : ""}`}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-              {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:-7, right:-9 }}>{cart.length}</span>}
+              {cart.length > 0 && <span className="cart-fab-badge" style={{ position:"absolute", top:"calc(50% - 19px)", right:"calc(50% - 21px)" }}>{cart.length}</span>}
             </button>
-            <button onClick={goAccount} title="My Account" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", display:"flex", alignItems:"center", transition:"color .2s", padding:0, position:"relative" }} onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"} onMouseLeave={e=>e.currentTarget.style.color="var(--muted)"}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              {user && <span style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
+            <button onClick={goAccount} title="My Account" aria-label="My Account" className="topbar-icon-btn topbar-account">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              {user && <span style={{ position:"absolute", bottom:"calc(50% - 11px)", right:"calc(50% - 11px)", width:8, height:8, borderRadius:"50%", background:"#2d6a4f", border:"1px solid #fff" }} />}
             </button>
-            {page !== "home" && <button onClick={() => setPage("home")} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", color:"var(--gold)", display:"flex", alignItems:"center", gap:5, padding:0 }}>← Home</button>}
+            {page !== "home" && <button className="topbar-home-btn" onClick={() => setPage("home")} style={{ background:"none", border:"none", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:14, letterSpacing:".1em", color:"var(--gold)", display:"flex", alignItems:"center", gap:5, padding:0 }}>← Home</button>}
             {page === "home" && <button className="topbar-tag" onClick={() => goToPage("catalog")} style={{ cursor:"pointer", border:"none" }}>Shop Now</button>}
           </div>
         </div>

@@ -142,7 +142,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
             return (
               <div key={id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <Icon size={14} color="var(--muted)" />
+                  <Icon size={17} color="var(--muted)" />
                   <span style={{ color:on?"var(--ink)":"var(--muted)" }}>{label}</span>
                 </div>
                 <button onClick={() => toggleNav(id)} style={{ width:42, height:24, borderRadius:12, border:"none", cursor:"pointer", background:on?"var(--sidebar-bg)":"#ddd", transition:"background .2s", position:"relative", flexShrink:0, padding:0 }}>

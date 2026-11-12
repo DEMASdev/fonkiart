@@ -609,3 +609,182 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .invoice-pay-value { font-size:17px;color:var(--ink);font-weight:500; }
 .invoice-approved-banner { background:#f0f9f4;border:1px solid #a3d4b3;padding:24px;text-align:center;margin-top:28px; }
 @media(max-width:600px){ .invoice-card { padding:28px 20px; } }
+
+/* ════════════════════════════════════════════════════════════════════
+   PHONE PASS — iPhone Safari + Android Chrome (2026-11)
+   Same colours, fonts and gold; this only makes things fit and tap well.
+   `!important` below is only used where it has to beat an inline style.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* iOS: don't blow the text up when the phone is turned sideways. */
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+
+/* iOS: 100vh is the height with Safari's bars HIDDEN, so full-height and vh-capped
+   boxes ran under the bottom bar. dvh is the height you can actually see; browsers
+   without dvh keep the vh values above. */
+.sidebar { height:100dvh; }
+.modal { max-height:92dvh; }
+.modal-img { max-height:75dvh; }
+.checkout { max-height:90dvh; }
+
+/* Modals: when the box is taller than the phone the dark backdrop scrolls instead of
+   cutting the bottom off; margin:auto still centres a short box. */
+.modal-bg { overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+.modal-bg > .modal, .modal-bg > .checkout, .modal-bg > .welcome-modal { margin:auto; flex-shrink:0; }
+.checkout, .sidebar-nav, .cart-drawer-body { overscroll-behavior:contain; }
+
+/* Keep the page behind still while a modal, the cart drawer or a lightbox is open
+   (iOS 16+ / Android Chrome honour overflow on the root). */
+html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:hidden; }
+@media(max-width:900px){ html:has(.sidebar.open) { overflow:hidden; } }
+
+/* iPhone Safari zooms the whole page when you tap a box whose text is under 16px. */
+@media (pointer:coarse), (max-width:900px) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]),
+  select, textarea { font-size:16px !important; }
+  .otp-input { font-size:22px !important; }
+}
+/* iOS paints its own rounded corners on text boxes; keep the site's square ones. */
+@media (pointer:coarse) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=date]),
+  textarea { -webkit-appearance:none; appearance:none; border-radius:0; }
+}
+
+/* Touch screens have no hover: show the card info, skip the hover zoom. */
+@media (hover:none) {
+  .card-over { opacity:1; }
+  .card:hover img { transform:none; }
+}
+
+/* Safe areas: notch / rounded corners / home bar (needs viewport-fit=cover). */
+.topbar { padding-left:max(40px, env(safe-area-inset-left, 0px)); padding-right:max(40px, env(safe-area-inset-right, 0px)); }
+.mobile-bottom-nav { height:calc(60px + env(safe-area-inset-bottom, 0px)); padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px); }
+.cart-drawer-foot { padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px)); }
+
+/* Top-bar icon buttons: one 44px hit area each. */
+.topbar-icon-btn { position:relative;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:color .2s; }
+.topbar-cart { color:var(--ink); }
+.topbar-account { color:var(--muted); }
+@media (hover:hover) { .topbar-icon-btn:hover { color:var(--accent); } }
+.topbar-left { display:flex;align-items:center;gap:14px;min-width:0; }
+.topbar-title { min-width:0; }
+.topbar-title-text { overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
+
+@media(max-width:900px){
+  .topbar { padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+  .content { padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .topbar-right { gap:2px; flex-shrink:0; }
+  .topbar-left { gap:6px; }
+  .hamburger { padding:10px;margin-left:-10px; }
+  .topbar-icon-btn { min-width:44px;min-height:44px; }
+  .topbar-home-btn { min-height:44px; }
+  .marquee-social { gap:18px;padding-right:max(10px, env(safe-area-inset-right, 0px)); }
+  .marquee-social-icon { width:26px;height:26px; }
+  .cookie-banner { bottom:calc(60px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Catalog: search, sort and the result count wrap instead of pushing sideways. */
+  .catalog-search-wrap { flex-wrap:wrap;gap:10px; }
+  .catalog-search { flex:1 1 160px;min-width:0; }
+  .cat-tab { min-height:44px; }
+  .pagination { padding:20px 12px;flex-wrap:wrap; }
+  .page-btn { min-width:44px;min-height:44px; }
+
+  /* Footer */
+  .footer-social { gap:2px; }
+  .footer-social a { width:44px;height:44px;justify-content:center; }
+  .track-order-btn { min-height:44px; }
+
+  /* Modals: a little more width on a phone, 44px close buttons. */
+  .modal-bg { padding:12px; }
+  .modal-close { width:44px;height:44px; }
+  .modal-zoom-close { width:44px;height:44px;top:max(16px, env(safe-area-inset-top, 0px));right:16px; }
+  .welcome-close-x { width:44px;height:44px;top:0;right:0;font-size:20px; }
+  /* Artwork window: it grows and the backdrop scrolls, so "Add to Cart" is always
+     reachable; the close button stays pinned to the corner of the screen. */
+  .modal { max-height:none;overflow:visible; }
+  /* A blur on the backdrop would make the pinned ✕ scroll away with the artwork (it becomes the ✕'s frame), so phones skip the blur; the backdrop is 88% dark anyway. */
+  .modal-bg { backdrop-filter:none;-webkit-backdrop-filter:none; }
+  .modal .modal-close { position:fixed;top:max(20px, env(safe-area-inset-top, 0px));right:20px;z-index:5;margin:0;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25); }
+
+  /* ── ADMIN ── */
+  .admin-top { height:auto;min-height:56px;flex-wrap:wrap;gap:8px;padding:10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
+  .admin-top-title { font-size:16px; }
+  .admin-top-actions { flex-wrap:wrap;gap:6px !important; }
+  .admin-top .btn-s { padding:8px 10px;font-size:11px;letter-spacing:.06em; }
+  .crm-tabs { padding:0 8px;flex-wrap:wrap; }
+  .admin-tab { padding:10px 9px;font-size:12px;letter-spacing:.06em;min-height:44px; }
+  .crm-wrap { padding:20px 16px; }
+  .crm-header { flex-wrap:wrap;gap:10px; }
+  .crm-title { font-size:19px; }
+  .crm-add-form { padding:16px; }
+  .crm-2col { grid-template-columns:1fr !important;gap:0 !important; }
+  .admin-side, .admin-main { padding:20px 16px; }
+  .admin-side { border-right:none;border-bottom:1px solid var(--border); }
+  .admin-item { grid-template-columns:56px 1fr;padding:12px; }
+  .admin-item img { width:56px;height:56px; }
+  .admin-item .ai-btns { grid-column:1 / -1;flex-direction:row !important;flex-wrap:wrap;justify-content:flex-end;align-items:center !important;gap:8px; }
+  .admin-item .ai-btns > div { margin-bottom:0 !important; }
+  .photo-tile, .photo-add { width:150px !important;height:150px !important; }
+  .chip-row { flex-wrap:wrap;flex-shrink:1 !important;min-width:0;max-width:100%; }
+  .login-box { width:100%;max-width:340px;padding:32px 24px; }
+  .login-wrap { padding:16px; }
+}
+
+/* Admin tables (Leads · Orders · Clients) become one card per row on a phone.
+   Each cell shows its column name above the value (data-label). */
+@media(max-width:700px){
+  .crm-cards thead { display:none; }
+  .crm-cards, .crm-cards > tbody { display:block; }
+  .crm-cards > tbody > tr { display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;background:#fff;border:1px solid var(--border);padding:14px;margin-bottom:10px; }
+  .crm-cards > tbody > tr > td { display:block;padding:0;border:none;min-width:0;overflow-wrap:anywhere;max-width:none !important;white-space:normal !important; }
+  .crm-cards > tbody > tr > td[data-label]::before { content:attr(data-label);display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:3px; }
+  .crm-cards > tbody > tr > td.crm-wide, .crm-cards > tbody > tr > td[colspan] { grid-column:1 / -1; }
+  .crm-cards > tbody > tr:hover td { background:none; }
+  .crm-cards > tbody > tr.crm-detail { display:block;padding:0;margin-top:-11px;border-top:none; }
+}
+
+/* Touch: every button and control gets a finger-sized target (about 44px). */
+@media (pointer:coarse) {
+  .btn-p, .btn-s, .btn-d, .tap { min-height:44px; }
+  .crm-cards select { min-height:44px; }
+  .crm-cards .tap { min-width:44px; }
+  .ai-toggle { min-height:44px;padding:6px 14px !important; }
+  .admin-main input[type=search] { min-height:44px; }
+  .fld input[type=checkbox] + label { padding:12px 0;margin:0;cursor:pointer; }
+  .photo-remove { width:32px !important;height:32px !important;top:-10px !important;right:-10px !important; }
+  input[type=checkbox] { width:20px !important;height:20px;flex-shrink:0; }
+}
+
+/* Private Collectors Room: the artwork window stacks on a phone. */
+.cr-modal { background:#1a1816;max-width:800px;width:100%;display:grid;grid-template-columns:1fr 1fr;max-height:90vh;max-height:90dvh;overflow:hidden; }
+.cr-modal-img { width:100%;height:100%;object-fit:cover; }
+.cr-modal-info { padding:36px;display:flex;flex-direction:column;overflow-y:auto; }
+@media(max-width:700px){
+  .cr-modal { grid-template-columns:1fr;max-height:none;overflow:visible;margin:auto; }
+  .cr-modal-img { height:auto;max-height:50vh;max-height:50dvh;object-fit:contain;background:#0a0908; }
+  .cr-modal-info { padding:20px 18px; }
+}
+
+/* Phone pass, part 2: small modal pieces. Inline sizes need !important to be overridden. */
+@media(max-width:480px){ .stack-phone { grid-template-columns:1fr !important; } }
+@media (pointer:coarse) {
+  .auth-close, .cr-close { width:44px !important; height:44px !important; }
+}
+@media (pointer:coarse) {
+  .card-btn, .hero-shop-btn, .collectors-submit, .catalog-search { min-height:44px; }
+}
+/* The strip is only 30px tall and clips anything taller, so the two social icons keep
+   their look and get a wider invisible touch area instead (44px wide, the strip's height). */
+@media(max-width:900px){
+  .marquee-social-icon { position:relative; }
+  .marquee-social-icon::after { content:"";position:absolute;top:-2px;bottom:-2px;left:-9px;right:-9px; }
+}
+@media(max-width:900px){
+  /* Checkout on the cart page: let the page scroll, not a box inside the page. */
+  .checkout-page-bg { padding:24px 12px; }
+  .checkout-page-bg .checkout { max-height:none;overflow:visible; }
+}
+@media (pointer:coarse) {
+  .cart-page-return { min-height:44px;padding-right:12px; }
+  .cart-page-item-remove { width:44px;height:44px; }
+}

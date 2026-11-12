@@ -69,8 +69,8 @@ export default function ClientsTab() {
         <div className="crm-add-form">
           <h3>{editClient ? "Edit Client" : "New Client"}</h3>
           <div className="fld"><label>Name *</label><input value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Jane Smith" /></div>
-          <div className="fld"><label>Email *</label><input value={form.email} onChange={e=>f("email",e.target.value)} placeholder="jane@email.com" /></div>
-          <div className="fld"><label>Phone</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+          <div className="fld"><label>Email *</label><input type="email" autoCapitalize="none" value={form.email} onChange={e=>f("email",e.target.value)} placeholder="jane@email.com" /></div>
+          <div className="fld"><label>Phone</label><input type="tel" value={form.phone||""} onChange={e=>f("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
           <div className="fld"><label>Street Address</label><input value={form.address||""} onChange={e=>f("address",e.target.value)} placeholder="123 Main St" /></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div className="fld"><label>City</label><input value={form.city||""} onChange={e=>f("city",e.target.value)} placeholder="Miami" /></div>
@@ -91,18 +91,18 @@ export default function ClientsTab() {
       <input className="crm-search" placeholder="Search by name or email…" value={search} onChange={e=>setSearch(e.target.value)} />
       {loading ? <p className="crm-empty">Loading…</p>
         : filtered.length===0 ? <p className="crm-empty">No clients yet.</p>
-        : <table className="crm-table">
+        : <table className="crm-table crm-cards">
             <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Notes</th><th>Login</th><th>Date Added</th><th></th></tr></thead>
             <tbody>{filtered.map(c=>(
               <Fragment key={c.id}>
                 <tr>
-                  <td>{c.name}</td>
-                  <td>{c.email}</td>
-                  <td>{c.phone||"—"}</td>
-                  <td style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
-                  <td>{c.password ? <span style={{color:"#2d6a4f",fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa"}}>—</span>}</td>
-                  <td>{c.created_at?new Date(c.created_at).toLocaleDateString():"—"}</td>
-                  <td>
+                  <td data-label="Name" className="crm-wide">{c.name}</td>
+                  <td data-label="Email" className="crm-wide">{c.email}</td>
+                  <td data-label="Phone">{c.phone||"—"}</td>
+                  <td data-label="Notes" style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
+                  <td data-label="Login">{c.password ? <span style={{color:"#2d6a4f",fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa"}}>—</span>}</td>
+                  <td data-label="Date Added">{c.created_at?new Date(c.created_at).toLocaleDateString():"—"}</td>
+                  <td className="crm-wide">
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       <button className="btn-s" style={{padding:"4px 10px"}} onClick={()=>toggleHistory(c)}>
                         {expandedClientId===c.id ? "▲ Hide" : "▼ Orders"}
@@ -113,7 +113,7 @@ export default function ClientsTab() {
                   </td>
                 </tr>
                 {expandedClientId===c.id && (
-                  <tr>
+                  <tr className="crm-detail">
                     <td colSpan={6} style={{background:"#fffbf5",padding:"12px 14px 16px",borderTop:"none"}}>
                       <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>Order History</p>
                       {!clientOrders[c.id]
