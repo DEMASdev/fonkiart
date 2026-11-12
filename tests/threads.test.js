@@ -177,6 +177,14 @@ test("email replies setup: creates Brevo's inbound webhook once, with the key in
   assert.deepEqual(await adminInboundSetup(fakeFetch), { ok: true, already: true });
   assert.equal(calls.filter(c => c.method === "POST").length, 1);
 
+  // Brevo's real answer when no inbound webhook exists yet (seen live 2026-11-12).
+  let made2 = 0;
+  const none = async (url, opts = {}) => (opts.method === "POST"
+    ? (made2++, { ok: true, json: async () => ({ id: 2 }) })
+    : { ok: false, status: 404, json: async () => ({ code: "document_not_found", message: "Webhook record does not exist" }) });
+  assert.deepEqual(await adminInboundSetup(none), { ok: true, already: false });
+  assert.equal(made2, 1);
+
   const refused = async () => ({ ok: false, status: 403, json: async () => ({ message: "Not available on your plan" }) });
   assert.deepEqual(await adminInboundSetup(refused), { ok: false, message: "Not available on your plan" });
 }));

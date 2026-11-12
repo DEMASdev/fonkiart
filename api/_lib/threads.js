@@ -108,8 +108,10 @@ export async function adminInboundSetup(fetchImpl = fetch) {
   const headers = { accept: "application/json", "api-key": apiKey, "content-type": "application/json" };
   const list = await fetchImpl("https://api.brevo.com/v3/webhooks?type=inbound", { headers });
   const listed = await list.json().catch(() => ({}));
-  if (!list.ok) return { ok: false, message: listed.message || `Brevo answered ${list.status}` };
-  if ((listed.webhooks || []).some(w => w.url === url)) return { ok: true, already: true };
+  // With no inbound webhook yet, Brevo answers 404 "Webhook record does not exist":
+  // that means "none yet", so go on and create it.
+  if (!list.ok && list.status !== 404) return { ok: false, message: listed.message || `Brevo answered ${list.status}` };
+  if (list.ok && (listed.webhooks || []).some(w => w.url === url)) return { ok: true, already: true };
   const made = await fetchImpl("https://api.brevo.com/v3/webhooks", {
     method: "POST",
     headers,
