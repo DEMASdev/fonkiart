@@ -49,7 +49,7 @@ export default function DashboardTab({ goToTab, goToSettings }) {
       <div className="crm-header">
         <span className="crm-title">Dashboard</span>
         <button className="btn-s" style={{ display:"flex", alignItems:"center", gap:6 }} onClick={() => setTick(t => t+1)}>
-          <RefreshCw size={13} /> Refresh
+          <RefreshCw size={16} /> Refresh
         </button>
       </div>
       {stats.collectorRequests.length > 0 && (
@@ -61,7 +61,7 @@ export default function DashboardTab({ goToTab, goToSettings }) {
               <div style={{ color:"var(--muted)" }}>{stats.collectorRequests.slice(0,3).map(r => r.email).join(", ")}{stats.collectorRequests.length > 3 ? ` +${stats.collectorRequests.length - 3} more` : ""}</div>
             </div>
           </div>
-          <button onClick={() => goToTab("leads")} style={{ background:"var(--gold)", color:"#fff", border:"none", padding:"8px 18px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>View in Leads →</button>
+          <button className="tap" onClick={() => goToTab("leads")} style={{ background:"var(--gold)", color:"#fff", border:"none", padding:"8px 18px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>View in Leads →</button>
         </div>
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:2, marginBottom:2 }}>

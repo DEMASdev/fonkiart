@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { adminLogin, adminVerify, adminLogout, adminHasToken, requestAdminReset } from "../lib/adminAuth";
 import PasswordInput from "../components/PasswordInput";
 import AdminPanel from "./AdminPanel";
+import { mouseHover } from "../utils/hover";
 
 const ADMIN_EMAIL = "fonkiart@gmail.com";
 const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
@@ -74,7 +75,7 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
         <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
           {reset === "sent"
             ? <span style={{ color:"#2d6a4f" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
-            : <button onClick={forgot} disabled={reset === "sending"} style={linkBtn}>
+            : <button className="tap" onClick={forgot} disabled={reset === "sending"} style={linkBtn}>
                 {reset === "sending" ? "Sending…" : "Forgot password?"}
               </button>}
           {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
@@ -83,8 +84,7 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
           {loggingIn ? "Checking…" : "Enter"}
         </button>
         <button onClick={onBack} style={{ width:"100%", background:"none", border:"1px solid var(--border)", padding:"10px", cursor:"pointer", letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", transition:"all .2s" }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor="var(--ink)"; e.currentTarget.style.color="var(--ink)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor="var(--border)"; e.currentTarget.style.color="var(--muted)"; }}>
+          {...mouseHover({ borderColor:"var(--ink)", color:"var(--ink)" }, { borderColor:"var(--border)", color:"var(--muted)" })}>
           ← Back to Site
         </button>
         <p style={{ textAlign:"center", color:"var(--muted)", marginTop:14, letterSpacing:".06em" }}>

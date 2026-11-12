@@ -35,7 +35,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="welcome-modal" onClick={e => e.stopPropagation()}>
-        <button className="welcome-close-x" onClick={onClose}>✕</button>
+        <button className="welcome-close-x" aria-label="Close" onClick={onClose}>✕</button>
         <div className="welcome-gallery">
           {Array.from({ length: 3 }).map((_, i) => {
             const art = previewImgs[i];
@@ -61,7 +61,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
             {!submitted ? (
               <>
                 <p>Enter your email and we'll send your unique coupon instantly.</p>
-                <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="your@email.com" onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                <input type="email" autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="your@email.com" onKeyDown={e => e.key === "Enter" && handleSubmit()}
                   style={{ width:"100%", border:"1px solid var(--border)", padding:"11px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:16, outline:"none", marginBottom:8 }} />
                 {err && <p style={{ color:"#c0392b", fontSize:14, marginBottom:6 }}>{err}</p>}
                 <button className="btn-p" style={{ width:"100%", background:"var(--gold)", marginBottom:10, padding:"14px", fontSize:15 }} onClick={handleSubmit} disabled={loading}>

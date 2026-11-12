@@ -41,11 +41,11 @@ export default function PriceInquiryModal({ item, onClose }) {
         <p style={{ fontSize:13, color:"var(--muted)", lineHeight:1.7, marginBottom:20 }}>
           This piece is available by request. Fill in your details and Aliana will get back to you with pricing and availability.
         </p>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>
-          <div className="fld"><label>Name *</label><input value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Jane Smith" /></div>
-          <div className="fld"><label>Email *</label><input value={form.email} onChange={e=>f("email",e.target.value)} placeholder="jane@email.com" /></div>
+        <div className="stack-phone" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>
+          <div className="fld"><label>Name *</label><input autoComplete="name" value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Jane Smith" /></div>
+          <div className="fld"><label>Email *</label><input type="email" autoComplete="email" autoCapitalize="none" value={form.email} onChange={e=>f("email",e.target.value)} placeholder="jane@email.com" /></div>
         </div>
-        <div className="fld"><label>Phone <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></label><input value={form.phone} onChange={e=>f("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+        <div className="fld"><label>Phone <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></label><input type="tel" autoComplete="tel" value={form.phone} onChange={e=>f("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
         <div className="fld"><label>Message <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></label><textarea value={form.message} onChange={e=>f("message",e.target.value)} placeholder="I'm interested in this piece for my living room…" style={{ minHeight:70, resize:"vertical" }} /></div>
         <button className="btn-p" style={{ width:"100%", marginTop:8, opacity:canSend?1:.5, cursor:canSend?"pointer":"default" }} onClick={canSend&&!sending?send:undefined} disabled={!canSend||sending}>
           {sending ? "Sending…" : "Send Inquiry"}

@@ -33,26 +33,26 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
     <div style={{ minHeight:"100vh", background:"var(--cream)", fontFamily:"'DM Sans',sans-serif" }}>
 
       {/* Header */}
-      <div style={{ background:"var(--sidebar-bg)", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+      <div style={{ background:"var(--sidebar-bg)", padding:"24px clamp(16px, 5vw, 40px)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
           <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:11, letterSpacing:".22em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", marginBottom:4 }}>My Account</div>
           <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:24, fontWeight:300, color:"#fff" }}>Welcome back, {firstName}</div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <span style={{ fontSize:12, color:"rgba(255,255,255,.55)" }}>{user?.email}</span>
-          <button onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,.7)", fontSize:12, letterSpacing:".08em", fontFamily:"'DM Sans',sans-serif" }}>← Back to site</button>
-          <button onClick={onLogout} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.25)", padding:"7px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"#fff" }}>Sign Out</button>
+        <div style={{ display:"flex", alignItems:"center", gap:"4px 12px", flexWrap:"wrap", minWidth:0 }}>
+          <span style={{ fontSize:12, color:"rgba(255,255,255,.55)", overflowWrap:"anywhere" }}>{user?.email}</span>
+          <button className="tap" onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,.7)", fontSize:12, letterSpacing:".08em", fontFamily:"'DM Sans',sans-serif" }}>← Back to site</button>
+          <button className="tap" onClick={onLogout} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.25)", padding:"7px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"#fff" }}>Sign Out</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ background:"#fff", borderBottom:"1px solid var(--border)", padding:"0 40px", display:"flex" }}>
+      <div style={{ background:"#fff", borderBottom:"1px solid var(--border)", padding:"0 clamp(4px, 4vw, 40px)", display:"flex" }}>
         <TabBtn label="My Orders"   active={tab==="orders"}  onClick={() => setTab("orders")} />
         <TabBtn label="My Profile"  active={tab==="profile"} onClick={() => setTab("profile")} />
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth:860, margin:"0 auto", padding:"40px 24px 80px" }}>
+      <div style={{ maxWidth:860, margin:"0 auto", padding:"clamp(24px, 6vw, 40px) clamp(16px, 4vw, 24px) 80px" }}>
 
         {/* ── ORDERS TAB ── */}
         {tab === "orders" && (
@@ -74,9 +74,9 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                 {orders.map(o => (
-                  <div key={o.id} style={{ background:"#fff", border:"1px solid var(--border)", padding:"20px 24px" }}>
+                  <div key={o.id} style={{ background:"#fff", border:"1px solid var(--border)", padding:"20px clamp(14px, 4vw, 24px)" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
-                      <div style={{ flex:1 }}>
+                      <div style={{ flex:"1 1 180px", minWidth:0, overflowWrap:"anywhere" }}>
                         <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:"var(--ink)", marginBottom:4 }}>{o.item_title}</div>
                         <div style={{ fontSize:12, color:"var(--muted)" }}>
                           Placed {o.created_at ? new Date(o.created_at).toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" }) : "—"}
@@ -128,16 +128,16 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
               <p style={{ fontSize:13, color:"var(--muted)" }}>Your account information at Fonkiart.</p>
             </div>
 
-            <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"28px 32px" }}>
+            <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"clamp(16px, 5vw, 28px) clamp(16px, 5vw, 32px)" }}>
               {[
                 ["Name",    client?.name  || user?.user_metadata?.name  || "—"],
                 ["Email",   user?.email   || "—"],
                 ["Phone",   client?.phone || "—"],
                 ["Address", [client?.address, client?.city, client?.state, client?.zip, client?.country].filter(Boolean).join(", ") || "—"],
               ].map(([label, value]) => (
-                <div key={label} style={{ display:"flex", alignItems:"baseline", padding:"14px 0", borderBottom:"1px solid var(--border)" }}>
+                <div key={label} style={{ display:"flex", alignItems:"baseline", flexWrap:"wrap", gap:"4px 0", padding:"14px 0", borderBottom:"1px solid var(--border)" }}>
                   <div style={{ fontSize:11, letterSpacing:".12em", textTransform:"uppercase", color:"var(--muted)", width:100, flexShrink:0 }}>{label}</div>
-                  <div style={{ fontSize:14, color:"var(--ink)" }}>{value}</div>
+                  <div style={{ fontSize:14, color:"var(--ink)", flex:"1 1 160px", minWidth:0, overflowWrap:"anywhere" }}>{value}</div>
                 </div>
               ))}
               <p style={{ fontSize:12, color:"var(--muted)", marginTop:20, lineHeight:1.7 }}>
@@ -146,8 +146,8 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
               </p>
             </div>
 
-            <div style={{ marginTop:32, textAlign:"center" }}>
-              <button className="btn-p" style={{ background:"var(--gold)", marginRight:12 }} onClick={onBack}>Browse the Collection</button>
+            <div style={{ marginTop:32, display:"flex", flexWrap:"wrap", justifyContent:"center", gap:12 }}>
+              <button className="btn-p" style={{ background:"var(--gold)" }} onClick={onBack}>Browse the Collection</button>
               <button className="btn-s" onClick={onLogout}>Sign Out</button>
             </div>
           </>
