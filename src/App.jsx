@@ -369,7 +369,7 @@ export default function App() {
         {page === "about"    && <AboutPage />}
         {page === "archive"  && <SoldPage data={mergedData} />}
         {page === "children" && <ChildrenPage setPage={goToPage} />}
-        {page === "conversation" && threadToken && <ThreadPage token={threadToken} embedded />}
+        {page === "conversation" && threadToken && <ThreadPage token={threadToken} embedded artworks={mergedData.items} />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
         <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => setPage("cart")} />
