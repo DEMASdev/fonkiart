@@ -6,6 +6,7 @@ import { checkPassword } from "./adminSecret.js";
 import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
+import { opReminders } from "./reminders.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -287,4 +288,8 @@ export const STORE_OPS = {
   "thread": (db, req) => opThread(db, req.body || {}),
   "thread-reply": (db, req, mail) => opThreadReply(db, req.body || {}, mail),
   "inbound": (db, req, mail) => opInbound(db, req, mail),
+  "reminders": (db, req, mail) => opReminders(db, req, mail),
 };
+
+// Ops a plain GET may call: only Vercel's daily cron, which can't POST.
+export const GET_OPS = new Set(["reminders"]);

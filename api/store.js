@@ -1,12 +1,12 @@
 import { getServiceClient } from "./_lib/supabaseAdmin.js";
 import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
-import { STORE_OPS } from "./_lib/storeOps.js";
+import { STORE_OPS, GET_OPS } from "./_lib/storeOps.js";
 import { withRandomArt } from "./_lib/emails.js";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const op = String(req.query?.op || "");
+  if (req.method !== "POST" && !(req.method === "GET" && GET_OPS.has(op))) return res.status(405).json({ error: "Method not allowed" });
   const run = STORE_OPS[op];
   if (!run) return res.status(404).json({ error: "Unknown operation" });
   const db = getServiceClient();

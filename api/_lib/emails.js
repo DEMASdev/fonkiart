@@ -240,3 +240,30 @@ export function inboundUnmatched({ from, subject, text }) {
     + `<div style="margin:14px 0 0;padding:14px 18px;border-left:3px solid ${C.gold};background:#ffffff;font-size:17px;line-height:1.7;">${multiline(text)}</div>`
     + footnote);
 }
+
+// The daily "waiting for you" reminder (reminders.js). Only sent when the list isn't empty.
+const waited = (d) => d === 0 ? "came in today" : d === 1 ? "1 day ago" : `${d} days ago`;
+const clip = (s, n) => { const t = String(s || "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+const MAX_ROWS = 15;
+const more = (n) => n > MAX_ROWS ? `<p style="margin:6px 0 0;font-size:16px;color:${C.muted};">…and ${n - MAX_ROWS} more in the admin.</p>` : "";
+// A thin gold line BETWEEN rows, none under the last one.
+const row = (html, i) => `<div style="${i ? `margin:14px 0 0;padding:14px 0 0;border-top:1px solid ${C.line};` : "margin:0;"}">${html}</div>`;
+const note = (html) => `<p style="margin:0;font-size:14px;letter-spacing:.06em;color:${C.muted};">${html}</p>`;
+
+export function reminderStore({ requests, orders }) {
+  const reqRows = requests.slice(0, MAX_ROWS).map((r, i) => row(
+    `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(r.name || "—")}</strong>${r.email ? ` · ${link(`mailto:${r.email}`, e(r.email))}` : ""}</p>`
+    + `<p style="margin:0 0 4px;font-size:16px;line-height:1.6;">${e(clip(r.message, 140))}</p>`
+    + note(`${r.replied ? "They replied to your answer" : "New message"}${r.days != null ? ` · ${waited(r.days)}` : ""}`), i)).join("");
+  const ordRows = orders.slice(0, MAX_ROWS).map((o, i) => row(
+    `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(o.title || "—")}</strong>${o.amount ? ` — $${money(o.amount)}` : ""}</p>`
+    + (o.email ? `<p style="margin:0 0 4px;font-size:16px;">${link(`mailto:${o.email}`, e(o.email))}</p>` : "")
+    + note(`${o.status === "confirmed" ? "Confirmed, not sent yet" : "Pending"}${o.days != null ? ` · ordered ${o.days === 0 ? "today" : waited(o.days)}` : ""}`), i)).join("");
+  return frame("Waiting for you",
+    p("Here's what is still waiting at Fonkiart.")
+    + (requests.length ? panel(`Messages to answer (${requests.length})`, reqRows + more(requests.length)) : "")
+    + (orders.length ? panel(`Orders to send (${orders.length})`, ordRows + more(orders.length)) : "")
+    + button(SITE, "Open the admin")
+    + small("Answer messages under Requests and update orders under Orders. This email comes once a day, and only when something is waiting.")
+    + footnote);
+}
