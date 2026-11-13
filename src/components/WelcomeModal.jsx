@@ -36,7 +36,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="welcome-modal" onClick={e => e.stopPropagation()}>
-        <button className="welcome-close-x" aria-label="Close" onClick={onClose}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <button className="welcome-close-x" aria-label="Close" onClick={onClose}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div className="welcome-gallery">
           {Array.from({ length: 3 }).map((_, i) => {
             const art = previewImgs[i];
