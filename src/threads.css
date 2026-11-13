@@ -58,10 +58,12 @@
 /* Its header: "Welcome Back" on the left, three tilted pieces of art on the right
    (the same look as the welcome popup). On phones the art sits above the words. */
 /* Kept tight (Andy, 2026-11-13: "it's wasting a lot of space"). */
-.page-hero.rq-hero { display:flex;align-items:center;justify-content:space-between;gap:32px;padding:22px 48px 20px; }
-.rq-hero .page-hero-eyebrow { margin-bottom:6px; }
-.rq-hero-sub { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(19px,2vw,24px);color:var(--muted);margin-top:4px;line-height:1.3; }
-.rq-hero-art { position:relative;width:min(270px,36vw);height:130px;flex-shrink:0;margin-right:12px; }
+/* Then "1/4 smaller" again (same day): computer ~131 px, phone ~184 px. */
+.page-hero.rq-hero { display:flex;align-items:center;justify-content:space-between;gap:32px;padding:14px 48px 12px; }
+.rq-hero .page-hero-eyebrow { margin-bottom:5px; }
+.rq-hero .page-hero-title { font-size:clamp(30px,3vw,44px); }
+.rq-hero-sub { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(18px,1.6vw,20px);color:var(--muted);margin-top:3px;line-height:1.3; }
+.rq-hero-art { position:relative;width:min(210px,32vw);height:100px;flex-shrink:0;margin-right:12px; }
 .rq-embed .invoice-card { padding:28px 36px 32px; }
 .rq-hero-tile { position:absolute;top:6%;width:42%;height:88%;overflow:hidden;background:#e8e2d9;border:4px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,.18); }
 .rq-hero-tile img { width:100%;height:100%;object-fit:cover;display:block; }
@@ -69,8 +71,8 @@
 .rq-hero-tile:nth-child(2) { left:29%;top:0;height:100%;z-index:2;transform:rotate(2deg); }
 .rq-hero-tile:nth-child(3) { left:58%;transform:rotate(-2deg); }
 @media(max-width:760px){
-  .page-hero.rq-hero { flex-direction:column;align-items:stretch;gap:12px;padding:16px 16px 14px; }
-  .rq-hero-art { order:-1;width:100%;max-width:240px;height:112px;margin:0 auto; }
+  .page-hero.rq-hero { flex-direction:column;align-items:stretch;gap:8px;padding:10px 16px 8px; }
+  .rq-hero-art { order:-1;width:100%;max-width:170px;height:76px;margin:0 auto; }
   .rq-embed .invoice-card { padding:20px 16px 24px; }
 }
 
