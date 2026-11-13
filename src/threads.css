@@ -52,6 +52,9 @@
 .rq-page-intro { font-size:15px;color:var(--muted);line-height:1.7;margin-bottom:22px; }
 .rq-page-foot { text-align:center;margin-top:24px; }
 .rq-page-foot a { color:var(--gold); }
+/* The conversation inside the full site (?thread= link): centred under the page header. */
+.rq-embed { display:flex;justify-content:center;padding:8px 20px 64px; }
+@media(max-width:600px){ .rq-embed { padding:4px 12px 48px; } }
 
 @media(max-width:760px){
   .rq-wrap { padding:20px 14px; }

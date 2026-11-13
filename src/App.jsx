@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { Menu, Package, LogIn, KeyRound, ShoppingBag } from "lucide-react";
+import { Menu, Package, LogIn, KeyRound, ShoppingBag, MessageCircle } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
 import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
@@ -57,7 +57,12 @@ export default function App() {
     return m ? { admin: m[1] === "admin-reset", token: m[2] } : null;
   });
   const [loginNotice, setLoginNotice] = useState(null);
-  const [page, setPage] = useState(() => (resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  // The link in our answers (?thread=<token>) opens the conversation INSIDE the full
+  // site, with the menu, top bar and footer (Andy, 2026-11-13: "should go to the full
+  // site not a chat site").
+  const [page, setPage] = useState(() => (threadToken ? "conversation" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  const pageRef = useRef(page);
+  useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => {
     if (resetLink) window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [resetLink]);
@@ -156,12 +161,13 @@ export default function App() {
     };
     init();
     loadArtworks();
-    if (!sessionStorage.getItem("fonkiart-welcome-seen")) {
+    if (!threadToken && !sessionStorage.getItem("fonkiart-welcome-seen")) {
       setTimeout(() => setShowWelcome(true), 1500);
     }
   }, []);
 
-  useEffect(() => { localStorage.setItem("fonkiart-page", page); }, [page]);
+  // Not the conversation: it only exists while its link is in the address bar.
+  useEffect(() => { if (page !== "conversation") localStorage.setItem("fonkiart-page", page); }, [page]);
   useEffect(() => { localStorage.setItem("fonkiart-cart", JSON.stringify(cart)); }, [cart]);
   useEffect(() => {
     if (collectorsClient) localStorage.setItem("fonkiart-collectors-client", JSON.stringify(collectorsClient));
@@ -206,15 +212,16 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return;
+    // A signed-in customer opening the conversation link stays on the conversation.
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user || null;
       setUser(u);
-      if (u) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      if (u && pageRef.current !== "conversation") setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       const u = session?.user || null;
       setUser(u);
-      if (u) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      if (u && pageRef.current !== "conversation") setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -228,6 +235,7 @@ export default function App() {
       partners:"Partners — Fonkiart", contact:"Contact — Fonkiart",
       about:"About Fonkiart", children:"Children Benefit — Fonkiart",
       admin:"Admin — Fonkiart", "buyer-dashboard":"My Account — Fonkiart",
+      conversation:"Your Conversation — Fonkiart",
     };
     document.title = titles[page] || "Fonkiart";
   }, [page]);
@@ -262,7 +270,6 @@ export default function App() {
   const mergedData = data ? { ...data, items: artworks.length > 0 ? artworks : (data.items || []) } : null;
 
   if (invoiceToken) return <InvoicePage token={invoiceToken} />;
-  if (threadToken) return <ThreadPage token={threadToken} />;
   if (!mergedData) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"#8a8078" }}>Loading Fonkiart…</div>;
 
   if (page === "buyer-dashboard" && user) return <BuyerDashboard user={user} onLogout={async () => { await supabase.auth.signOut(); setUser(null); setPage("home"); }} onBack={() => setPage("home")} />;
@@ -273,7 +280,9 @@ export default function App() {
 
   if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => setPage("collectors-room")} tab={adminTab} setTab={setAdminTab} />;
 
-  const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag } : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
+  const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag }
+    : page === "conversation" ? { label: "Your Conversation", Icon: MessageCircle }
+    : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (
     <div className="layout">
@@ -360,6 +369,7 @@ export default function App() {
         {page === "about"    && <AboutPage />}
         {page === "archive"  && <SoldPage data={mergedData} />}
         {page === "children" && <ChildrenPage setPage={goToPage} />}
+        {page === "conversation" && threadToken && <ThreadPage token={threadToken} embedded />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
         <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => setPage("cart")} />
