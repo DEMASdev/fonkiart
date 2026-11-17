@@ -443,7 +443,6 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                   <td className="crm-wide">
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                      {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                       {o.invoice_token && (<>
                         <a className="tap" href={invoiceLink(window.location.origin, o.invoice_token, { shopView: true })} target="_blank" rel="noopener noreferrer"
                           style={{background:"none",border:"1px solid var(--border)",padding:"3px 8px",color:"var(--muted)",textDecoration:"none",display:"inline-block"}}>
@@ -459,6 +458,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                         </button>
                       </>)}
                       <button className="btn-d" onClick={()=>deleteOrder(o.id)}>Delete</button>
+                      {/* Order details (notes) last, Open first: Andy, 2026-11-17 */}
+                      {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                     </div>
                   </td>
                 </tr>
