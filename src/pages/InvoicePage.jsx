@@ -124,7 +124,7 @@ export default function InvoicePage({ token, shopView = false }) {
                     <div className="invoice-pay-title">Zelle</div>
                   </div>
                   <div className="invoice-pay-value">{payZelle}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" in the memo.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the memo.</p>
                 </div>
               )}
 
@@ -136,7 +136,7 @@ export default function InvoicePage({ token, shopView = false }) {
                     <div className="invoice-pay-title">Venmo</div>
                   </div>
                   <div className="invoice-pay-value">{payVenmo}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the note.</p>
                 </div>
               )}
 
@@ -148,7 +148,7 @@ export default function InvoicePage({ token, shopView = false }) {
                     <div className="invoice-pay-title">Cash App</div>
                   </div>
                   <div className="invoice-pay-value">{payCashApp}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the note.</p>
                 </div>
               )}
 
