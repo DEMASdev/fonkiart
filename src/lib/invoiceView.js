@@ -23,3 +23,20 @@ export function readInvoiceParams(search) {
 export function canApprove({ approved, shopView }) {
   return !approved && !shopView;
 }
+
+// Which ways to pay the customer sees after confirming (Andy, 2026-11-17: "confirm how
+// pay how ?"). Zelle is ticked by default on the Send Invoice form but its box starts
+// EMPTY, with the shop's address only as grey placeholder text, so an invoice sent
+// as-is used to save a blank Zelle address and the customer saw no way to pay at all.
+// A blank box now falls back to the Zelle address in Settings, as the shop checkout does.
+// payment_methods is null on old invoices: then every way that has a value shows.
+export function paymentOptions(order = {}, settings = {}) {
+  const methods = order.payment_methods ? String(order.payment_methods).split(",") : null;
+  const allowed = (m) => !methods || methods.includes(m);
+  const val = (v) => (typeof v === "string" && v.trim()) ? v.trim() : null;
+  const zelle   = allowed("zelle")   ? (val(order.zelle_contact) || val(settings.zelleContact)) : null;
+  const venmo   = allowed("venmo")   ? val(settings.venmoHandle)   : null;
+  const cashApp = allowed("cashapp") ? val(settings.cashAppHandle) : null;
+  const stripe  = allowed("stripe")  ? val(order.stripe_link)      : null;
+  return { zelle, venmo, cashApp, stripe, any: !!(zelle || venmo || cashApp || stripe) };
+}

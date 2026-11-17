@@ -187,7 +187,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       {sendingInvoice && (
         <div className="crm-add-form" style={{maxWidth:"100%",borderTop:"3px solid var(--sidebar-bg)"}}>
           <h3 style={{marginBottom:4}}>Send Invoice to Client</h3>
-          <p style={{color:"var(--muted)",marginBottom:20}}>Client receives an email with a link to approve and pay.</p>
+          <p style={{color:"var(--muted)",marginBottom:20}}>Client receives an email with a link to the invoice. After they confirm it, the page shows the ways to pay you tick below.</p>
           <div className="crm-2col" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:32}}>
 
             {/* LEFT — Client */}
@@ -293,7 +293,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <button className="btn-p" onClick={sendInvoice} disabled={invSending}>
               {invSending ? "Sending…" : "Send Invoice →"}
             </button>
-            <p style={{color:"var(--muted)",margin:0}}>A payment link will be emailed to the client automatically.</p>
+            <p style={{color:"var(--muted)",margin:0}}>Nothing is charged automatically. Check your accounts for the money.</p>
           </div>
         </div>
       )}

@@ -16,13 +16,14 @@ export function invoiceEmail({ invNum, invDate, firstName, itemTitle, notes, due
   const row = (label, value, size = 16) => `<tr><td style="padding:10px 0;border-bottom:1px solid ${C.line};font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:${C.muted};">${label}</td><td style="padding:10px 0;border-bottom:1px solid ${C.line};font-size:${size}px;color:${C.ink};text-align:right;">${value}</td></tr>`;
   const content = `<p style="margin:0 0 18px;font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:${C.muted};">Invoice ${esc(invNum)} · ${esc(invDate)}</p>`
     + `<p style="margin:0 0 8px;">Hi ${esc(firstName)},</p>`
-    + `<p style="margin:0 0 22px;">You have a new invoice from Fonkiart. Click below to review the details and approve your order.</p>`
+    + `<p style="margin:0 0 22px;">You have a new invoice from Fonkiart. Click below to review the details and confirm your order.</p>`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">`
     + row("Artwork / Item", esc(itemTitle), 18)
     + (notes ? row("Notes", esc(notes)) : "")
     + (dueDate ? row("Due Date", esc(dueDate)) : "")
     + `<tr><td style="padding:14px 0 0;font-size:17px;font-weight:bold;color:${C.ink};">Total Due</td><td style="padding:14px 0 0;font-family:Georgia,serif;font-size:27px;font-weight:bold;color:${C.gold};text-align:right;">$${money(amount)}</td></tr></table>`
-    + button(link, "Review &amp; Approve →")
+    + small("You pay after you confirm. The ways to pay show on the invoice page.")
+    + button(link, "Review &amp; Confirm →")
     + small(`Questions? Reply to this email or contact us at ${contact(sender)}.`);
   return { heading: "Your invoice", content };
 }

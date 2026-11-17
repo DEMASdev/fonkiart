@@ -410,7 +410,9 @@ test("admin-written emails (invoice, status, coupon) get the shared frame and a 
   await adminEmail(mail, { to: "ana@x.com", subject: "Your invoice", ...inv });
   assert.match(sent[0].htmlContent, /FONKIART/);
   assert.match(sent[0].htmlContent, /<!--ART-->/);
-  assert.match(sent[0].htmlContent, /Review &amp; Approve/);
+  assert.match(sent[0].htmlContent, /Review &amp; Confirm/);
+  assert.match(sent[0].htmlContent, /You pay after you confirm/);
+  assert.doesNotMatch(sent[0].htmlContent, /Approve/);
   assert.match(AE.couponEmail({ code: "FK-<x>", discount: 15 }).content, /FK-&lt;x&gt;/);
   assert.match(AE.statusEmail({ name: "<i>Bo</i>", message: "Shipped", sender: "s@f.com" }).heading, /&lt;i&gt;Bo/);
   // A ready-made htmlContent still goes out exactly as written.

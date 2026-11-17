@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
-import { canApprove } from "../lib/invoiceView";
+import { canApprove, paymentOptions } from "../lib/invoiceView";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
@@ -12,6 +12,7 @@ export default function InvoicePage({ token, shopView = false }) {
   const [notFound, setNotFound] = useState(false);
   const [approved, setApproved] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [approveFailed, setApproveFailed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -29,10 +30,11 @@ export default function InvoicePage({ token, shopView = false }) {
   const handleApprove = async () => {
     if (!order || !canApprove({ approved, shopView })) return;
     setApproving(true);
+    setApproveFailed(false);
     try {
       await storeCall("invoice-approve", { token });
       setApproved(true);
-    } catch(e) { console.warn("Approve error:", e); }
+    } catch(e) { console.warn("Approve error:", e); setApproveFailed(true); }
     finally { setApproving(false); }
   };
 
@@ -47,13 +49,8 @@ export default function InvoicePage({ token, shopView = false }) {
     </div>
   );
 
-  const methods     = order.payment_methods ? order.payment_methods.split(",") : null;
-  const allowed     = (m) => !methods || methods.includes(m);
-  const payZelle    = allowed("zelle")   ? order.zelle_contact          : null;
-  const payVenmo    = allowed("venmo")   ? settings.venmoHandle          : null;
-  const payCashApp  = allowed("cashapp") ? settings.cashAppHandle        : null;
-  const payStripe   = allowed("stripe")  ? order.stripe_link             : null;
-  const hasAnyPayment = payZelle || payStripe || payVenmo || payCashApp;
+  const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, stripe: payStripe, any: hasAnyPayment } = paymentOptions(order, settings);
+  const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = `INV-${String(order.id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
@@ -84,7 +81,7 @@ export default function InvoicePage({ token, shopView = false }) {
         </div>
       </div>
 
-      <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart. Please review the details and click <em>Approve &amp; Pay</em> when you're ready.</p>
+      <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart. Please review the details and click <em>Confirm order</em> when you're ready.</p>
 
       {order.client_name && (
         <div className="invoice-row">
@@ -109,9 +106,11 @@ export default function InvoicePage({ token, shopView = false }) {
 
       {approved ? (
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:8}}>Order Approved ✓</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:8}}>Order Confirmed ✓</p>
           <p style={{fontSize:13,color:"#4a8c6a",lineHeight:1.7,marginBottom:hasAnyPayment?20:0}}>
-            Thank you! Fonkiart has been notified and will follow up shortly.
+            {hasAnyPayment
+              ? `Your order is confirmed. It is not paid yet. Please send ${amountText} using one of these:`
+              : "Your order is confirmed. It is not paid yet. Fonkiart will email you how to pay."}
           </p>
           {hasAnyPayment && (
             <div style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
@@ -171,11 +170,16 @@ export default function InvoicePage({ token, shopView = false }) {
         </div>
       ) : (
         <div className="invoice-pay-section">
-          <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>Click below to confirm your order. Payment details will appear after you approve.</p>
+          <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.6,marginBottom:20,textAlign:"center"}}>Step 1: confirm the invoice is right. No money is taken. Step 2: the ways to pay show right here.</p>
           <button onClick={handleApprove} disabled={approving}
             style={{width:"100%",background:"var(--sidebar-bg)",color:"#fff",border:"none",padding:"16px 32px",fontSize:13,letterSpacing:".1em",textTransform:"uppercase",cursor:approving?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",opacity:approving?0.7:1,transition:"opacity .2s"}}>
-            {approving ? "Processing…" : "Approve & Pay →"}
+            {approving ? "Processing…" : "Confirm order →"}
           </button>
+          {approveFailed && (
+            <p role="alert" style={{fontSize:13,color:"#c0392b",lineHeight:1.6,marginTop:12,textAlign:"center"}}>
+              Something went wrong and your order was not confirmed. Please try again, or email us at <a href={`mailto:${BREVO_SENDER}`} style={{color:"var(--gold)"}}>{BREVO_SENDER}</a>.
+            </p>
+          )}
         </div>
       )}
 
