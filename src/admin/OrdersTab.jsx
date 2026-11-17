@@ -4,6 +4,7 @@ import { adminDb as supabase } from "../lib/adminDb";
 import { sendEmail } from "../utils/helpers";
 import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
+import { invoiceNumber } from "../lib/invoiceNumber";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -29,11 +30,10 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
-  const fmtInvNum = (id) => `INV-${String(id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
   const fmtDate   = (iso) => iso ? new Date(iso).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
 
   const buildInvoiceEmail = (order, link) => invoiceEmail({
-    invNum: fmtInvNum(order.id),
+    invNum: invoiceNumber(order),
     invDate: fmtDate(order.created_at || new Date().toISOString()),
     firstName: order.client_name ? order.client_name.split(" ")[0] : "there",
     itemTitle: order.item_title,
@@ -92,8 +92,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         payment_methods: methods,
       }]).select().single();
       if (orderErr) throw orderErr;
-      const order = { ...orderData, client_name: name, created_at: new Date().toISOString() };
-      await sendEmail({ to: email, subject: `Invoice ${fmtInvNum(order.id)} — ${inv.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
+      const order = { ...orderData, client_name: name, created_at: orderData?.created_at || new Date().toISOString() };
+      await sendEmail({ to: email, subject: `Invoice ${invoiceNumber(order)} — ${inv.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
       await load();
       setInv(invBlank); setSendingInvoice(false);
       showMsg(`Invoice sent to ${email}`);
@@ -110,7 +110,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setResending(r => ({...r, [order.id]: true}));
     try {
       const link = `${window.location.origin}/?invoice=${order.invoice_token}`;
-      await sendEmail({ to: order.client_email, subject: `Invoice ${fmtInvNum(order.id)} — ${order.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
+      await sendEmail({ to: order.client_email, subject: `Invoice ${invoiceNumber(order)} — ${order.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
       showMsg(`Invoice resent to ${order.client_email}`);
     } catch { showMsg("Error resending invoice."); }
     finally { setResending(r => ({...r, [order.id]: false})); }
@@ -420,7 +420,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
               <Fragment key={o.id}>
                 <tr>
                   <td data-label="Ref" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
-                    <div>{o.invoice_token ? fmtInvNum(o.id) : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
+                    <div>{o.invoice_token ? invoiceNumber(o) : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (
                       <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
                         {o.invoice_approved ? "✓ APPROVED" : "INVOICE SENT"}

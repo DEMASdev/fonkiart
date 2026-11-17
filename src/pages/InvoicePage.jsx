@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { canApprove, paymentOptions } from "../lib/invoiceView";
+import { invoiceNumber } from "../lib/invoiceNumber";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
@@ -53,7 +54,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false 
   const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, stripe: payStripe, any: hasAnyPayment } = paymentOptions(order, settings);
   const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
-  const invNum  = `INV-${String(order.id).replace(/-/g,"").slice(0,6).toUpperCase()}`;
+  const invNum  = invoiceNumber(order);
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
@@ -72,7 +73,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:16,borderBottom:"1px solid var(--border)"}}>
         <div>
           <div style={{fontSize:11,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:3}}>Invoice</div>
-          <div style={{fontFamily:"monospace",fontSize:16,fontWeight:600,color:"var(--ink)",letterSpacing:".06em"}}>{invNum}</div>
+          <div style={{fontFamily:"monospace",fontSize:"clamp(13px,3.6vw,16px)",fontWeight:600,color:"var(--ink)",letterSpacing:".04em",whiteSpace:"nowrap"}}>{invNum}</div>
         </div>
         <div style={{textAlign:"right"}}>
           {invDate && <div style={{fontSize:12,color:"var(--muted)"}}>Date: {invDate}</div>}
