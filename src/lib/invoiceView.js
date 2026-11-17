@@ -42,3 +42,14 @@ export function paymentOptions(order = {}, settings = {}) {
   const stripe  = allowed("stripe")  ? (val(order.stripe_link) || val(settings.stripeLink)) : null;
   return { zelle, venmo, cashApp, stripe, any: !!(zelle || venmo || cashApp || stripe) };
 }
+
+// The artwork an invoice is for (Andy, 2026-11-17: "can't see the artwork i'm paying for").
+// An invoice only stores the item's TITLE, so find the piece in the catalogue by its
+// title: same words, ignoring case, extra spaces and quotes. No match, no picture;
+// it never guesses, so a customer is never shown the wrong piece.
+const norm = (t) => String(t ?? "").toLowerCase().replace(/["'‘’“”]/g, "").replace(/\s+/g, " ").trim();
+export function findArtwork(artworks = [], title) {
+  const want = norm(title);
+  if (!want) return null;
+  return artworks.find(a => a && a.image && norm(a.title) === want) || null;
+}

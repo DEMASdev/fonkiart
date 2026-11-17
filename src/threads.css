@@ -55,6 +55,10 @@
 /* The invoice inside the full site (?invoice= link), centred under the top bar. */
 .inv-embed { display:flex;justify-content:center;padding:32px 20px 64px; }
 @media(max-width:600px){ .inv-embed { padding:16px 12px 48px; } .inv-embed .invoice-card { padding:24px 16px; } }
+/* The artwork the invoice is for, framed like the art elsewhere on the site. */
+.inv-art { margin:0 0 24px;text-align:center; }
+.inv-art img { display:block;margin:0 auto;max-width:100%;max-height:340px;object-fit:contain;border:6px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,.14);background:#f3eee6; }
+@media(max-width:600px){ .inv-art img { max-height:260px; } }
 /* The conversation inside the full site (?thread= link): centred under the page header. */
 .rq-embed { display:flex;justify-content:center;padding:8px 20px 64px; }
 @media(max-width:600px){ .rq-embed { padding:4px 12px 48px; } }

@@ -419,11 +419,11 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <tbody>{filtered.map(o=>(
               <Fragment key={o.id}>
                 <tr>
-                  <td data-label="Ref" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
+                  <td data-label="Ref" className="crm-wide" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div>{o.invoice_token ? invoiceNumber(o) : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (
                       <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
-                        {o.invoice_approved ? "✓ APPROVED" : "INVOICE SENT"}
+                        {o.invoice_approved ? "✓ CLIENT APPROVED" : "INVOICE SENT"}
                       </div>
                     )}
                   </td>

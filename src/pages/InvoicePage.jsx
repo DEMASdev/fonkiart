@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
-import { canApprove, paymentOptions } from "../lib/invoiceView";
+import { canApprove, paymentOptions, findArtwork } from "../lib/invoiceView";
+import Pic from "../components/Pic";
 import { invoiceNumber } from "../lib/invoiceNumber";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
 // embedded: shown inside the full site (App.jsx), with its menu, top bar and footer.
-export default function InvoicePage({ token, shopView = false, embedded = false }) {
+export default function InvoicePage({ token, shopView = false, embedded = false, artworks = [] }) {
   const [order, setOrder] = useState(null);
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false 
   const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
+  const art     = findArtwork(artworks, order.item_title);
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
@@ -84,6 +86,12 @@ export default function InvoicePage({ token, shopView = false, embedded = false 
       </div>
 
       <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart. Please review the details and click <em>Confirm order</em> when you're ready.</p>
+
+      {art && (
+        <figure className="inv-art">
+          <Pic src={art.image} w={640} alt={art.title} />
+        </figure>
+      )}
 
       {order.client_name && (
         <div className="invoice-row">

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, SHOP_VIEW } from "../src/lib/invoiceView.js";
+import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, SHOP_VIEW } from "../src/lib/invoiceView.js";
 import { invoiceNumber } from "../src/lib/invoiceNumber.js";
 
 const ORIGIN = "https://fonkiart.com";
@@ -75,4 +75,19 @@ test("two invoices a millisecond apart get different numbers; no time falls back
   assert.notEqual(a, b);
   assert.equal(invoiceNumber({ id: 12 }), "INV-12");
   assert.equal(invoiceNumber({ id: 12, created_at: "not a date" }), "INV-12");
+});
+
+test("the invoice shows the artwork it is for, found by its title, and never a wrong one", () => {
+  const art = [
+    { id: 1, title: "Frida the manatee", image: "https://x/frida.jpg" },
+    { id: 2, title: "Pink palms", image: "https://x/palms.jpg" },
+    { id: 3, title: "No picture yet", image: "" },
+  ];
+  assert.equal(findArtwork(art, "Frida the manatee")?.id, 1);
+  assert.equal(findArtwork(art, "  frida  THE manatee ")?.id, 1, "case and spaces don't matter");
+  assert.equal(findArtwork(art, '"Pink palms"')?.id, 2, "quotes don't matter");
+  assert.equal(findArtwork(art, "Frida"), null, "part of a title is not a match");
+  assert.equal(findArtwork(art, "No picture yet"), null, "a piece with no picture shows nothing");
+  assert.equal(findArtwork(art, ""), null);
+  assert.equal(findArtwork(undefined, "Pink palms"), null);
 });
