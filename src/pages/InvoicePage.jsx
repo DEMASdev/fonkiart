@@ -89,7 +89,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
 
       {art && (
         <figure className="inv-art">
-          <Pic src={art.image} w={640} alt={art.title} />
+          <Pic src={art.image} w={320} alt={art.title} />
         </figure>
       )}
 
