@@ -5,6 +5,8 @@
 // READ-ONLY. The Approve button is not shown there, so opening an invoice can never
 // approve it on the customer's behalf.
 
+import { isPaid } from "./orderStatus.js";
+
 export const SHOP_VIEW = "shop";
 
 // The customer's link (what the invoice email carries) is unchanged; the shop's
@@ -55,4 +57,13 @@ export function findArtwork(artworks = [], title) {
   const want = norm(title);
   if (!want) return null;
   return artworks.find(a => a && a.image && norm(a.title) === want) || null;
+}
+
+// Paid: a congratulations under the Fonkiart title (Andy, 2026-11-17, after paying his own
+// test invoice: "should say Congratulations you make it yours ! a one of a kind ! very
+// nicely and elegant under the fonkiart title"). His words, grammar fixed, nothing added.
+// Paid, Shipped and Delivered all count, so a Zelle payment marked by hand shows it too.
+// Never before the money is in: null.
+export function paidCongrats(status) {
+  return isPaid(status) ? { title: "Congratulations, you made it yours!", sub: "A one of a kind!" } : null;
 }

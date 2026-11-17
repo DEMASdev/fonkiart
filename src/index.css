@@ -599,6 +599,14 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .invoice-logo { font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px; }
 .invoice-logo-dot { width:5px;height:5px;border-radius:50%;background:var(--gold);flex-shrink:0; }
 .invoice-tagline { font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted); }
+/* Paid: the congratulations under the title (Andy, 2026-11-17: "very nicely and elegant").
+   The logo's gold dot between two hairlines, the title serif in italic, then the gold small caps.
+   padding-left balances the space letter-spacing leaves after the last letter, so it sits centred. */
+.inv-congrats { margin-top:18px; }
+.inv-congrats-rule { display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px; }
+.inv-congrats-rule::before, .inv-congrats-rule::after { content:"";width:40px;height:1px;background:var(--border); }
+.inv-congrats-title { font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:clamp(20px,5.6vw,24px);line-height:1.25;color:var(--ink);text-wrap:balance; }
+.inv-congrats-sub { font-family:'Cormorant Garamond',serif;font-weight:600;font-size:13px;letter-spacing:.24em;padding-left:.24em;text-transform:uppercase;color:var(--gold);margin-top:6px; }
 .invoice-row { display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--border); }
 .invoice-label { font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted); }
 .invoice-value { font-size:15px;color:var(--ink);font-weight:500; }

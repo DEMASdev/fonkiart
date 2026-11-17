@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
-import { canApprove, paymentOptions, findArtwork, readInvoiceParams } from "../lib/invoiceView";
+import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats } from "../lib/invoiceView";
 import { isPaid } from "../lib/orderStatus";
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
@@ -88,9 +88,12 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
 
   const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, card: payCard, any: hasAnyPayment } = paymentOptions(order, settings, { cardReady });
   const paid = isPaid(order.status);
+  const congrats = paidCongrats(order.status);
+  // Paid, not shipped yet (Andy, 2026-11-17: "also we will be sending you a tracking number
+  // or delivery updates if a shipping is needed !").
   const paidNote = order.status === "delivered" ? "Your order was delivered."
     : order.status === "shipped" ? "Your order has shipped."
-    : "We'll email you as soon as it ships.";
+    : "We will be sending you a tracking number or delivery updates if shipping is needed.";
   const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
@@ -127,6 +130,13 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <div className="invoice-header">
         <div className="invoice-logo"><div className="invoice-logo-dot"/>Fonkiart</div>
         <div className="invoice-tagline">Original Art &amp; Fine Art Prints</div>
+        {congrats && (
+          <div className="inv-congrats">
+            <div className="inv-congrats-rule" aria-hidden="true"><div className="invoice-logo-dot"/></div>
+            <p className="inv-congrats-title">{congrats.title}</p>
+            <p className="inv-congrats-sub">{congrats.sub}</p>
+          </div>
+        )}
       </div>
 
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:16,borderBottom:"1px solid var(--border)"}}>

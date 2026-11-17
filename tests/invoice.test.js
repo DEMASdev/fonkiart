@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, SHOP_VIEW } from "../src/lib/invoiceView.js";
+import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, paidCongrats, SHOP_VIEW } from "../src/lib/invoiceView.js";
 import { invoiceNumber } from "../src/lib/invoiceNumber.js";
 import { invoiceNumber as serverInvoiceNumber } from "../api/_lib/invoiceNumber.js";
 import { opInvoiceApprove } from "../api/_lib/storeOps.js";
@@ -98,6 +98,12 @@ test("the invoice shows the artwork it is for, found by its title, and never a w
   assert.equal(findArtwork(art, "No picture yet"), null, "a piece with no picture shows nothing");
   assert.equal(findArtwork(art, ""), null);
   assert.equal(findArtwork(undefined, "Pink palms"), null);
+});
+
+test("a paid invoice congratulates the client, in Andy's words; never before the money is in", () => {
+  const words = { title: "Congratulations, you made it yours!", sub: "A one of a kind!" };
+  for (const status of ["paid", "shipped", "delivered"]) assert.deepEqual(paidCongrats(status), words, status);
+  for (const status of ["pending", "confirmed", undefined, null, ""]) assert.equal(paidCongrats(status), null, String(status));
 });
 
 test("the server's invoice number (emails) and the browser's (invoice page) are always the same", () => {
