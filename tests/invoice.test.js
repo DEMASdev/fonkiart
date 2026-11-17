@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, SHOP_VIEW } from "../src/lib/invoiceView.js";
 import { invoiceNumber } from "../src/lib/invoiceNumber.js";
+import { invoiceNumber as serverInvoiceNumber } from "../api/_lib/invoiceNumber.js";
+import { opInvoiceApprove } from "../api/_lib/storeOps.js";
 
 const ORIGIN = "https://fonkiart.com";
 const TOKEN = "8f0c2a5e-1111-2222-3333-444455556666";
@@ -90,4 +92,61 @@ test("the invoice shows the artwork it is for, found by its title, and never a w
   assert.equal(findArtwork(art, "No picture yet"), null, "a piece with no picture shows nothing");
   assert.equal(findArtwork(art, ""), null);
   assert.equal(findArtwork(undefined, "Pink palms"), null);
+});
+
+test("the server's invoice number (emails) and the browser's (invoice page) are always the same", () => {
+  for (const created_at of [
+    "2026-11-17T21:19:56.080514+00:00", "2026-07-04T16:00:00.007Z", "2026-11-18T03:30:00.5+00:00",
+    "2026-11-18T05:00:00Z", "2027-03-14T06:59:59.999Z", undefined, "not a date",
+  ]) {
+    const order = { id: "abc-12345", created_at };
+    assert.equal(serverInvoiceNumber(order), invoiceNumber(order), String(created_at));
+  }
+});
+
+// A tiny stand-in for the database: one Orders table, records every update.
+function fakeOrders(rows) {
+  const updates = [];
+  const from = () => {
+    let payload = null; const filters = [];
+    const q = {
+      select: () => q, limit: () => q,
+      update: (v) => { payload = v; return q; },
+      eq: (k, v) => { filters.push([k, v]); return q; },
+      then: (ok, bad) => Promise.resolve().then(() => {
+        const hit = rows.filter(r => filters.every(([k, v]) => String(r[k]) === String(v)));
+        if (payload) { updates.push(payload); hit.forEach(r => Object.assign(r, payload)); return { data: null, error: null }; }
+        return { data: hit.map(r => ({ ...r })), error: null };
+      }).then(ok, bad),
+    };
+    return q;
+  };
+  return { from, updates };
+}
+
+test("when a client confirms, the shop's email says CONFIRMED BY CUSTOMER and NOT PAID, once", async () => {
+  const TOKEN2 = "85d82763-0000-4000-8000-000000000016";
+  const order = { id: 16, invoice_token: TOKEN2, invoice_approved: false, status: "pending", item_title: "Frida the manatee",
+    amount: 450, client_name: "Ana <b>Lopez</b>", client_email: "ana@example.com", payment_methods: "zelle,venmo,cashapp",
+    created_at: "2026-11-17T21:19:56.080514+00:00" };
+  const db = fakeOrders([order]);
+  const sent = [];
+  const mail = { sender: "shop@fonkiart.com", send: async (m) => { sent.push(m); } };
+
+  await opInvoiceApprove(db, { token: TOKEN2 }, mail);
+  assert.deepEqual(db.updates, [{ invoice_approved: true, status: "confirmed" }]);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "shop@fonkiart.com");
+  assert.equal(sent[0].subject, "Invoice confirmed by customer, NOT paid yet — Frida the manatee · $450");
+  const html = sent[0].htmlContent;
+  assert.match(html, /Invoice confirmed by customer/);
+  assert.match(html, /not a payment/);
+  assert.match(html, /FA-261117161956080/);
+  assert.match(html, /Zelle, Venmo, Cash App/);
+  assert.match(html, /set the order to <strong>Shipped<\/strong>/);
+  assert.doesNotMatch(html, /<b>Lopez<\/b>/, "the client's name is shown as text, never as HTML");
+  assert.doesNotMatch(html, /Invoice Approved/);
+
+  await opInvoiceApprove(db, { token: TOKEN2 }, mail);
+  assert.equal(sent.length, 1, "confirming twice sends one email, not two");
 });

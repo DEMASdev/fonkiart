@@ -7,6 +7,7 @@ import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
+import { invoiceNumber } from "./invoiceNumber.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -217,7 +218,7 @@ export async function opInvoiceApprove(db, body, mail) {
   if (!order.invoice_approved) {
     const { error } = await db.from("Orders").update({ invoice_approved: true, status: "confirmed" }).eq("id", order.id);
     if (error) throw error;
-    await mail.send({ to: mail.sender, subject: `Invoice approved — ${order.item_title}`, htmlContent: T.invoiceApproved({ order }) })
+    await mail.send({ to: mail.sender, subject: T.invoiceConfirmedSubject(order), htmlContent: T.invoiceApproved({ order, invNum: invoiceNumber(order) }) })
       .catch(e => console.warn("store invoice email:", e.message));
   }
   return { ok: true };

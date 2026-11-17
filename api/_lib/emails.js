@@ -216,9 +216,29 @@ export function contactStore({ name, email, message }) {
     + footnote);
 }
 
-export function invoiceApproved({ order }) {
-  return frame("Invoice Approved",
-    p(`<strong>${e(order.client_name || order.client_email)}</strong> approved the invoice for <strong>${e(order.item_title)}</strong> — $${money(order.amount)}.`)
+// To the shop when a client confirms an invoice (Andy, 2026-11-17: "Invoice confirmed by
+// customer !"). Confirming is NOT paying, and the site never sees money arrive, so the
+// email says so plainly and says what to do once the money is in.
+const PAY_NAMES = { zelle: "Zelle", venmo: "Venmo", cashapp: "Cash App", stripe: "Stripe" };
+export function invoiceConfirmedSubject(order) {
+  return `Invoice confirmed by customer, NOT paid yet — ${order.item_title} · $${money(order.amount)}`;
+}
+export function invoiceApproved({ order, invNum }) {
+  const amount = `$${money(order.amount)}`;
+  const ways = order.payment_methods
+    ? String(order.payment_methods).split(",").map(m => PAY_NAMES[m.trim()]).filter(Boolean)
+    : [];
+  const who = order.client_name
+    ? `${e(order.client_name)}${order.client_email ? ` (${link(`mailto:${order.client_email}`, e(order.client_email))})` : ""}`
+    : e(order.client_email || "The customer");
+  return frame("Invoice confirmed by customer",
+    p(`<strong>${who}</strong> confirmed the invoice for <strong>${e(order.item_title)}</strong>.`)
+    + panel("Not paid yet",
+      field("Invoice", e(invNum))
+      + field("Amount", amount)
+      + (ways.length ? field("Ways to pay shown", e(ways.join(", "))) : ""))
+    + p(`This is <strong>not a payment</strong>. The website can't see money arrive.`)
+    + p(`When ${amount} arrives${ways.length ? ` (${e(ways.join(" or "))})` : ""}, look for "${e(order.item_title)}" or "${e(invNum)}" in the memo. Then ship it and set the order to <strong>Shipped</strong> in Admin → Orders.`)
     + footnote);
 }
 
