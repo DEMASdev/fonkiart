@@ -3,6 +3,7 @@ import { BREVO_SENDER } from "../lib/supabase";
 import { adminDb as supabase } from "../lib/adminDb";
 import { sendEmail } from "../utils/helpers";
 import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
+import { invoiceLink } from "../lib/invoiceView";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -444,6 +445,10 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                       {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                       {o.invoice_token && (<>
+                        <a className="tap" href={invoiceLink(window.location.origin, o.invoice_token, { shopView: true })} target="_blank" rel="noopener noreferrer"
+                          style={{background:"none",border:"1px solid var(--border)",padding:"3px 8px",color:"var(--muted)",textDecoration:"none",display:"inline-block"}}>
+                          👁 Open
+                        </a>
                         <button className="tap" onClick={()=>{ const link=`${window.location.origin}/?invoice=${o.invoice_token}`; navigator.clipboard.writeText(link).then(()=>alert("Invoice link copied!")); }}
                           style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>
                           🔗 Link

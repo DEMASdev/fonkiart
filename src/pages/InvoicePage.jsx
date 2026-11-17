@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
+import { canApprove } from "../lib/invoiceView";
 
-export default function InvoicePage({ token }) {
+// shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
+// read-only: no Approve button, so the shop can look without approving anything.
+export default function InvoicePage({ token, shopView = false }) {
   const [order, setOrder] = useState(null);
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
@@ -24,7 +27,7 @@ export default function InvoicePage({ token }) {
   }, [token]);
 
   const handleApprove = async () => {
-    if (!order || approved) return;
+    if (!order || !canApprove({ approved, shopView })) return;
     setApproving(true);
     try {
       await storeCall("invoice-approve", { token });
@@ -58,6 +61,11 @@ export default function InvoicePage({ token }) {
 
   return shell(
     <div className="invoice-card">
+      {shopView && (
+        <p style={{fontSize:12,lineHeight:1.6,color:"#7a5b14",background:"#fff8ec",border:"1px solid #e8d5a0",padding:"10px 14px",marginBottom:24,textAlign:"center"}}>
+          Shop view, read-only. This is the page the customer sees; the Approve button is hidden here.
+        </p>
+      )}
       <div className="invoice-header">
         <div className="invoice-logo"><div className="invoice-logo-dot"/>Fonkiart</div>
         <div className="invoice-tagline">Original Art &amp; Fine Art Prints</div>
@@ -156,6 +164,10 @@ export default function InvoicePage({ token }) {
               )}
             </div>
           )}
+        </div>
+      ) : shopView ? (
+        <div className="invoice-pay-section">
+          <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.6,textAlign:"center"}}>Not approved by the customer yet.</p>
         </div>
       ) : (
         <div className="invoice-pay-section">

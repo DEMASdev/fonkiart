@@ -205,6 +205,15 @@ test("invoice: found by its link, approve marks it confirmed once and tells the 
   await assert.rejects(store.opInvoice(db, { token: "nope!" }), InputError);
 });
 
+test("invoice: a past (already approved) invoice link still opens, with its approval showing", async () => {
+  const token = "8f0c2a5e-1111-2222-3333-444455556666";
+  const db = fakeDb({ Orders: [{ id: 5, invoice_token: token, item_title: "Ocean", amount: 300, invoice_approved: false }], Settings: [{ id: 1 }] });
+  await store.opInvoiceApprove(db, { token }, mailbox());
+  const got = await store.opInvoice(db, { token });
+  assert.equal(got.order.id, 5);
+  assert.equal(got.order.invoice_approved, true);
+});
+
 test("next order number matches the old FA-1710 offset", async () => {
   assert.deepEqual(await store.opNextRef(fakeDb({ Orders: [{ id: 12 }] })), { ref: "FA-1723" });
   assert.deepEqual(await store.opNextRef(fakeDb({ Orders: [] })), { ref: "FA-1720" });
