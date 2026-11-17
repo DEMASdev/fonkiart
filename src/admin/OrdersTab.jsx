@@ -6,6 +6,7 @@ import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
+import { ORDER_STATUSES, isPaid, canMarkPaid } from "../lib/orderStatus";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -28,6 +29,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const [invSent, setInvSent] = useState("");
   const showMsg = (msg) => { setInvSent(msg); setTimeout(() => setInvSent(""), 4000); };
   const [resending, setResending] = useState({});
+  const [statusErr, setStatusErr] = useState("");
+  const [confirmPaid, setConfirmPaid] = useState(null); // the order id asking "Paid?"
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
@@ -89,7 +92,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         notes: inv.notes, due_date: inv.due_date || null,
         status: "pending", invoice_token: token, invoice_approved: false,
         zelle_contact: inv.pay_zelle ? inv.zelle_contact : null,
-        stripe_link: inv.pay_stripe ? inv.stripe_link : null,
+        stripe_link: null, // card payments no longer use a pasted link (api/_lib/stripe.js)
         payment_methods: methods,
       }]).select().single();
       if (orderErr) throw orderErr;
@@ -136,6 +139,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const name = client?.name?.split(" ")[0] || "there";
     const msgs = {
       confirmed: { sub:`Your order is confirmed — ${order.item_title}`, body:`Great news! Your order for <strong>${esc(order.item_title)}</strong> has been confirmed. We'll notify you once it ships.` },
+      paid:      { sub:`Payment received — ${order.item_title}`,       body:`Thank you! We received your payment for <strong>${esc(order.item_title)}</strong>. We'll let you know as soon as it ships.` },
       shipped:   { sub:`Your order has shipped — ${order.item_title}`,   body:`Your order for <strong>${esc(order.item_title)}</strong> is on its way! Fonkiart will follow up with any tracking details.` },
       delivered: { sub:`Order delivered — ${order.item_title}`,           body:`Your order for <strong>${esc(order.item_title)}</strong> has been marked as delivered. We hope you love it!` },
     };
@@ -148,8 +152,13 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       });
     } catch(e) { console.warn("Status email:", e); }
   };
+  // Only change the screen and email the client once the database has really saved it.
+  // It used to ignore a failed save, so the client could be told something untrue.
   const updateStatus = async (id, status) => {
-    await supabase.from("Orders").update({status}).eq("id",id);
+    setStatusErr("");
+    const { error } = await supabase.from("Orders").update({status}).eq("id",id);
+    if (error) { setStatusErr(`Could not save the new status (${error.message || "unknown error"}). Nothing was emailed.`); return false; }
+    setConfirmPaid(null);
     const order = orders.find(o => o.id === id);
     setOrders(orders.map(o=>o.id===id?{...o,status}:o));
     if (order) sendStatusEmail(order, status);
@@ -168,7 +177,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
      o.item_title?.toLowerCase().includes(search.toLowerCase()) ||
      clientName(o.client_email)?.toLowerCase().includes(search.toLowerCase()))
   );
-  const statusCounts = { all:orders.length, pending:0, confirmed:0, shipped:0, delivered:0 };
+  const statusCounts = { all:orders.length, ...Object.fromEntries(ORDER_STATUSES.map(([v]) => [v, 0])) };
   orders.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
   return (
     <div className="crm-wrap">
@@ -184,6 +193,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       </div>
 
       {invSent && <div className="ok-msg" style={{marginBottom:12}}>{invSent}</div>}
+      {statusErr && <div className="warn-msg" role="alert" style={{marginBottom:12}}>⚠ {statusErr}</div>}
 
       {sendingInvoice && (
         <div className="crm-add-form" style={{maxWidth:"100%",borderTop:"3px solid var(--sidebar-bg)"}}>
@@ -279,12 +289,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_stripe} onChange={e=>iv("pay_stripe",e.target.checked)} />
                     💳 Credit Card (Stripe)
+                    <span style={{color:"var(--muted)",fontWeight:400}}>(client pays the exact amount, nothing to paste)</span>
                   </label>
-                  {inv.pay_stripe && (
-                    <div className="fld" style={{marginTop:6,marginLeft:24}}>
-                      <input value={inv.stripe_link} onChange={e=>iv("stripe_link",e.target.value)} placeholder="https://buy.stripe.com/…" />
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -387,10 +393,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <div className="fld"><label>Amount (USD)</label><input type="number" value={form.amount} onChange={e=>f("amount",e.target.value)} placeholder={formAmountHint} /></div>
                 <div className="fld"><label>Status</label>
                   <select value={form.status} onChange={e=>f("status",e.target.value)}>
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
+                    {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                   </select>
                 </div>
               </div>
@@ -406,7 +409,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
         <input className="crm-search" style={{marginBottom:0,flex:1,minWidth:200}} placeholder="Search by name, email or artwork…" value={search} onChange={e=>setSearch(e.target.value)} />
         <div className="chip-row" style={{display:"flex",gap:4,flexShrink:0}}>
-          {[["all","All"],["pending","Pending"],["confirmed","Confirmed"],["shipped","Shipped"],["delivered","Delivered"]].map(([val,label])=>(
+          {[["all","All"], ...ORDER_STATUSES].map(([val,label])=>(
             <button key={val} className="tap" onClick={()=>setStatusFilter(val)}
               style={{border:`1px solid ${statusFilter===val?"var(--ink)":"var(--border)"}`,background:statusFilter===val?"var(--ink)":"none",color:statusFilter===val?"#fff":"var(--muted)",padding:"5px 12px",letterSpacing:".08em",cursor:"pointer"}}>
               {label}{statusFilter!==val&&statusCounts[val]!==undefined?` (${statusCounts[val]})`:statusFilter===val?` (${statusCounts[val]})`:""}</button>
@@ -422,11 +425,13 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <tr>
                   <td data-label="Ref" className="crm-wide" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>{o.invoice_token ? <>{invoiceNumber(o)}<CopyButton text={invoiceNumber(o)} /></> : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
-                    {o.invoice_token && (
+                    {o.invoice_token && (isPaid(o.status) ? (
+                      <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:"#fff",background:"#2d6a4f",border:"1px solid #2d6a4f",padding:"1px 5px",display:"inline-block"}}>✓ PAID</div>
+                    ) : (
                       <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
                         {o.invoice_approved ? "✓ CLIENT APPROVED" : "INVOICE SENT"}
                       </div>
-                    )}
+                    ))}
                   </td>
                   <td data-label="Client" className="crm-wide">
                     {(o.client_name || clientName(o.client_email)) && <div style={{fontWeight:500}}>{o.client_name || clientName(o.client_email)}</div>}
@@ -437,9 +442,18 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <td data-label="Status">
                     <select value={o.status||"pending"} onChange={e=>updateStatus(o.id,e.target.value)}
                       style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
-                      <option value="pending">Pending</option><option value="confirmed">Confirmed</option>
-                      <option value="shipped">Shipped</option><option value="delivered">Delivered</option>
+                      {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                     </select>
+                    {/* Mark paid: two taps, because it emails the client a receipt. */}
+                    {canMarkPaid(o.status) && (confirmPaid === o.id ? (
+                      <div className="mark-paid-ask">
+                        <span>Money arrived?</span>
+                        <button className="tap mark-paid-yes" onClick={()=>updateStatus(o.id,"paid")}>Yes, paid</button>
+                        <button className="tap mark-paid-no" onClick={()=>setConfirmPaid(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <button className="tap mark-paid" onClick={()=>{ setStatusErr(""); setConfirmPaid(o.id); }}>✓ Mark paid</button>
+                    ))}
                   </td>
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                   <td className="crm-wide">

@@ -29,11 +29,12 @@ const daysSince = (iso, now) => {
 // site or by email) puts it back to New, so that case is covered too.
 const requestWaits = (r) => !r.status || r.status === "new";
 
-// An order waits to be fulfilled while it is Pending or Confirmed. An invoice the
-// customer hasn't approved yet waits on the customer, not the shop, so it's left out.
+// An order waits to be fulfilled while it is Pending, Confirmed or Paid (paid = ship it).
+// An invoice the customer hasn't approved yet waits on the customer, not the shop, so
+// it's left out.
 const orderWaits = (o) => {
   const s = o.status || "pending";
-  if (s !== "pending" && s !== "confirmed") return false;
+  if (s !== "pending" && s !== "confirmed" && s !== "paid") return false;
   if (o.invoice_token && !o.invoice_approved) return false;
   return true;
 };

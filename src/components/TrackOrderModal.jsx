@@ -17,8 +17,8 @@ export default function TrackOrderModal({ onClose }) {
     setLoading(false);
   };
 
-  const statusColor = { pending:"#f0d5a8", confirmed:"#1e3a52", shipped:"#2d6a4f", delivered:"var(--gold)" };
-  const statusLabel = { pending:"Pending", confirmed:"Confirmed", shipped:"Shipped", delivered:"Delivered" };
+  const statusColor = { pending:"#f0d5a8", confirmed:"#1e3a52", paid:"#52b788", shipped:"#2d6a4f", delivered:"var(--gold)" };
+  const statusLabel = { pending:"Pending", confirmed:"Confirmed", paid:"Paid", shipped:"Shipped", delivered:"Delivered" };
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -38,7 +38,7 @@ export default function TrackOrderModal({ onClose }) {
               <div key={o.id} style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"16px 20px", marginBottom:10 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
                   <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:17, fontWeight:500 }}>{o.item_title}</div>
-                  <div style={{ background:statusColor[o.status]||"var(--border)", color:["confirmed","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", fontSize:10, letterSpacing:".12em", textTransform:"uppercase", padding:"3px 10px", borderRadius:12, flexShrink:0, marginLeft:10 }}>
+                  <div style={{ background:statusColor[o.status]||"var(--border)", color:["confirmed","paid","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", fontSize:10, letterSpacing:".12em", textTransform:"uppercase", padding:"3px 10px", borderRadius:12, flexShrink:0, marginLeft:10 }}>
                     {statusLabel[o.status] || o.status}
                   </div>
                 </div>

@@ -27,7 +27,9 @@ async function copyText(text) {
   }
 }
 
-export default function CopyButton({ text, label = "Copy invoice number", size = 14 }) {
+// caption: show words on the button too, on a line of its own (Andy, 2026-11-17: the pay
+// lines read better as the sentence, then "Tap here to copy to your clipboard [icon]").
+export default function CopyButton({ text, label = "Copy invoice number", size = 14, caption = "" }) {
   const [copied, setCopied] = useState(false);
   const onClick = async (e) => {
     e.preventDefault();
@@ -38,9 +40,17 @@ export default function CopyButton({ text, label = "Copy invoice number", size =
     }
   };
   const tip = copied ? "Copied" : label;
+  const icon = copied ? <Check size={size} aria-hidden="true" /> : <Copy size={size} aria-hidden="true" />;
+  if (caption) {
+    return (
+      <button type="button" className={`copy-btn copy-btn-line${copied ? " is-copied" : ""}`} onClick={onClick} aria-label={copied ? "Copied to your clipboard" : `${label} to your clipboard`}>
+        <span>{copied ? "Copied to your clipboard" : caption}</span>{icon}
+      </button>
+    );
+  }
   return (
     <button type="button" className={`copy-btn${copied ? " is-copied" : ""}`} onClick={onClick} aria-label={tip} title={tip}>
-      {copied ? <Check size={size} aria-hidden="true" /> : <Copy size={size} aria-hidden="true" />}
+      {icon}
       {copied && <span className="copy-btn-done">Copied</span>}
     </button>
   );

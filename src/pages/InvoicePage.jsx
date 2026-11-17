@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
-import { canApprove, paymentOptions, findArtwork } from "../lib/invoiceView";
+import { canApprove, paymentOptions, findArtwork, readInvoiceParams } from "../lib/invoiceView";
+import { isPaid } from "../lib/orderStatus";
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
 import { invoiceNumber } from "../lib/invoiceNumber";
@@ -17,19 +18,51 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const [approved, setApproved] = useState(false);
   const [approving, setApproving] = useState(false);
   const [approveFailed, setApproveFailed] = useState(false);
+  const [cardReady, setCardReady] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [cardError, setCardError] = useState(false);
+  const [cardJustPaid, setCardJustPaid] = useState(false);
+  const [cardCheckFailed, setCardCheckFailed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
+        // Back from paying by card: Stripe added &card=<payment page id>. The server asks
+        // Stripe itself whether it was paid before marking the order Paid.
+        const { card } = readInvoiceParams(window.location.search);
+        if (card && !shopView) {
+          try {
+            const r = await storeCall("card-paid", { token, session: card });
+            if (r?.paid) setCardJustPaid(true);
+          } catch (e) { console.warn("Card check:", e); setCardCheckFailed(true); }
+          // Drop &card= from the address, so a reload doesn't ask again.
+          const u = new URL(window.location.href);
+          u.searchParams.delete("card");
+          window.history.replaceState(window.history.state, "", u.toString());
+        }
         const r = await storeCall("invoice", { token });
         setOrder(r.order);
         setApproved(!!r.order.invoice_approved);
         setSettings(r.settings || {});
+        setCardReady(r.cardReady === true);
       } catch { setNotFound(true); }
       finally { setLoading(false); }
     };
     load();
-  }, [token]);
+  }, [token, shopView]);
+
+  // "Pay by card": the server asks Stripe for a payment page with this invoice's exact amount.
+  const handleCard = async () => {
+    if (shopView || paying) return;
+    setPaying(true);
+    setCardError(false);
+    try {
+      const r = await storeCall("card-checkout", { token });
+      if (r?.url) { window.location.assign(r.url); return; }
+      if (r?.paid) setOrder(o => ({ ...o, status: "paid" }));
+    } catch (e) { console.warn("Card payment:", e); setCardError(true); }
+    setPaying(false);
+  };
 
   const handleApprove = async () => {
     if (!order || !canApprove({ approved, shopView })) return;
@@ -53,7 +86,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     </div>
   );
 
-  const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, stripe: payStripe, any: hasAnyPayment } = paymentOptions(order, settings);
+  const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, card: payCard, any: hasAnyPayment } = paymentOptions(order, settings, { cardReady });
+  const paid = isPaid(order.status);
+  const paidNote = order.status === "delivered" ? "Your order was delivered."
+    : order.status === "shipped" ? "Your order has shipped."
+    : "We'll email you as soon as it ships.";
   const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
@@ -118,11 +155,20 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
         </div>
       ) : (<>{clientRow}{itemRow}{notesRow(false)}</>)}
       <div className="invoice-total">
-        <span className="invoice-label">Total Due</span>
+        <span className="invoice-label">{paid ? "Total Paid" : "Total Due"}</span>
         <span className="invoice-value">${Number(order.amount).toLocaleString()}</span>
       </div>
 
-      {approved ? (
+      {/* Paid: never ask for money again (Andy, 2026-11-17: a paid, shipped order's link
+          still said "not paid yet, please send"). */}
+      {paid ? (
+        <div className="invoice-approved-banner">
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:8}}>Paid ✓</p>
+          <p style={{fontSize:13,color:"#4a8c6a",lineHeight:1.7}}>
+            {cardJustPaid ? "Thank you! Your card payment went through." : "Thank you! Fonkiart received your payment."} {paidNote}
+          </p>
+        </div>
+      ) : approved ? (
         <div className="invoice-approved-banner">
           <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:8}}>Order Confirmed ✓</p>
           <p style={{fontSize:13,color:"#4a8c6a",lineHeight:1.7,marginBottom:hasAnyPayment?20:0}}>
@@ -130,6 +176,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
               ? `Your order is confirmed. It is not paid yet. Please send ${amountText} using one of these:`
               : "Your order is confirmed. It is not paid yet. Fonkiart will email you how to pay."}
           </p>
+          {cardCheckFailed && (
+            <p role="status" style={{fontSize:13,color:"#7a5b14",background:"#fff8ec",border:"1px solid #e8d5a0",padding:"10px 14px",lineHeight:1.6,marginBottom:16}}>
+              We couldn't confirm your card payment just now. If you paid, Stripe emails you a receipt and Fonkiart will mark it paid.
+            </p>
+          )}
           {hasAnyPayment && (
             <div style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
               <p style={{fontSize:11,letterSpacing:".12em",textTransform:"uppercase",color:"#4a8c6a",marginBottom:14}}>Send Payment To</p>
@@ -142,7 +193,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Zelle</div>
                   </div>
                   <div className="invoice-pay-value">{payZelle}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the memo.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the memo.</p>
+                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
                 </div>
               )}
 
@@ -154,7 +206,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Venmo</div>
                   </div>
                   <div className="invoice-pay-value">{payVenmo}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the note.</p>
+                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
                 </div>
               )}
 
@@ -166,17 +219,24 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Cash App</div>
                   </div>
                   <div className="invoice-pay-value">{payCashApp}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the note.</p>
+                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
                 </div>
               )}
 
-              {/* Stripe / Card */}
-              {payStripe && (
+              {/* Card: Stripe's payment page with this invoice's exact amount already in it. */}
+              {payCard && (
                 <div style={{textAlign:"center",marginTop:4}}>
-                  <a href={payStripe} target="_blank" rel="noreferrer"
-                    style={{display:"inline-block",background:"#635bff",color:"#fff",padding:"13px 32px",fontSize:13,letterSpacing:".08em",textDecoration:"none",fontFamily:"'DM Sans',sans-serif"}}>
-                    💳 Pay by Card (Stripe) →
-                  </a>
+                  <button type="button" className="tap" onClick={handleCard} disabled={paying || shopView}
+                    style={{display:"inline-block",background:"#635bff",color:"#fff",border:"none",padding:"13px 32px",fontSize:13,letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",cursor:paying||shopView?"default":"pointer",opacity:paying?0.7:1}}>
+                    {paying ? "Opening the secure card page…" : `💳 Pay ${amountText} by card →`}
+                  </button>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:8,lineHeight:1.5}}>Secure payment by Stripe. The amount is already filled in.</p>
+                  {cardError && (
+                    <p role="alert" style={{fontSize:13,color:"#c0392b",lineHeight:1.6,marginTop:8}}>
+                      Card payment isn't working right now. Please use another way above, or try again later.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

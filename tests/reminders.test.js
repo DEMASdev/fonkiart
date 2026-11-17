@@ -108,7 +108,7 @@ test("daily run: first time makes the PRIVATE note bucket, emails fonkiart@gmail
   assert.ok(m.htmlContent.includes("Ana &lt;b&gt;Lopez&lt;/b&gt;"), "names are escaped");
   assert.ok(!m.htmlContent.includes("<b>Lopez"), "no raw HTML from a visitor");
   assert.ok(m.htmlContent.includes("They replied to your answer"));
-  assert.ok(m.htmlContent.includes("Confirmed, not sent yet"));
+  assert.ok(m.htmlContent.includes("Confirmed, not paid yet"));
   assert.ok(!m.htmlContent.includes("Shipped one") && !m.htmlContent.includes("Invoice not approved"));
   const note = db.note();
   assert.equal(note.lastSentAt, inHour.toISOString());

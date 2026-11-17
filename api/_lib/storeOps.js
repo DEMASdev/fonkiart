@@ -8,6 +8,7 @@ import { siteUrl } from "./site.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
+import { cardReady, createCheckout, checkoutPaidFor, StripeError } from "./stripe.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -210,7 +211,55 @@ async function findInvoice(db, token) {
 export async function opInvoice(db, body) {
   const order = await findInvoice(db, invoiceToken(body.token));
   const { data: settings } = await db.from("Settings").select("*").eq("id", 1).maybeSingle();
-  return { order, settings: settings || {} };
+  return { order, settings: settings || {}, cardReady: cardReady() };
+}
+
+// Money has arrived: Paid, and everything after it. (Browser copy: src/lib/orderStatus.js.)
+const PAID_STATUSES = ["paid", "shipped", "delivered"];
+const NOT_PAID_STATUSES = ["pending", "confirmed"];
+const cardTicked = (order) => !order.payment_methods || String(order.payment_methods).split(",").includes("stripe");
+
+// "Pay by card": ask Stripe for a payment page with this invoice's exact amount.
+export async function opCardCheckout(db, body) {
+  const order = await findInvoice(db, invoiceToken(body.token));
+  if (PAID_STATUSES.includes(order.status)) return { paid: true };
+  if (!order.invoice_approved) throw new InputError("Please confirm the invoice first", 409);
+  if (!cardTicked(order)) throw new InputError("Card payment is not offered on this invoice", 409);
+  try {
+    return { url: await createCheckout({ order, invNum: invoiceNumber(order), site: siteUrl() }) };
+  } catch (e) {
+    if (!(e instanceof StripeError)) throw e;
+    console.error("store card-checkout:", e.code, e.message);
+    throw new InputError("Card payment isn't working right now", 502);
+  }
+}
+
+// The client is back from Stripe. Ask Stripe if that page was really paid, for this invoice
+// and amount; only then mark the order Paid and email the shop and the client, once.
+export async function opCardPaid(db, body, mail) {
+  const order = await findInvoice(db, invoiceToken(body.token));
+  if (PAID_STATUSES.includes(order.status)) return { paid: true };
+  const sessionId = text(body.session, 300, "payment reference", { required: true });
+  let paid;
+  try {
+    paid = await checkoutPaidFor({ sessionId, order });
+  } catch (e) {
+    if (!(e instanceof StripeError)) throw e;
+    console.error("store card-paid:", e.code, e.message);
+    throw new InputError("Couldn't check the card payment right now", 502);
+  }
+  if (!paid) return { paid: false };
+  // Only the first caller flips it (a reload can't send the emails twice).
+  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true })
+    .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
+  if (error) console.error("store card-paid: could not mark the order Paid:", error.message);
+  if (!error && !flipped?.length) return { paid: true };
+  const invNum = invoiceNumber(order);
+  await Promise.allSettled([
+    mail.send({ to: mail.sender, subject: T.cardPaidSubject(order), htmlContent: T.cardPaidShop({ order, invNum, saved: !error }) }),
+    mail.send({ to: order.client_email, subject: T.paymentReceivedSubject(order), htmlContent: T.paymentReceived({ order, invNum }) }),
+  ]);
+  return { paid: true };
 }
 
 export async function opInvoiceApprove(db, body, mail) {
@@ -281,6 +330,8 @@ export const STORE_OPS = {
   "order": (db, req, mail) => opOrder(db, req.body || {}, mail),
   "invoice": (db, req) => opInvoice(db, req.body || {}),
   "invoice-approve": (db, req, mail) => opInvoiceApprove(db, req.body || {}, mail),
+  "card-checkout": (db, req) => opCardCheckout(db, req.body || {}),
+  "card-paid": (db, req, mail) => opCardPaid(db, req.body || {}, mail),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),

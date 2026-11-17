@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { adminDb as supabase } from "../lib/adminDb";
 import AdminTasksWidget from "./AdminTasksWidget";
+import { isPaid } from "../lib/orderStatus";
 
 const Stat = ({ label, value, sub, color }) => (
   <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", borderTop:`3px solid ${color||"var(--gold)"}` }}>
@@ -29,20 +30,21 @@ export default function DashboardTab({ goToTab, goToSettings }) {
       const orders = ordersRes.data || [];
       const pending   = orders.filter(o => o.status === "pending").length;
       const confirmed = orders.filter(o => o.status === "confirmed").length;
+      const paidCount = orders.filter(o => o.status === "paid").length;
       const shipped   = orders.filter(o => o.status === "shipped").length;
       const delivered = orders.filter(o => o.status === "delivered").length;
-      // Money is only counted once the order is shipped or delivered (Aliana ships after the
-      // money arrives). "Confirmed" means the client approved the invoice: NOT paid yet, so it
-      // shows apart as "Waiting for payment" (Andy, 2026-11-17: "that doesn't make sense").
+      // Money is counted once the order is Paid (or later: shipped, delivered). Before 11-17 there
+      // was no Paid step, so it waited for Shipped. "Confirmed" means the client approved the invoice:
+      // NOT paid yet, so it shows apart as "Waiting for payment" (Andy, 2026-11-17).
       const sum = (list) => list.reduce((total, o) => total + Number(o.amount || 0), 0);
-      const paid = orders.filter(o => o.status === "shipped" || o.status === "delivered");
+      const paid = orders.filter(o => isPaid(o.status));
       const revenue   = sum(paid);
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
       const monthRevenue = sum(paid.filter(o => o.created_at >= monthStart));
       const awaiting  = sum(orders.filter(o => o.status === "confirmed"));
       const newRequests = (requestsRes.data || []).filter(r => r.status === "new").length;
       const collectorRequests = collectorsRes.data || [];
-      setStats({ leads:leadsRes.count||0, orders:orders.length, clients:clientsRes.count||0, pending, confirmed, shipped, delivered, revenue, monthRevenue, awaiting, newRequests, collectorRequests });
+      setStats({ leads:leadsRes.count||0, orders:orders.length, clients:clientsRes.count||0, pending, confirmed, paidCount, shipped, delivered, revenue, monthRevenue, awaiting, newRequests, collectorRequests });
     }).catch(e => { console.error("Dashboard load:", e); setLoadErr(true); });
   }, [tick]);
 
@@ -70,10 +72,10 @@ export default function DashboardTab({ goToTab, goToSettings }) {
         </div>
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:2, marginBottom:2 }}>
-        <Stat label="Revenue (All Time)" value={`$${stats.revenue.toLocaleString()}`} sub="Shipped + delivered" color="var(--gold)" />
-        <Stat label="Revenue (This Month)" value={`$${stats.monthRevenue.toLocaleString()}`} sub={`Shipped + delivered · ${new Date().toLocaleString("default",{month:"long",year:"numeric"})}`} color="#a07a3a" />
+        <Stat label="Revenue (All Time)" value={`$${stats.revenue.toLocaleString()}`} sub="Paid, shipped + delivered" color="var(--gold)" />
+        <Stat label="Revenue (This Month)" value={`$${stats.monthRevenue.toLocaleString()}`} sub={`Paid, shipped + delivered · ${new Date().toLocaleString("default",{month:"long",year:"numeric"})}`} color="#a07a3a" />
         <Stat label="Waiting for Payment" value={`$${stats.awaiting.toLocaleString()}`} sub={`${stats.confirmed} client-approved, not paid yet`} color="#b5651d" />
-        <Stat label="Total Orders" value={stats.orders} sub={`${stats.pending} pending · ${stats.confirmed} confirmed`} color="#1e3a52" />
+        <Stat label="Total Orders" value={stats.orders} sub={`${stats.pending} pending · ${stats.confirmed} confirmed · ${stats.paidCount} paid`} color="#1e3a52" />
         <Stat label="Clients" value={stats.clients} color="#2d6a4f" />
         <Stat label="Leads" value={stats.leads} sub="Email subscribers" color="#7a4f00" />
         {stats.newRequests > 0 && <Stat label="New Requests" value={stats.newRequests} sub="Need attention" color="#c0392b" />}
@@ -81,7 +83,7 @@ export default function DashboardTab({ goToTab, goToSettings }) {
       <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", marginTop:2 }}>
         <p style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:18 }}>Orders by Status</p>
         <div style={{ display:"flex", gap:32, flexWrap:"wrap" }}>
-          {[{label:"Pending",value:stats.pending,color:"#f0d5a8"},{label:"Confirmed",value:stats.confirmed,color:"#1e3a52"},{label:"Shipped",value:stats.shipped,color:"#2d6a4f"},{label:"Delivered",value:stats.delivered,color:"var(--gold)"}].map(({ label, value, color }) => (
+          {[{label:"Pending",value:stats.pending,color:"#f0d5a8"},{label:"Confirmed",value:stats.confirmed,color:"#1e3a52"},{label:"Paid",value:stats.paidCount,color:"#52b788"},{label:"Shipped",value:stats.shipped,color:"#2d6a4f"},{label:"Delivered",value:stats.delivered,color:"var(--gold)"}].map(({ label, value, color }) => (
             <div key={label} style={{ display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:color, flexShrink:0, border:"1px solid rgba(0,0,0,.1)" }} />
               <span style={{ color:"var(--muted)" }}>{label}</span>

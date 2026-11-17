@@ -14,9 +14,10 @@ export function invoiceLink(origin, token, { shopView = false } = {}) {
   return shopView ? `${link}&view=${SHOP_VIEW}` : link;
 }
 
+// card: Stripe sends the client back with &card=<payment page id> after paying by card.
 export function readInvoiceParams(search) {
   const p = new URLSearchParams(search);
-  return { token: p.get("invoice"), shopView: p.get("view") === SHOP_VIEW };
+  return { token: p.get("invoice"), shopView: p.get("view") === SHOP_VIEW, card: p.get("card") || null };
 }
 
 // Only the customer, on their own link, can approve, and only once.
@@ -29,18 +30,20 @@ export function canApprove({ approved, shopView }) {
 // EMPTY, with the shop's address only as grey placeholder text, so an invoice sent
 // as-is used to save a blank Zelle address and the customer saw no way to pay at all.
 // A blank box now falls back to the Zelle address in Settings, as the shop checkout does.
-// The card (Stripe) box works the same way: blank falls back to Settings' Default Stripe
-// Payment Link (Andy, 2026-11-17, after creating the Stripe account).
+// Card (Stripe): no pasted link any more (Andy, 2026-11-17: "why do i need to put a new
+// link ? is it needed ?"). A Stripe link can't be told the amount, so the website now asks
+// Stripe for a payment page with the invoice's exact amount (api/_lib/stripe.js). The card
+// option shows when it's ticked on the invoice AND the Stripe key is set up (cardReady).
 // payment_methods is null on old invoices: then every way that has a value shows.
-export function paymentOptions(order = {}, settings = {}) {
+export function paymentOptions(order = {}, settings = {}, { cardReady = false } = {}) {
   const methods = order.payment_methods ? String(order.payment_methods).split(",") : null;
   const allowed = (m) => !methods || methods.includes(m);
   const val = (v) => (typeof v === "string" && v.trim()) ? v.trim() : null;
   const zelle   = allowed("zelle")   ? (val(order.zelle_contact) || val(settings.zelleContact)) : null;
   const venmo   = allowed("venmo")   ? val(settings.venmoHandle)   : null;
   const cashApp = allowed("cashapp") ? val(settings.cashAppHandle) : null;
-  const stripe  = allowed("stripe")  ? (val(order.stripe_link) || val(settings.stripeLink)) : null;
-  return { zelle, venmo, cashApp, stripe, any: !!(zelle || venmo || cashApp || stripe) };
+  const card    = allowed("stripe") && cardReady === true;
+  return { zelle, venmo, cashApp, card, any: !!(zelle || venmo || cashApp || card) };
 }
 
 // The artwork an invoice is for (Andy, 2026-11-17: "can't see the artwork i'm paying for").

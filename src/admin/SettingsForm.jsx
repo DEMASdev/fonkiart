@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { NAV_ITEMS } from "../constants";
+import CardStatus from "./CardStatus";
 
 export const SETTINGS_SECTIONS = [
   ["zelle",   "💚 Zelle"],
@@ -99,8 +100,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
       {section === "stripe" && (
         <div className="settings-box">
           <h3>💳 Stripe (Credit Card)</h3>
-          <div className="fld"><label>Default Stripe Payment Link</label><input value={s.stripeLink} onChange={e=>setS({...s,stripeLink:e.target.value})} placeholder="https://buy.stripe.com/…" /></div>
-          <p style={{ color:"var(--muted)", lineHeight:1.7 }}>Create links at <strong>dashboard.stripe.com → Payment Links</strong>.</p>
+          <CardStatus />
         </div>
       )}
 

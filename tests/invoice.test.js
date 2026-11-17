@@ -10,13 +10,13 @@ const TOKEN = "8f0c2a5e-1111-2222-3333-444455556666";
 
 test("the customer's invoice link is unchanged (what old invoice emails already carry)", () => {
   assert.equal(invoiceLink(ORIGIN, TOKEN), `${ORIGIN}/?invoice=${TOKEN}`);
-  assert.deepEqual(readInvoiceParams(new URL(invoiceLink(ORIGIN, TOKEN)).search), { token: TOKEN, shopView: false });
+  assert.deepEqual(readInvoiceParams(new URL(invoiceLink(ORIGIN, TOKEN)).search), { token: TOKEN, shopView: false, card: null });
 });
 
 test("the admin's Open link opens the same invoice in the read-only shop view", () => {
   const link = invoiceLink(ORIGIN, TOKEN, { shopView: true });
   assert.equal(link, `${ORIGIN}/?invoice=${TOKEN}&view=${SHOP_VIEW}`);
-  assert.deepEqual(readInvoiceParams(new URL(link).search), { token: TOKEN, shopView: true });
+  assert.deepEqual(readInvoiceParams(new URL(link).search), { token: TOKEN, shopView: true, card: null });
 });
 
 test("only the customer, on their own link, can approve, and only once", () => {
@@ -43,21 +43,27 @@ test("a blank Zelle box on the invoice falls back to the Zelle address in Settin
 
 test("only the ways to pay ticked on the invoice show, and only when they have a value", () => {
   const settings = { zelleContact: "shop@example.com", venmoHandle: "@shop", cashAppHandle: "$shop" };
-  const o = paymentOptions({ payment_methods: "venmo,stripe", stripe_link: "https://buy.stripe.com/x" }, settings);
-  assert.deepEqual(o, { zelle: null, venmo: "@shop", cashApp: null, stripe: "https://buy.stripe.com/x", any: true });
+  const o = paymentOptions({ payment_methods: "venmo,stripe" }, settings, { cardReady: true });
+  assert.deepEqual(o, { zelle: null, venmo: "@shop", cashApp: null, card: true, any: true });
   // Nothing usable: the page must say Fonkiart will email how to pay.
   assert.equal(paymentOptions({ payment_methods: "zelle" }, {}).any, false);
   assert.equal(paymentOptions({ payment_methods: "venmo" }, { venmoHandle: "" }).any, false);
   // Old invoices (no payment_methods saved) show every way that has a value.
-  assert.deepEqual(paymentOptions({}, settings), { zelle: "shop@example.com", venmo: "@shop", cashApp: "$shop", stripe: null, any: true });
+  assert.deepEqual(paymentOptions({}, settings), { zelle: "shop@example.com", venmo: "@shop", cashApp: "$shop", card: false, any: true });
 });
 
-test("a blank card (Stripe) box on the invoice falls back to the Default Stripe Payment Link in Settings", () => {
-  const settings = { stripeLink: "https://buy.stripe.com/shop-default" };
-  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: "" }, settings).stripe, "https://buy.stripe.com/shop-default");
-  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: null }, settings).any, true, "the customer must see a way to pay");
-  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: "https://buy.stripe.com/this-one" }, settings).stripe, "https://buy.stripe.com/this-one", "a pasted link wins");
-  assert.equal(paymentOptions({ payment_methods: "zelle", stripe_link: "" }, settings).stripe, null, "not ticked, not shown");
+test("card shows only when ticked AND Stripe is set up; no pasted link is needed or used", () => {
+  const oldLinks = { stripeLink: "https://buy.stripe.com/shop-default" };
+  assert.equal(paymentOptions({ payment_methods: "stripe" }, {}, { cardReady: true }).card, true, "nothing to paste");
+  assert.equal(paymentOptions({ payment_methods: "stripe" }, {}, { cardReady: true }).any, true, "the customer must see a way to pay");
+  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: "https://buy.stripe.com/x" }, oldLinks).card, false, "no Stripe key: no card, links or not");
+  assert.equal(paymentOptions({ payment_methods: "stripe" }, oldLinks, { cardReady: "yes" }).card, false, "only a real true turns it on");
+  assert.equal(paymentOptions({ payment_methods: "zelle" }, {}, { cardReady: true }).card, false, "not ticked, not shown");
+  assert.equal(paymentOptions({ payment_methods: "stripe" }, oldLinks).any, false, "no key and nothing else: the page says Fonkiart will email how to pay");
+});
+
+test("Stripe's return address carries the payment page id", () => {
+  assert.deepEqual(readInvoiceParams(`?invoice=${TOKEN}&card=cs_live_abc123`), { token: TOKEN, shopView: false, card: "cs_live_abc123" });
 });
 
 test("invoice number = FA- + the moment it was made, Florida time, to the millisecond", () => {
@@ -105,17 +111,23 @@ test("the server's invoice number (emails) and the browser's (invoice page) are 
 });
 
 // A tiny stand-in for the database: one Orders table, records every update.
-function fakeOrders(rows) {
+// updateError: make every update fail, like a database that refuses a value.
+function fakeOrders(rows, { updateError = null } = {}) {
   const updates = [];
   const from = () => {
     let payload = null; const filters = [];
     const q = {
       select: () => q, limit: () => q,
       update: (v) => { payload = v; return q; },
-      eq: (k, v) => { filters.push([k, v]); return q; },
+      eq: (k, v) => { filters.push(r => String(r[k]) === String(v)); return q; },
+      in: (k, list) => { filters.push(r => list.includes(r[k])); return q; },
       then: (ok, bad) => Promise.resolve().then(() => {
-        const hit = rows.filter(r => filters.every(([k, v]) => String(r[k]) === String(v)));
-        if (payload) { updates.push(payload); hit.forEach(r => Object.assign(r, payload)); return { data: null, error: null }; }
+        const hit = rows.filter(r => filters.every(f => f(r)));
+        if (payload) {
+          if (updateError) return { data: null, error: { message: updateError } };
+          updates.push(payload); hit.forEach(r => Object.assign(r, payload));
+          return { data: hit.map(r => ({ id: r.id })), error: null };
+        }
         return { data: hit.map(r => ({ ...r })), error: null };
       }).then(ok, bad),
     };
@@ -143,7 +155,9 @@ test("when a client confirms, the shop's email says CONFIRMED BY CUSTOMER and NO
   assert.match(html, /not a payment/);
   assert.match(html, /FA-261117161956080/);
   assert.match(html, /Zelle, Venmo, Cash App/);
-  assert.match(html, /set the order to <strong>Shipped<\/strong>/);
+  assert.match(html, /When \$450 arrives by Zelle or Venmo or Cash App/);
+  assert.match(html, /tap <strong>✓ Mark paid<\/strong>/);
+  assert.doesNotMatch(html, /pay by card/, "card was not offered on this invoice");
   assert.doesNotMatch(html, /<b>Lopez<\/b>/, "the client's name is shown as text, never as HTML");
   assert.doesNotMatch(html, /Invoice Approved/);
 

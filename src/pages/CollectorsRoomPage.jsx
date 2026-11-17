@@ -173,7 +173,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                       <div style={{ fontSize:12, color:CR.muted }}>{new Date(o.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>
                     </div>
                     <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:CR.gold }}>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</div>
-                    <div style={{ fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:o.status==="delivered"?"#2d6a4f":o.status==="shipped"?"#1e5a9c":CR.muted, border:`1px solid currentColor`, padding:"4px 10px" }}>{o.status}</div>
+                    <div style={{ fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:o.status==="delivered"||o.status==="paid"?"#2d6a4f":o.status==="shipped"?"#1e5a9c":CR.muted, border:`1px solid currentColor`, padding:"4px 10px" }}>{o.status}</div>
                   </div>
                 ))}
               </div>

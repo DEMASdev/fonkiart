@@ -219,26 +219,63 @@ export function contactStore({ name, email, message }) {
 // To the shop when a client confirms an invoice (Andy, 2026-11-17: "Invoice confirmed by
 // customer !"). Confirming is NOT paying, and the site never sees money arrive, so the
 // email says so plainly and says what to do once the money is in.
-const PAY_NAMES = { zelle: "Zelle", venmo: "Venmo", cashapp: "Cash App", stripe: "Stripe" };
+const PAY_NAMES = { zelle: "Zelle", venmo: "Venmo", cashapp: "Cash App", stripe: "Card" };
+const clientWho = (order) => order.client_name
+  ? `${e(order.client_name)}${order.client_email ? ` (${link(`mailto:${order.client_email}`, e(order.client_email))})` : ""}`
+  : e(order.client_email || "The customer");
 export function invoiceConfirmedSubject(order) {
   return `Invoice confirmed by customer, NOT paid yet — ${order.item_title} · $${money(order.amount)}`;
 }
 export function invoiceApproved({ order, invNum }) {
   const amount = `$${money(order.amount)}`;
-  const ways = order.payment_methods
-    ? String(order.payment_methods).split(",").map(m => PAY_NAMES[m.trim()]).filter(Boolean)
-    : [];
-  const who = order.client_name
-    ? `${e(order.client_name)}${order.client_email ? ` (${link(`mailto:${order.client_email}`, e(order.client_email))})` : ""}`
-    : e(order.client_email || "The customer");
+  const ticked = order.payment_methods ? String(order.payment_methods).split(",").map(m => m.trim()) : [];
+  const ways = ticked.map(m => PAY_NAMES[m]).filter(Boolean);
+  // The apps the website can't see (Zelle, Venmo, Cash App): the shop marks those Paid by hand.
+  const byHand = ticked.filter(m => m !== "stripe").map(m => PAY_NAMES[m]).filter(Boolean);
+  const card = ticked.includes("stripe");
   return frame("Invoice confirmed by customer",
-    p(`<strong>${who}</strong> confirmed the invoice for <strong>${e(order.item_title)}</strong>.`)
+    p(`<strong>${clientWho(order)}</strong> confirmed the invoice for <strong>${e(order.item_title)}</strong>.`)
     + panel("Not paid yet",
       field("Invoice", e(invNum))
       + field("Amount", amount)
       + (ways.length ? field("Ways to pay shown", e(ways.join(", "))) : ""))
-    + p(`This is <strong>not a payment</strong>. The website can't see money arrive.`)
-    + p(`When ${amount} arrives${ways.length ? ` (${e(ways.join(" or "))})` : ""}, look for "${e(order.item_title)}" or "${e(invNum)}" in the memo. Then ship it and set the order to <strong>Shipped</strong> in Admin → Orders.`)
+    + p(`This is <strong>not a payment</strong>.`)
+    + (byHand.length || !card
+      ? p(`When ${amount} arrives${byHand.length ? ` by ${e(byHand.join(" or "))}` : ""}, look for "${e(order.item_title)}" or "${e(invNum)}" in the memo. Then tap <strong>✓ Mark paid</strong> on the order in Admin → Orders (the client gets a receipt) and ship it.`)
+      : "")
+    + (card ? p(`If they pay by card, the website marks the order Paid by itself and emails you.`) : "")
+    + footnote);
+}
+
+// To the shop when a client pays an invoice by card. Stripe confirmed it to the server,
+// so the website marked the order Paid by itself.
+export function cardPaidSubject(order) {
+  return `Paid by card ✓ — ${order.item_title} · $${money(order.amount)}`;
+}
+export function cardPaidShop({ order, invNum, saved = true }) {
+  const amount = `$${money(order.amount)}`;
+  return frame("Paid by card",
+    p(`<strong>${clientWho(order)}</strong> paid <strong>${amount}</strong> by card for <strong>${e(order.item_title)}</strong>.`)
+    + panel("Paid", field("Invoice", e(invNum)) + field("Amount", amount) + field("Paid with", "Card (Stripe)"))
+    + (saved
+      ? p(`The website already marked the order <strong>Paid</strong>. Ship it, then set it to <strong>Shipped</strong> in Admin → Orders.`)
+      : p(`⚠ The website could not mark the order Paid. Please tap <strong>✓ Mark paid</strong> on it in Admin → Orders, then ship it.`))
+    + small(`The money is in your Stripe account, under Payments.`)
+    + footnote);
+}
+
+// To the client once their card payment is in.
+export function paymentReceivedSubject(order) {
+  return `Payment received — ${order.item_title} · Fonkiart`;
+}
+export function paymentReceived({ order, invNum }) {
+  const first = order.client_name ? String(order.client_name).trim().split(/\s+/)[0] : "there";
+  const amount = `$${money(order.amount)}`;
+  return frame("Payment received",
+    p(`Hi ${e(first)},`)
+    + p(`Thank you! We received your payment of <strong>${amount}</strong> for <strong>${e(order.item_title)}</strong>.`)
+    + panel("Receipt", field("Invoice", e(invNum)) + field("Amount paid", amount) + field("Paid with", "Card"))
+    + p(`We'll let you know as soon as it ships.`)
     + footnote);
 }
 
@@ -278,7 +315,7 @@ export function reminderStore({ requests, orders }) {
   const ordRows = orders.slice(0, MAX_ROWS).map((o, i) => row(
     `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(o.title || "—")}</strong>${o.amount ? ` — $${money(o.amount)}` : ""}</p>`
     + (o.email ? `<p style="margin:0 0 4px;font-size:16px;">${link(`mailto:${o.email}`, e(o.email))}</p>` : "")
-    + note(`${o.status === "confirmed" ? "Confirmed, not sent yet" : "Pending"}${o.days != null ? ` · ordered ${o.days === 0 ? "today" : waited(o.days)}` : ""}`), i)).join("");
+    + note(`${o.status === "paid" ? "Paid, ship it" : o.status === "confirmed" ? "Confirmed, not paid yet" : "Pending"}${o.days != null ? ` · ordered ${o.days === 0 ? "today" : waited(o.days)}` : ""}`), i)).join("");
   return frame("Waiting for you",
     p("Here's what is still waiting at Fonkiart.")
     + (requests.length ? panel(`Messages to answer (${requests.length})`, reqRows + more(requests.length)) : "")
