@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { Menu, Package, LogIn, KeyRound, ShoppingBag, MessageCircle } from "lucide-react";
+import { Menu, Package, LogIn, KeyRound, ShoppingBag, MessageCircle, Receipt } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
 import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
@@ -44,6 +44,9 @@ import BuyerDashboard from "./pages/BuyerDashboard";
 
 import AdminPage from "./admin/AdminPage";
 
+// Pages that only exist while their link (?thread= / ?invoice=) is in the address bar.
+const LINK_PAGES = new Set(["conversation", "invoice"]);
+
 export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
   const [invoiceShopView] = useState(() => readInvoiceParams(window.location.search).shopView);
@@ -62,7 +65,9 @@ export default function App() {
   // The link in our answers (?thread=<token>) opens the conversation INSIDE the full
   // site, with the menu, top bar and footer (Andy, 2026-11-13: "should go to the full
   // site not a chat site").
-  const [page, setPage] = useState(() => (threadToken ? "conversation" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  // The invoice link (?invoice=<token>) does the same (Andy, 2026-11-17: "should go to
+  // the site ... not to some lost page somewhere").
+  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => {
@@ -163,13 +168,13 @@ export default function App() {
     };
     init();
     loadArtworks();
-    if (!threadToken && !sessionStorage.getItem("fonkiart-welcome-seen")) {
+    if (!threadToken && !invoiceToken && !sessionStorage.getItem("fonkiart-welcome-seen")) {
       setTimeout(() => setShowWelcome(true), 1500);
     }
   }, []);
 
-  // Not the conversation: it only exists while its link is in the address bar.
-  useEffect(() => { if (page !== "conversation") localStorage.setItem("fonkiart-page", page); }, [page]);
+  // Not the conversation or the invoice: they only exist while their link is in the address bar.
+  useEffect(() => { if (!LINK_PAGES.has(page)) localStorage.setItem("fonkiart-page", page); }, [page]);
   useEffect(() => { localStorage.setItem("fonkiart-cart", JSON.stringify(cart)); }, [cart]);
   useEffect(() => {
     if (collectorsClient) localStorage.setItem("fonkiart-collectors-client", JSON.stringify(collectorsClient));
@@ -214,16 +219,16 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return;
-    // A signed-in customer opening the conversation link stays on the conversation.
+    // A signed-in customer opening a conversation or invoice link stays on it.
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user || null;
       setUser(u);
-      if (u && pageRef.current !== "conversation") setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      if (u && !LINK_PAGES.has(pageRef.current)) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       const u = session?.user || null;
       setUser(u);
-      if (u && pageRef.current !== "conversation") setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      if (u && !LINK_PAGES.has(pageRef.current)) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -237,7 +242,7 @@ export default function App() {
       partners:"Partners — Fonkiart", contact:"Contact — Fonkiart",
       about:"About Fonkiart", children:"Children Benefit — Fonkiart",
       admin:"Admin — Fonkiart", "buyer-dashboard":"My Account — Fonkiart",
-      conversation:"Your Conversation — Fonkiart",
+      conversation:"Your Conversation — Fonkiart", invoice:"Your Invoice — Fonkiart",
     };
     document.title = titles[page] || "Fonkiart";
   }, [page]);
@@ -271,7 +276,6 @@ export default function App() {
 
   const mergedData = data ? { ...data, items: artworks.length > 0 ? artworks : (data.items || []) } : null;
 
-  if (invoiceToken) return <InvoicePage token={invoiceToken} shopView={invoiceShopView} />;
   if (!mergedData) return <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"#8a8078" }}>Loading Fonkiart…</div>;
 
   if (page === "buyer-dashboard" && user) return <BuyerDashboard user={user} onLogout={async () => { await supabase.auth.signOut(); setUser(null); setPage("home"); }} onBack={() => setPage("home")} />;
@@ -284,6 +288,7 @@ export default function App() {
 
   const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag }
     : page === "conversation" ? { label: "Your Conversation", Icon: MessageCircle }
+    : page === "invoice" ? { label: "Your Invoice", Icon: Receipt }
     : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (
@@ -372,6 +377,7 @@ export default function App() {
         {page === "archive"  && <SoldPage data={mergedData} />}
         {page === "children" && <ChildrenPage setPage={goToPage} />}
         {page === "conversation" && threadToken && <ThreadPage token={threadToken} embedded artworks={mergedData.items} />}
+        {page === "invoice" && invoiceToken && <InvoicePage token={invoiceToken} shopView={invoiceShopView} embedded />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
         <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => setPage("cart")} />

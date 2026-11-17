@@ -5,7 +5,8 @@ import { canApprove, paymentOptions } from "../lib/invoiceView";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
-export default function InvoicePage({ token, shopView = false }) {
+// embedded: shown inside the full site (App.jsx), with its menu, top bar and footer.
+export default function InvoicePage({ token, shopView = false, embedded = false }) {
   const [order, setOrder] = useState(null);
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
@@ -38,7 +39,7 @@ export default function InvoicePage({ token, shopView = false }) {
     finally { setApproving(false); }
   };
 
-  const shell = (content) => <div className="invoice-page">{content}</div>;
+  const shell = (content) => <div className={embedded ? "inv-embed" : "invoice-page"}>{content}</div>;
 
   if (loading) return shell(<p style={{color:"var(--muted)",fontFamily:"'Cormorant Garamond',serif",fontSize:20}}>Loading…</p>);
 
