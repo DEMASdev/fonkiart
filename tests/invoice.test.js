@@ -48,3 +48,11 @@ test("only the ways to pay ticked on the invoice show, and only when they have a
   // Old invoices (no payment_methods saved) show every way that has a value.
   assert.deepEqual(paymentOptions({}, settings), { zelle: "shop@example.com", venmo: "@shop", cashApp: "$shop", stripe: null, any: true });
 });
+
+test("a blank card (Stripe) box on the invoice falls back to the Default Stripe Payment Link in Settings", () => {
+  const settings = { stripeLink: "https://buy.stripe.com/shop-default" };
+  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: "" }, settings).stripe, "https://buy.stripe.com/shop-default");
+  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: null }, settings).any, true, "the customer must see a way to pay");
+  assert.equal(paymentOptions({ payment_methods: "stripe", stripe_link: "https://buy.stripe.com/this-one" }, settings).stripe, "https://buy.stripe.com/this-one", "a pasted link wins");
+  assert.equal(paymentOptions({ payment_methods: "zelle", stripe_link: "" }, settings).stripe, null, "not ticked, not shown");
+});

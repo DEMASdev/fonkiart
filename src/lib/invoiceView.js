@@ -29,6 +29,8 @@ export function canApprove({ approved, shopView }) {
 // EMPTY, with the shop's address only as grey placeholder text, so an invoice sent
 // as-is used to save a blank Zelle address and the customer saw no way to pay at all.
 // A blank box now falls back to the Zelle address in Settings, as the shop checkout does.
+// The card (Stripe) box works the same way: blank falls back to Settings' Default Stripe
+// Payment Link (Andy, 2026-11-17, after creating the Stripe account).
 // payment_methods is null on old invoices: then every way that has a value shows.
 export function paymentOptions(order = {}, settings = {}) {
   const methods = order.payment_methods ? String(order.payment_methods).split(",") : null;
@@ -37,6 +39,6 @@ export function paymentOptions(order = {}, settings = {}) {
   const zelle   = allowed("zelle")   ? (val(order.zelle_contact) || val(settings.zelleContact)) : null;
   const venmo   = allowed("venmo")   ? val(settings.venmoHandle)   : null;
   const cashApp = allowed("cashapp") ? val(settings.cashAppHandle) : null;
-  const stripe  = allowed("stripe")  ? val(order.stripe_link)      : null;
+  const stripe  = allowed("stripe")  ? (val(order.stripe_link) || val(settings.stripeLink)) : null;
   return { zelle, venmo, cashApp, stripe, any: !!(zelle || venmo || cashApp || stripe) };
 }
