@@ -8,6 +8,7 @@ import { InputError } from "./_lib/errors.js";
 import { runQuery, signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
 import { adminReminderNow } from "./_lib/reminders.js";
 import { cardCheck } from "./_lib/stripe.js";
+import { siteUrl } from "./_lib/site.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: { message: "Method not allowed" } });
@@ -37,7 +38,8 @@ export default async function handler(req, res) {
     if (body.kind === "request-reply") return res.status(200).json(await adminReply(db, body, { sender: senderAddress(), send }));
     if (body.kind === "inbound-setup") return res.status(200).json(await adminInboundSetup());
     if (body.kind === "reminder-now") return res.status(200).json(await adminReminderNow(db, { send }));
-    if (body.kind === "card-check") return res.status(200).json(await cardCheck());
+    // deep: "Check again" makes a $0.50 payment page and cancels it at once (see cardCheck).
+    if (body.kind === "card-check") return res.status(200).json(await cardCheck({ deep: body.deep === true, site: siteUrl() }));
     return res.status(400).json({ error: { message: "Unknown request" } });
   } catch (e) {
     if (e instanceof InputError) return res.status(e.status).json({ error: { message: e.message } });

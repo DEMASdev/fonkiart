@@ -3,14 +3,18 @@ import { adminAction } from "../lib/adminDb";
 
 // Admin -> Settings -> Stripe (Andy, 2026-11-17: "why do i need to put a new link ? is it
 // needed ?"). No link to paste any more: when a client taps "Pay by card", the website asks
-// Stripe for a payment page with that invoice's exact amount. This box only shows whether
-// that is working: the server checks the Stripe key with Stripe itself (a read, no charge).
+// Stripe for a payment page with that invoice's exact amount. This box shows whether that
+// works, checked by the server with Stripe itself:
+//  - when it opens: a quick read, which proves Stripe accepts the key;
+//  - "Check again": the full check. A real $0.50 payment page is made and cancelled at once
+//    (nobody can pay it, nothing is charged), which proves the key may make payment pages.
+//    If Stripe says no, its own message is shown: it names what the key is missing.
 export default function CardStatus() {
   const [status, setStatus] = useState(null); // null = checking
-  const [round, setRound] = useState(0);
+  const [round, setRound] = useState(0);      // 0 = the quick check on open; 1+ = "Check again"
   useEffect(() => {
     let live = true;
-    adminAction("card-check")
+    adminAction("card-check", round ? { deep: true } : {})
       .then(r => live && setStatus(r), e => live && setStatus({ ready: false, reason: e.message }));
     return () => { live = false; };
   }, [round]);
@@ -19,10 +23,13 @@ export default function CardStatus() {
   return (
     <div className="card-status">
       {!status ? (
-        <p className="card-status-line">Checking with Stripe…</p>
+        <p className="card-status-line">{round ? "Making a test payment page with Stripe…" : "Checking with Stripe…"}</p>
       ) : status.ready ? (
         <>
           <p className="card-status-line is-on">✓ Card payments are ON{status.live ? "" : " (test mode, no real money)"}</p>
+          <p className="card-status-help">{status.deep
+            ? "Full check passed: Stripe made a $0.50 test payment page and cancelled it at once. Nothing was charged."
+            : "Stripe accepts the key. Tap Check again for the full check: it makes a $0.50 test payment page and cancels it at once."}</p>
           <p className="card-status-help">Each invoice charges its exact amount. Nothing to paste. Tick 💳 Credit Card when you send an invoice.</p>
         </>
       ) : (
@@ -31,7 +38,8 @@ export default function CardStatus() {
           <p className="card-status-help">{status.reason}</p>
         </>
       )}
-      <button type="button" className="btn-s" onClick={again} disabled={!status}>Check again</button>
+      <button type="button" className="btn-s" onClick={again} disabled={!status}
+        title="Makes a $0.50 test payment page with Stripe and cancels it at once. Nothing is charged.">Check again</button>
     </div>
   );
 }

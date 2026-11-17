@@ -8,7 +8,9 @@
 //
 // When the client comes back from paying, the website asks Stripe AGAIN whether that page
 // was really paid, for this invoice and this amount, before it marks the order Paid. Nothing
-// the browser sends is trusted on its own.
+// the browser sends is trusted on its own. Stripe's own "paid" message (the webhook, op
+// "stripe-event" in storeOps.js) is checked the same way, for the client who closes the tab
+// before coming back.
 //
 // Needs STRIPE_SECRET_KEY in Vercel (a restricted key with "Checkout Sessions: Write" is
 // enough). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
@@ -58,15 +60,29 @@ async function stripe(path, body) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// A payment page's id as Stripe makes them. Checked before it goes anywhere near a URL.
+export const isSessionId = (id) => /^cs_(live|test)_[A-Za-z0-9]{10,250}$/.test(String(id || ""));
+
+// Every payment page we make: one item, paid once, in dollars, by CARD ONLY. Cards only, so
+// no slower method (a bank transfer) can come back "not paid yet" when the client returns.
+// Apple Pay and Google Pay still show: Stripe counts them as cards.
+function paymentPage({ cents, name, description, ...rest }) {
+  return {
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name, description } } }],
+    ...rest,
+  };
+}
+
 // The payment page for one invoice. Returns the address to send the client to.
 export async function createCheckout({ order, invNum, site }) {
   const cents = toCents(order.amount);
   if (cents < MIN_CENTS) throw new StripeError("This invoice is too small for a card payment", "too-small");
   const back = `${site}/?invoice=${encodeURIComponent(order.invoice_token)}`;
   const title = String(order.item_title || "Fonkiart artwork").slice(0, 200);
-  const session = await stripe("/checkout/sessions", {
-    mode: "payment",
-    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name: title, description: `Invoice ${invNum}` } } }],
+  const session = await stripe("/checkout/sessions", paymentPage({
+    cents, name: title, description: `Invoice ${invNum}`,
     customer_email: EMAIL_RE.test(order.client_email || "") ? order.client_email : undefined,
     client_reference_id: invNum,
     metadata: { invoice: invNum, invoice_token: order.invoice_token, order_id: order.id },
@@ -75,28 +91,62 @@ export async function createCheckout({ order, invNum, site }) {
     // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the client back.
     success_url: `${back}&card={CHECKOUT_SESSION_ID}`,
     cancel_url: back,
-  });
+  }));
   if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
   return session.url;
 }
 
-// Was this payment page really paid, for this invoice and this exact amount?
-export async function checkoutPaidFor({ sessionId, order }) {
-  if (!/^cs_(live|test)_[A-Za-z0-9]{10,250}$/.test(String(sessionId || ""))) return false;
-  const s = await stripe(`/checkout/sessions/${sessionId}`);
-  return s.payment_status === "paid"
-    && s.metadata?.invoice_token === order.invoice_token
-    && s.amount_total === toCents(order.amount)
-    && String(s.currency).toLowerCase() === "usd";
+// Stripe's own record of a payment page (null for an id that isn't one). Whatever a browser
+// or a webhook says about a page, this is what gets believed.
+export async function getCheckout(sessionId) {
+  return isSessionId(sessionId) ? stripe(`/checkout/sessions/${sessionId}`) : null;
 }
 
-// Admin -> Settings -> Stripe: is the key there, and does Stripe accept it? (A read only.)
-export async function cardCheck() {
+// Does Stripe's record say paid, for this invoice and this exact amount, in dollars?
+export function paidFor(session, order) {
+  return session?.payment_status === "paid"
+    && session.metadata?.invoice_token === order.invoice_token
+    && session.amount_total === toCents(order.amount)
+    && String(session.currency).toLowerCase() === "usd";
+}
+
+// Was this payment page really paid, for this invoice and this exact amount?
+export async function checkoutPaidFor({ sessionId, order }) {
+  return paidFor(await getCheckout(sessionId), order);
+}
+
+// Admin -> Settings -> Stripe: can this key take card payments?
+//  - Quick (when the panel opens): a read. Proves Stripe accepts the key, NOT that it may
+//    make payment pages.
+//  - Deep ("Check again"): makes a real $0.50 payment page, the same kind an invoice makes,
+//    and cancels it at once, so nobody can pay it and nothing is charged. Ready only if
+//    Stripe allows both; if not, Stripe's own message says why (it names a missing permission).
+export async function cardCheck({ deep = false, site } = {}) {
   if (!cardReady()) return { ready: false, reason: "No Stripe key in Vercel yet (STRIPE_SECRET_KEY)." };
-  try {
-    await stripe("/checkout/sessions?limit=1");
-    return { ready: true, live: key().includes("_live_") };
-  } catch (e) {
-    return { ready: false, reason: `Stripe refused the key: ${e.message}` };
+  const live = key().includes("_live_");
+  if (!deep) {
+    try {
+      await stripe("/checkout/sessions?limit=1");
+      return { ready: true, live };
+    } catch (e) {
+      return { ready: false, reason: `Stripe refused the key: ${e.message}` };
+    }
   }
+  let page;
+  try {
+    page = await stripe("/checkout/sessions", paymentPage({
+      cents: MIN_CENTS, name: "Fonkiart card check", description: "Made by Admin's card check and cancelled at once",
+      metadata: { purpose: "card-check" },
+      success_url: `${site}/`,
+    }));
+  } catch (e) {
+    return { ready: false, reason: `Stripe would not make a payment page: ${e.message}` };
+  }
+  if (!isSessionId(page?.id)) return { ready: false, reason: "Stripe sent no payment page." };
+  try {
+    await stripe(`/checkout/sessions/${page.id}/expire`, {});
+  } catch (e) {
+    return { ready: false, reason: `Stripe made the test payment page but would not cancel it: ${e.message}` };
+  }
+  return { ready: true, live, deep: true };
 }

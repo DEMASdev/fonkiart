@@ -4,8 +4,9 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { formBody, toCents, createCheckout, checkoutPaidFor, cardCheck, cardReady } from "../api/_lib/stripe.js";
-import { opCardCheckout, opCardPaid, opInvoice } from "../api/_lib/storeOps.js";
+import { opCardCheckout, opCardPaid, opInvoice, STORE_OPS } from "../api/_lib/storeOps.js";
 import { isPaid, canMarkPaid, ORDER_STATUSES } from "../src/lib/orderStatus.js";
+import storeHandler from "../api/store.js";
 
 const TOKEN = "85d82763-0000-4000-8000-0000000000aa";
 const SESSION = "cs_test_a1B2c3D4e5F6g7H8";
@@ -201,4 +202,189 @@ test("the order steps: Paid sits between Confirmed and Shipped; money is in from
   assert.deepEqual(ORDER_STATUSES.map(([v]) => v), ["pending", "confirmed", "paid", "shipped", "delivered"]);
   assert.deepEqual(["pending", "confirmed", "paid", "shipped", "delivered"].map(isPaid), [false, false, true, true, true]);
   assert.deepEqual([undefined, "pending", "confirmed", "paid", "shipped"].map(canMarkPaid), [true, true, true, false, false]);
+});
+
+test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {
+  fakeStripe(() => ({ json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } }));
+  await createCheckout({ order: order(), invNum: "FA-261117161956080", site: "https://fonkiart.com" });
+  const { body } = calls[0];
+  assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]"]);
+  assert.equal(body.get("payment_method_types[0]"), "card");
+});
+
+// Stripe's own "paid" message (op stripe-event). Stripe is asked about the page every time;
+// the message itself only supplies the page's id.
+const paidPage = (over = {}) => ({ id: SESSION, object: "checkout.session", payment_status: "paid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN }, ...over });
+const stripeEvent = (type = "checkout.session.completed", object = { id: SESSION }) => ({ id: "evt_test_1", object: "event", type, data: { object } });
+const webhook = (db, event, mail) => STORE_OPS["stripe-event"](db, { body: event }, mail);
+
+test("Stripe's message, paid: the order turns Paid, the shop and the client each get one email", async () => {
+  const row = order();
+  const db = fakeDb([row]);
+  const mail = mailbox();
+  fakeStripe(() => ({ json: paidPage() }));
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true });
+  assert.deepEqual(calls.map(c => [c.method, c.url]), [["GET", `https://api.stripe.com/v1/checkout/sessions/${SESSION}`]], "asked Stripe itself");
+  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true }]);
+  assert.equal(row.status, "paid");
+  assert.deepEqual(mail.sent.map(m => m.to).sort(), ["ana@example.com", "shop@fonkiart.com"]);
+  const shop = mail.sent.find(m => m.to === "shop@fonkiart.com");
+  assert.equal(shop.subject, "Paid by card ✓ — Frida the manatee · $450");
+  assert.match(shop.htmlContent, /already marked the order <strong>Paid<\/strong>/);
+  assert.equal(mail.sent.find(m => m.to === "ana@example.com").subject, "Payment received — Frida the manatee · Fonkiart");
+});
+
+test("the same Stripe message twice, one after the other or both at once: the emails go out once", async () => {
+  fakeStripe(() => ({ json: paidPage() }));
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true });
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true }, "a replay still gets a 200, so Stripe stops sending it");
+  assert.equal(db.updates.length, 1);
+  assert.equal(mail.sent.length, 2);
+  const db2 = fakeDb([order()]);
+  const mail2 = mailbox();
+  await Promise.all([1, 2].map(() => webhook(db2, stripeEvent(), mail2)));
+  assert.equal(mail2.sent.length, 2, "one to the shop, one to the client");
+});
+
+test("the client comes back AND Stripe's message arrives: the emails go out once, whichever is first", async () => {
+  fakeStripe(() => ({ json: paidPage() }));
+  const back = { token: TOKEN, session: SESSION };
+  let db = fakeDb([order()]); let mail = mailbox();
+  assert.deepEqual(await opCardPaid(db, back, mail), { paid: true });
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true });
+  assert.equal(mail.sent.length, 2, "client first, then Stripe");
+  db = fakeDb([order()]); mail = mailbox();
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true });
+  assert.deepEqual(await opCardPaid(db, back, mail), { paid: true });
+  assert.equal(mail.sent.length, 2, "Stripe first, then the client");
+  db = fakeDb([order()]); mail = mailbox();
+  await Promise.all([opCardPaid(db, back, mail), webhook(db, stripeEvent(), mail)]);
+  assert.equal(mail.sent.length, 2, "both at the same moment");
+});
+
+test("Stripe's other messages get a 200 and are ignored, without asking Stripe or touching the order", async () => {
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  fakeStripe(() => ({ json: paidPage() }));
+  for (const type of ["payment_intent.succeeded", "checkout.session.expired", "charge.refunded"]) {
+    assert.deepEqual(await webhook(db, stripeEvent(type), mail), { received: true, ignored: type });
+  }
+  assert.deepEqual(await webhook(db, {}, mail), { received: true, ignored: "no type" });
+  assert.equal(calls.length, 0);
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+});
+
+test("the address Andy gives Stripe: a POST to /api/store?op=stripe-event gets in and is answered 200", async () => {
+  const env = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FAKEKEYFORTESTS" };
+  const before = Object.fromEntries(Object.keys(env).map(k => [k, process.env[k]]));
+  Object.assign(process.env, env);
+  try {
+    const res = () => { const r = { code: null, body: null, status(c) { r.code = c; return r; }, json(b) { r.body = b; return r; } }; return r; };
+    const a = res();
+    await storeHandler({ method: "POST", query: { op: "stripe-event" }, headers: {}, body: stripeEvent("payment_intent.succeeded") }, a);
+    assert.equal(a.code, 200);
+    assert.deepEqual(a.body, { received: true, ignored: "payment_intent.succeeded" });
+    const b = res();
+    await storeHandler({ method: "GET", query: { op: "stripe-event" }, headers: {} }, b);
+    assert.equal(b.code, 405, "Stripe always POSTs; a GET is refused");
+  } finally {
+    for (const [k, v] of Object.entries(before)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+test("a message whose id isn't a payment page's is ignored, and that id never reaches Stripe", async () => {
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  fakeStripe(() => ({ json: paidPage() }));
+  for (const object of [{ id: "cs_live_x/../../v1/charges" }, { id: "pi_3Abc1234567890" }, { id: 12345 }, {}, null]) {
+    assert.deepEqual(await webhook(db, stripeEvent("checkout.session.completed", object), mail), { received: true, ignored: "not a payment page id" });
+  }
+  assert.equal(calls.length, 0);
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+});
+
+test("Stripe says the page is not paid (or not this amount): nothing changes, even when the message claims it is paid", async () => {
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  const claims = stripeEvent("checkout.session.completed", paidPage());
+  for (const stripeSays of [paidPage({ payment_status: "unpaid" }), paidPage({ amount_total: 100 }), paidPage({ currency: "eur" })]) {
+    fakeStripe(() => ({ json: stripeSays }));
+    assert.deepEqual(await webhook(db, claims, mail), { received: true, ignored: "not paid" });
+  }
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+});
+
+test("a paid page for no order the shop has: 200 and nothing, and the order is found from Stripe's answer, not the message", async () => {
+  const row = order();
+  const db = fakeDb([row]);
+  const mail = mailbox();
+  const claimsOurs = stripeEvent("checkout.session.completed", paidPage());
+  for (const stripeSays of [
+    paidPage({ metadata: { invoice_token: "00000000-dead-4000-8000-000000000000" } }), // another invoice
+    paidPage({ metadata: {} }),                                                     // e.g. an old Payment Link
+    paidPage({ metadata: { invoice_token: "../../x" } }),
+  ]) {
+    fakeStripe(() => ({ json: stripeSays }));
+    assert.deepEqual(await webhook(db, claimsOurs, mail), { received: true, ignored: "unknown order" });
+  }
+  assert.equal(row.status, "confirmed");
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+});
+
+test("the database fails on Stripe's message: 500 and no email, so Stripe sends it again; the retry then works, once", async () => {
+  const rows = [order()];
+  const mail = mailbox();
+  fakeStripe(() => ({ json: paidPage() }));
+  await assert.rejects(webhook(fakeDb(rows, { updateError: "connection reset" }), stripeEvent(), mail), e => e.status === 500);
+  assert.equal(mail.sent.length, 0, "no email, not even the 'mark it by hand' one");
+  assert.equal(rows[0].status, "confirmed");
+  // Stripe itself not answering is not a 200 either.
+  fakeStripe(() => ({ status: 500, json: { error: { message: "Stripe is having a moment" } } }));
+  await assert.rejects(webhook(fakeDb(rows), stripeEvent(), mail), e => e.status === 502);
+  assert.equal(mail.sent.length, 0);
+  // Stripe sends it again later, and the database is back.
+  fakeStripe(() => ({ json: paidPage() }));
+  assert.deepEqual(await webhook(fakeDb(rows), stripeEvent(), mail), { received: true, paid: true });
+  assert.equal(rows[0].status, "paid");
+  assert.equal(mail.sent.length, 2);
+  assert.match(mail.sent.find(m => m.to === "shop@fonkiart.com").htmlContent, /already marked the order <strong>Paid<\/strong>/);
+});
+
+test("Admin's full card check ('Check again'): makes a $0.50 payment page and cancels it at once; ready only if Stripe allows both", async () => {
+  const site = "https://fonkiart.com";
+  fakeStripe((url) => url.endsWith("/expire") ? { json: { id: SESSION, status: "expired" } } : { json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } });
+  assert.deepEqual(await cardCheck({ deep: true, site }), { ready: true, live: false, deep: true });
+  assert.deepEqual(calls.map(c => [c.method, c.url]), [
+    ["POST", "https://api.stripe.com/v1/checkout/sessions"],
+    ["POST", `https://api.stripe.com/v1/checkout/sessions/${SESSION}/expire`],
+  ]);
+  const made = calls[0].body;
+  assert.equal(made.get("line_items[0][price_data][unit_amount]"), "50");
+  assert.equal(made.get("line_items[0][price_data][currency]"), "usd");
+  assert.equal(made.get("line_items[0][price_data][product_data][name]"), "Fonkiart card check");
+  assert.equal(made.get("payment_method_types[0]"), "card", "the same kind of page an invoice makes");
+
+  // A key that may only read: Stripe's own message (it names the missing permission) is shown.
+  fakeStripe(() => ({ status: 403, json: { error: { code: "permission_error", message: "The provided key 'rk_test_*****ESTS' does not have the required permissions for this endpoint. Having the 'rak_checkout_session_write' permission would allow this request to continue." } } }));
+  const refused = await cardCheck({ deep: true, site });
+  assert.equal(refused.ready, false);
+  assert.match(refused.reason, /^Stripe would not make a payment page: .*rak_checkout_session_write/);
+  assert.equal(calls.length, 1, "nothing was made, so nothing to cancel");
+
+  // Made, but Stripe won't cancel it: not ready either, with Stripe's reason.
+  fakeStripe((url) => url.endsWith("/expire") ? { status: 400, json: { error: { message: "Only Checkout Sessions with a status of open can be expired." } } } : { json: { id: SESSION } });
+  const stuck = await cardCheck({ deep: true, site });
+  assert.equal(stuck.ready, false);
+  assert.match(stuck.reason, /would not cancel it: Only Checkout Sessions/);
+
+  // The quick check when the panel opens stays a read: one GET, nothing made.
+  fakeStripe(() => ({ json: { data: [] } }));
+  assert.deepEqual(await cardCheck(), { ready: true, live: false });
+  assert.deepEqual(calls.map(c => c.method), ["GET"]);
 });

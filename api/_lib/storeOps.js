@@ -8,7 +8,7 @@ import { siteUrl } from "./site.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, createCheckout, checkoutPaidFor, StripeError } from "./stripe.js";
+import { cardReady, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -234,6 +234,27 @@ export async function opCardCheckout(db, body) {
   }
 }
 
+// Stripe says this invoice is paid: mark the order Paid, then email the shop and the client.
+// The update only matches an order that is still Pending or Confirmed, so whoever gets there
+// first (the client coming back, Stripe's webhook, a second tab, a replay) sends the two
+// emails, and everyone after them sends none.
+// If the database refuses the change:
+//  - via "redirect" (the client coming back): email anyway, telling the shop to mark it by hand;
+//  - via "webhook" (Stripe's message): email nobody and answer 500, so Stripe sends it again later.
+async function markCardPaid(db, order, mail, via) {
+  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true })
+    .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
+  if (error) {
+    console.error(`store card-paid (${via}): could not mark the order Paid:`, error.message);
+    if (via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
+  } else if (!flipped?.length) return; // someone else got there first, and sent the emails
+  const invNum = invoiceNumber(order);
+  await Promise.allSettled([
+    mail.send({ to: mail.sender, subject: T.cardPaidSubject(order), htmlContent: T.cardPaidShop({ order, invNum, saved: !error }) }),
+    mail.send({ to: order.client_email, subject: T.paymentReceivedSubject(order), htmlContent: T.paymentReceived({ order, invNum }) }),
+  ]);
+}
+
 // The client is back from Stripe. Ask Stripe if that page was really paid, for this invoice
 // and amount; only then mark the order Paid and email the shop and the client, once.
 export async function opCardPaid(db, body, mail) {
@@ -249,17 +270,47 @@ export async function opCardPaid(db, body, mail) {
     throw new InputError("Couldn't check the card payment right now", 502);
   }
   if (!paid) return { paid: false };
-  // Only the first caller flips it (a reload can't send the emails twice).
-  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true })
-    .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
-  if (error) console.error("store card-paid: could not mark the order Paid:", error.message);
-  if (!error && !flipped?.length) return { paid: true };
-  const invNum = invoiceNumber(order);
-  await Promise.allSettled([
-    mail.send({ to: mail.sender, subject: T.cardPaidSubject(order), htmlContent: T.cardPaidShop({ order, invNum, saved: !error }) }),
-    mail.send({ to: order.client_email, subject: T.paymentReceivedSubject(order), htmlContent: T.paymentReceived({ order, invNum }) }),
-  ]);
+  await markCardPaid(db, order, mail, "redirect");
   return { paid: true };
+}
+
+// Stripe's own "paid" message (a webhook), for the client who pays and closes the tab before
+// coming back. Set up in Stripe -> Developers -> Webhooks: endpoint
+// POST https://fonkiart.com/api/store?op=stripe-event, event checkout.session.completed.
+//
+// No signature check, on purpose: nothing in the message is believed. Only the payment page's
+// id is taken from it; the website then asks Stripe about that page with its own key, and
+// finds the order from STRIPE's answer, exactly like the client coming back. So a forged or
+// replayed message can only make the website learn what Stripe itself says, and the order
+// turns Paid (and the emails go out) once.
+//
+// What we answer matters to Stripe: 200 means done (also for anything we choose to ignore);
+// anything else means "try again later", which Stripe does for up to 3 days.
+export async function opStripeEvent(db, event, mail) {
+  const type = typeof event.type === "string" ? event.type.slice(0, 100) : "no type";
+  if (type !== "checkout.session.completed") return { received: true, ignored: type };
+  const sessionId = event.data?.object?.id;
+  if (!isSessionId(sessionId)) return { received: true, ignored: "not a payment page id" };
+  let session;
+  try {
+    session = await getCheckout(sessionId);
+  } catch (e) {
+    if (!(e instanceof StripeError)) throw e;
+    console.error("store stripe-event:", e.code, e.message);
+    throw new InputError("Couldn't check the payment with Stripe right now", 502);
+  }
+  let order;
+  try {
+    order = await findInvoice(db, invoiceToken(session?.metadata?.invoice_token));
+  } catch (e) {
+    if (!(e instanceof InputError)) throw e; // the database failed: 500, Stripe retries
+    console.warn("store stripe-event: no invoice for payment page", sessionId);
+    return { received: true, ignored: "unknown order" };
+  }
+  if (PAID_STATUSES.includes(order.status)) return { received: true, paid: true };
+  if (!paidFor(session, order)) return { received: true, ignored: "not paid" };
+  await markCardPaid(db, order, mail, "webhook");
+  return { received: true, paid: true };
 }
 
 export async function opInvoiceApprove(db, body, mail) {
@@ -332,6 +383,7 @@ export const STORE_OPS = {
   "invoice-approve": (db, req, mail) => opInvoiceApprove(db, req.body || {}, mail),
   "card-checkout": (db, req) => opCardCheckout(db, req.body || {}),
   "card-paid": (db, req, mail) => opCardPaid(db, req.body || {}, mail),
+  "stripe-event": (db, req, mail) => opStripeEvent(db, req.body || {}, mail),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),
