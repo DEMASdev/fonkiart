@@ -31,13 +31,18 @@ export default function DashboardTab({ goToTab, goToSettings }) {
       const confirmed = orders.filter(o => o.status === "confirmed").length;
       const shipped   = orders.filter(o => o.status === "shipped").length;
       const delivered = orders.filter(o => o.status === "delivered").length;
-      const paidStatuses = ["confirmed","shipped","delivered"];
-      const revenue   = orders.filter(o => paidStatuses.includes(o.status)).reduce((sum, o) => sum + Number(o.amount || 0), 0);
+      // Money is only counted once the order is shipped or delivered (Aliana ships after the
+      // money arrives). "Confirmed" means the client approved the invoice: NOT paid yet, so it
+      // shows apart as "Waiting for payment" (Andy, 2026-11-17: "that doesn't make sense").
+      const sum = (list) => list.reduce((total, o) => total + Number(o.amount || 0), 0);
+      const paid = orders.filter(o => o.status === "shipped" || o.status === "delivered");
+      const revenue   = sum(paid);
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-      const monthRevenue = orders.filter(o => paidStatuses.includes(o.status) && o.created_at >= monthStart).reduce((sum, o) => sum + Number(o.amount || 0), 0);
+      const monthRevenue = sum(paid.filter(o => o.created_at >= monthStart));
+      const awaiting  = sum(orders.filter(o => o.status === "confirmed"));
       const newRequests = (requestsRes.data || []).filter(r => r.status === "new").length;
       const collectorRequests = collectorsRes.data || [];
-      setStats({ leads:leadsRes.count||0, orders:orders.length, clients:clientsRes.count||0, pending, confirmed, shipped, delivered, revenue, monthRevenue, newRequests, collectorRequests });
+      setStats({ leads:leadsRes.count||0, orders:orders.length, clients:clientsRes.count||0, pending, confirmed, shipped, delivered, revenue, monthRevenue, awaiting, newRequests, collectorRequests });
     }).catch(e => { console.error("Dashboard load:", e); setLoadErr(true); });
   }, [tick]);
 
@@ -65,8 +70,9 @@ export default function DashboardTab({ goToTab, goToSettings }) {
         </div>
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:2, marginBottom:2 }}>
-        <Stat label="Revenue (All Time)" value={`$${stats.revenue.toLocaleString()}`} sub="Confirmed + shipped + delivered" color="var(--gold)" />
-        <Stat label="Revenue (This Month)" value={`$${stats.monthRevenue.toLocaleString()}`} sub={new Date().toLocaleString("default",{month:"long",year:"numeric"})} color="#a07a3a" />
+        <Stat label="Revenue (All Time)" value={`$${stats.revenue.toLocaleString()}`} sub="Shipped + delivered" color="var(--gold)" />
+        <Stat label="Revenue (This Month)" value={`$${stats.monthRevenue.toLocaleString()}`} sub={`Shipped + delivered · ${new Date().toLocaleString("default",{month:"long",year:"numeric"})}`} color="#a07a3a" />
+        <Stat label="Waiting for Payment" value={`$${stats.awaiting.toLocaleString()}`} sub={`${stats.confirmed} client-approved, not paid yet`} color="#b5651d" />
         <Stat label="Total Orders" value={stats.orders} sub={`${stats.pending} pending · ${stats.confirmed} confirmed`} color="#1e3a52" />
         <Stat label="Clients" value={stats.clients} color="#2d6a4f" />
         <Stat label="Leads" value={stats.leads} sub="Email subscribers" color="#7a4f00" />
