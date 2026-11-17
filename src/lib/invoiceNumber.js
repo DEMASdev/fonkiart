@@ -1,9 +1,10 @@
 // Invoice numbers (Andy, 2026-11-17): "i don't want invoices having low numbers 11, 12,13 ,
-// they should be FAinv-yymmddttmmss", then "add miliseconds".
+// they should be FAinv-yymmddttmmss", then "add miliseconds", then "remove the inv from
+// the invoice name": FA- + the moment.
 //
 // The number is the moment the invoice was made (the order's created_at, which the
 // database sets when the invoice is saved), in Florida time, to the millisecond:
-//   2026-11-17 4:12:46.123 PM Florida  ->  FAinv-261117161246123
+//   2026-11-17 4:12:46.123 PM Florida  ->  FA-261117161246123
 // Nothing new is stored, so every invoice, old or new, has one, and the email, the
 // invoice page, the admin list and the memo line all show the same number.
 // Two invoices would need to be saved in the same millisecond to share one.
@@ -25,8 +26,8 @@ function toDate(value) {
 
 export function invoiceNumber(order = {}) {
   const d = toDate(order.created_at);
-  if (!d) return `INV-${String(order.id ?? "").replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+  if (!d) return `FA-${String(order.id ?? "").replace(/-/g, "").slice(0, 6).toUpperCase()}`;
   const p = Object.fromEntries(parts.formatToParts(d).map(x => [x.type, x.value]));
   const ms = String(d.getUTCMilliseconds()).padStart(3, "0");
-  return `FAinv-${p.year}${p.month}${p.day}${p.hour}${p.minute}${p.second}${ms}`;
+  return `FA-${p.year}${p.month}${p.day}${p.hour}${p.minute}${p.second}${ms}`;
 }

@@ -3,6 +3,7 @@ import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { canApprove, paymentOptions, findArtwork } from "../lib/invoiceView";
 import Pic from "../components/Pic";
+import CopyButton from "../components/CopyButton";
 import { invoiceNumber } from "../lib/invoiceNumber";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
@@ -57,6 +58,25 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
   const art     = findArtwork(artworks, order.item_title);
+  const clientRow = order.client_name && (
+    <div className="invoice-row">
+      <span className="invoice-label">Client</span>
+      <span className="invoice-value">{order.client_name}</span>
+    </div>
+  );
+  // Beside the picture the notes stack under their label; without one, label left, notes right.
+  const notesRow = (side) => order.notes && (
+    <div className="invoice-row" style={{alignItems:"flex-start"}}>
+      <span className="invoice-label">Notes</span>
+      <span className="invoice-value" style={{fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",...(side ? {} : {maxWidth:"60%",textAlign:"right"})}}>{order.notes}</span>
+    </div>
+  );
+  const itemRow = (
+    <div className="invoice-row">
+      <span className="invoice-label">Artwork / Item</span>
+      <span className="invoice-value">{order.item_title}</span>
+    </div>
+  );
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
@@ -75,7 +95,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:16,borderBottom:"1px solid var(--border)"}}>
         <div>
           <div style={{fontSize:11,letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:3}}>Invoice</div>
-          <div style={{fontFamily:"monospace",fontSize:"clamp(13px,3.6vw,16px)",fontWeight:600,color:"var(--ink)",letterSpacing:".04em",whiteSpace:"nowrap"}}>{invNum}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontFamily:"monospace",fontSize:"clamp(13px,3.6vw,16px)",fontWeight:600,color:"var(--ink)",letterSpacing:".04em",whiteSpace:"nowrap"}}>{invNum}<CopyButton text={invNum} /></div>
         </div>
         <div style={{textAlign:"right"}}>
           {invDate && <div style={{fontSize:12,color:"var(--muted)"}}>Date: {invDate}</div>}
@@ -87,28 +107,16 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
 
       <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart. Please review the details and click <em>Confirm order</em> when you're ready.</p>
 
-      {art && (
-        <figure className="inv-art">
-          <Pic src={art.image} w={320} alt={art.title} />
-        </figure>
-      )}
-
-      {order.client_name && (
-        <div className="invoice-row">
-          <span className="invoice-label">Client</span>
-          <span className="invoice-value">{order.client_name}</span>
+      {/* With a picture, Client and Artwork sit beside it (Andy, 2026-11-17: "compact it
+          more, use the space next to the picture"). Without one, the plain rows. */}
+      {art ? (
+        <div className="inv-art-row">
+          <figure className="inv-art">
+            <Pic src={art.image} w={320} alt={art.title} />
+          </figure>
+          <div className="inv-art-info">{clientRow}{itemRow}{notesRow(true)}</div>
         </div>
-      )}
-      <div className="invoice-row">
-        <span className="invoice-label">Artwork / Item</span>
-        <span className="invoice-value">{order.item_title}</span>
-      </div>
-      {order.notes && (
-        <div className="invoice-row" style={{alignItems:"flex-start"}}>
-          <span className="invoice-label">Notes</span>
-          <span className="invoice-value" style={{fontSize:13,maxWidth:"60%",textAlign:"right",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{order.notes}</span>
-        </div>
-      )}
+      ) : (<>{clientRow}{itemRow}{notesRow(false)}</>)}
       <div className="invoice-total">
         <span className="invoice-label">Total Due</span>
         <span className="invoice-value">${Number(order.amount).toLocaleString()}</span>
@@ -134,7 +142,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Zelle</div>
                   </div>
                   <div className="invoice-pay-value">{payZelle}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the memo.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the memo.</p>
                 </div>
               )}
 
@@ -146,7 +154,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Venmo</div>
                   </div>
                   <div className="invoice-pay-value">{payVenmo}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the note.</p>
                 </div>
               )}
 
@@ -158,7 +166,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                     <div className="invoice-pay-title">Cash App</div>
                   </div>
                   <div className="invoice-pay-value">{payCashApp}</div>
-                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or "{invNum}" in the note.</p>
+                  <p style={{fontSize:12,color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}" <CopyButton text={invNum} size={12} /></span> in the note.</p>
                 </div>
               )}
 

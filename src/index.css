@@ -790,3 +790,9 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
   .cart-page-return { min-height:44px;padding-right:12px; }
   .cart-page-item-remove { width:44px;height:44px; }
 }
+
+/* The copy button beside an invoice number (src/components/CopyButton.jsx). */
+.copy-btn { display:inline-flex;align-items:center;justify-content:center;gap:4px;vertical-align:middle;min-width:28px;min-height:28px;padding:4px 6px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:.06em;line-height:1; }
+.copy-btn:hover, .copy-btn:focus-visible { color:var(--ink);border-color:var(--gold); }
+.copy-btn.is-copied { color:#2d6a4f;border-color:#a3d4b3;background:#e8f5ee; }
+p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }

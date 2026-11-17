@@ -58,23 +58,23 @@ test("a blank card (Stripe) box on the invoice falls back to the Default Stripe 
   assert.equal(paymentOptions({ payment_methods: "zelle", stripe_link: "" }, settings).stripe, null, "not ticked, not shown");
 });
 
-test("invoice number = FAinv- + the moment it was made, Florida time, to the millisecond", () => {
+test("invoice number = FA- + the moment it was made, Florida time, to the millisecond", () => {
   // What Supabase sends (microseconds, UTC). 21:12 UTC in November = 4:12 PM in Florida.
-  assert.equal(invoiceNumber({ id: 12, created_at: "2026-11-17T21:12:46.123456+00:00" }), "FAinv-261117161246123");
+  assert.equal(invoiceNumber({ id: 12, created_at: "2026-11-17T21:12:46.123456+00:00" }), "FA-261117161246123");
   // Summer: Florida is UTC-4, not UTC-5.
-  assert.equal(invoiceNumber({ id: 3, created_at: "2026-07-04T16:00:00.007Z" }), "FAinv-260704120000007");
+  assert.equal(invoiceNumber({ id: 3, created_at: "2026-07-04T16:00:00.007Z" }), "FA-260704120000007");
   // Late evening in Florida is already the next day in UTC: the date must be Florida's.
-  assert.equal(invoiceNumber({ id: 4, created_at: "2026-11-18T03:30:00.5+00:00" }), "FAinv-261117223000500");
+  assert.equal(invoiceNumber({ id: 4, created_at: "2026-11-18T03:30:00.5+00:00" }), "FA-261117223000500");
   // Midnight is 00, never 24.
-  assert.equal(invoiceNumber({ id: 5, created_at: "2026-11-18T05:00:00Z" }), "FAinv-261118000000000");
+  assert.equal(invoiceNumber({ id: 5, created_at: "2026-11-18T05:00:00Z" }), "FA-261118000000000");
 });
 
-test("two invoices a millisecond apart get different numbers; no time falls back to the old INV number", () => {
+test("two invoices a millisecond apart get different numbers; no time falls back to FA- + the order id", () => {
   const a = invoiceNumber({ created_at: "2026-11-17T21:12:46.123Z" });
   const b = invoiceNumber({ created_at: "2026-11-17T21:12:46.124Z" });
   assert.notEqual(a, b);
-  assert.equal(invoiceNumber({ id: 12 }), "INV-12");
-  assert.equal(invoiceNumber({ id: 12, created_at: "not a date" }), "INV-12");
+  assert.equal(invoiceNumber({ id: 12 }), "FA-12");
+  assert.equal(invoiceNumber({ id: 12, created_at: "not a date" }), "FA-12");
 });
 
 test("the invoice shows the artwork it is for, found by its title, and never a wrong one", () => {

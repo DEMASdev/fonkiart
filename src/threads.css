@@ -57,8 +57,13 @@
 @media(max-width:600px){ .inv-embed { padding:16px 12px 48px; } .inv-embed .invoice-card { padding:24px 16px; } }
 /* The artwork the invoice is for: small and to the left, the same size as in the
    emails (156px wide). Andy, 2026-11-17: "just keep it small like in the email". */
-.inv-art { margin:0 0 20px; }
+.inv-art-row { display:flex;gap:18px;align-items:flex-start; }
+.inv-art { margin:0 0 12px;flex:0 0 auto; }
 .inv-art img { display:block;width:auto;height:auto;max-width:156px;max-height:200px;border:0; }
+.inv-art-info { flex:1;min-width:0; }
+.inv-art-info .invoice-row { flex-direction:column;align-items:flex-start;gap:3px;padding:0 0 10px;margin-bottom:10px; }
+.inv-art-info .invoice-value { overflow-wrap:anywhere; }
+@media(max-width:600px){ .inv-art-row { gap:14px; } .inv-art img { max-width:130px;max-height:170px; } }
 /* The conversation inside the full site (?thread= link): centred under the page header. */
 .rq-embed { display:flex;justify-content:center;padding:8px 20px 64px; }
 @media(max-width:600px){ .rq-embed { padding:4px 12px 48px; } }
