@@ -296,6 +296,14 @@ export async function opStripeEvent(db, event, mail) {
     session = await getCheckout(sessionId);
   } catch (e) {
     if (!(e instanceof StripeError)) throw e;
+    // Stripe has no such payment page (e.g. Stripe's own "send test event", whose ids are made
+    // up). It will never exist, so asking again can't help: 200, or Stripe would retry for days
+    // and email failure alarms. Anything else (Stripe down, too many requests, Stripe out of
+    // reach) is "not right now": 502, and Stripe sends the message again later.
+    if (e.code === "resource_missing") {
+      console.warn("store stripe-event: Stripe has no payment page", sessionId);
+      return { received: true, ignored: "no such payment page" };
+    }
     console.error("store stripe-event:", e.code, e.message);
     throw new InputError("Couldn't check the payment with Stripe right now", 502);
   }

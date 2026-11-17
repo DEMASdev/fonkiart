@@ -44,7 +44,7 @@ export function formBody(obj, prefix = "", out = new URLSearchParams()) {
 
 async function stripe(path, body) {
   if (!cardReady()) throw new StripeError("Card payments are not set up yet", "no-key");
-  const res = await fetch(`${API}${path}`, {
+  const request = {
     method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${key()}`,
@@ -52,7 +52,14 @@ async function stripe(path, body) {
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
     body: body ? formBody(body).toString() : undefined,
-  });
+  };
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, request);
+  } catch (e) {
+    // No answer at all (network, DNS): a Stripe failure "for now", like Stripe being down.
+    throw new StripeError(`Could not reach Stripe: ${e?.message || e}`, "network");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new StripeError(data?.error?.message || `Stripe answered ${res.status}`, data?.error?.code || `http-${res.status}`);
   return data;

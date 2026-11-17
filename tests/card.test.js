@@ -356,6 +356,54 @@ test("the database fails on Stripe's message: 500 and no email, so Stripe sends 
   assert.match(mail.sent.find(m => m.to === "shop@fonkiart.com").htmlContent, /already marked the order <strong>Paid<\/strong>/);
 });
 
+// The real address, called the way Stripe calls it: what Stripe acts on is the HTTP status.
+async function postToStore(event) {
+  const env = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "sb_secret_FAKEKEYFORTESTS" };
+  const before = Object.fromEntries(Object.keys(env).map(k => [k, process.env[k]]));
+  Object.assign(process.env, env);
+  try {
+    const r = { code: null, body: null, status(c) { r.code = c; return r; }, json(b) { r.body = b; return r; } };
+    await storeHandler({ method: "POST", query: { op: "stripe-event" }, headers: {}, body: event }, r);
+    return { code: r.code, body: r.body };
+  } finally {
+    for (const [k, v] of Object.entries(before)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+}
+
+// Stripe's answer about a payment page it never had, e.g. one in its own "send test event".
+const noSuchPage = { status: 404, json: { error: { type: "invalid_request_error", code: "resource_missing", param: "session", message: `No such checkout.session: '${SESSION}'` } } };
+
+test("Stripe has no such payment page (e.g. its own test event): 200 and nothing, so Stripe stops sending it", async () => {
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  fakeStripe(() => noSuchPage);
+  assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, ignored: "no such payment page" });
+  assert.deepEqual(calls.map(c => [c.method, c.url]), [["GET", `https://api.stripe.com/v1/checkout/sessions/${SESSION}`]], "asked Stripe once");
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+  assert.deepEqual(await postToStore(stripeEvent()), { code: 200, body: { received: true, ignored: "no such payment page" } });
+});
+
+test("Stripe down, busy or out of reach: still 502 and nothing, so Stripe sends the message again later", async () => {
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  for (const [label, answer] of [
+    ["Stripe's own error", { status: 500, json: { error: { type: "api_error", message: "An unknown error occurred" } } }],
+    ["Stripe unavailable, no answer", { status: 503, json: undefined }],
+    ["too many requests", { status: 429, json: { error: { type: "invalid_request_error", code: "rate_limit", message: "Too many requests" } } }],
+    ["a 404 that is not Stripe saying 'no such page'", { status: 404, json: undefined }],
+  ]) {
+    fakeStripe(() => answer);
+    await assert.rejects(webhook(db, stripeEvent(), mail), e => e.status === 502, label);
+  }
+  globalThis.fetch = async () => { throw new TypeError("fetch failed"); }; // no answer at all
+  await assert.rejects(webhook(db, stripeEvent(), mail), e => e.status === 502, "network down");
+  assert.equal(db.updates.length, 0);
+  assert.equal(mail.sent.length, 0);
+  fakeStripe(() => ({ status: 503, json: undefined }));
+  assert.deepEqual(await postToStore(stripeEvent()), { code: 502, body: { error: "Couldn't check the payment with Stripe right now" } });
+});
+
 test("Admin's full card check ('Check again'): makes a $0.50 payment page and cancels it at once; ready only if Stripe allows both", async () => {
   const site = "https://fonkiart.com";
   fakeStripe((url) => url.endsWith("/expire") ? { json: { id: SESSION, status: "expired" } } : { json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } });
