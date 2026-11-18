@@ -11,7 +11,8 @@
 //    coupon, both "order received" emails), with the server's prices, and Stripe makes a payment
 //    page for exactly those rows. The card form opens INSIDE fonkiart.com when the account's
 //    publishable key is set (stripe.js publishableKey) and the browser has Stripe.js ready;
-//    otherwise the buyer goes to Stripe's own page in the same tab.
+//    otherwise the buyer goes to Stripe's own page in the same tab. Either way Stripe brings the
+//    buyer back to the shop address they paid from (returnSite).
 // 2. "cart-paid": the buyer is back on fonkiart.com (?cart=FA-...&card=cs_...). The server asks
 //    Stripe about that page itself: paid, for this reference, for the rows' exact cents, in
 //    dollars. Only then do the rows turn Paid by card and the pieces SOLD, and ONE "Payment
@@ -53,6 +54,13 @@ const stripeLater = (op, e) => {
   return new InputError("The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.", 502);
 };
 
+// Where Stripe brings the buyer back: the shop address they are paying from (the checkout sends
+// it). The cart and the saved order live in that browser's own storage, and fonkiart.com and
+// www.fonkiart.com both serve the shop without sharing it, so coming back to the other one would
+// show an empty cart. Only the shop's own addresses; anything else gets the usual one (site.js).
+const SHOP_SITES = ["https://fonkiart.com", "https://www.fonkiart.com"];
+export const returnSite = (site) => (SHOP_SITES.includes(site) || site === siteUrl() ? site : siteUrl());
+
 // What the buyer sees of a Cart order: its pieces and amounts as the rows hold them, the total,
 // and the first name it was saved with.
 const cartView = (ref, rows) => ({
@@ -93,7 +101,7 @@ export async function opCartCard(db, body, mail, saveOrder) {
   const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total };
   let page;
   try {
-    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: siteUrl(), embedded: !!key });
+    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: returnSite(body.site), embedded: !!key });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
     // The order is saved and both "order received" emails are out. Not an error for the
@@ -259,7 +267,7 @@ export async function opCartAgain(db, body, mail) {
   const lines = rows.map((r, n) => ({ title: r.item_title, amount: Number(r.amount), image: arts[n] ? cardImage(arts[n].image) : null }));
   let page;
   try {
-    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email, site: siteUrl(), embedded: !!key });
+    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email, site: returnSite(body.site), embedded: !!key });
   } catch (e) {
     throw stripeLater("cart-again", e);
   }

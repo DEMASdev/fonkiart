@@ -319,6 +319,35 @@ test("until the key exists (or Stripe.js isn't there, or the key is the wrong mo
   assert.ok(logs.some(l => /STRIPE_PUBLISHABLE_KEY is a live key/.test(l)), "the mode mismatch is logged");
 });
 
+test("Stripe brings the buyer back to the shop address they paid from (each keeps its own cart), never anywhere else", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = "pk_test_FAKEPUBLISHABLE";
+  for (const [label, site, want] of [
+    ["www", "https://www.fonkiart.com", "https://www.fonkiart.com"],
+    ["the bare address", "https://fonkiart.com", "https://fonkiart.com"],
+    ["nothing sent", undefined, "https://fonkiart.com"],
+    ["someone else's site", "https://evil.example", "https://fonkiart.com"],
+    ["a look-alike", "https://fonkiart.com.evil.example", "https://fonkiart.com"],
+    ["not https", "http://www.fonkiart.com", "https://fonkiart.com"],
+    ["with a path", "https://www.fonkiart.com/x", "https://fonkiart.com"],
+    ["not text", ["https://www.fonkiart.com"], "https://fonkiart.com"],
+  ]) {
+    for (const embedded of [false, true]) {
+      const stripe = fakeStripe();
+      const db = shop();
+      const first = await cartCard(db, checkout({ site, embedded }));
+      await cartAgain(db, kept(first, { site, embedded }));
+      const made = stripe.calls.filter(c => c.method === "POST" && c.url.endsWith("/checkout/sessions"));
+      assert.equal(made.length, 2, label);
+      for (const { body } of made) {
+        const urls = embedded ? [body.get("return_url")] : [body.get("success_url"), body.get("cancel_url")];
+        assert.deepEqual(urls, embedded
+          ? [`${want}/?cart=FA-1752&card={CHECKOUT_SESSION_ID}`]
+          : [`${want}/?cart=FA-1752&card={CHECKOUT_SESSION_ID}`, `${want}/?cart=FA-1752&card=cancelled`], `${label}, ${embedded ? "card form inside" : "Stripe's page"}`);
+      }
+    }
+  }
+});
+
 test("publishableKey: only a pk_ key of the same mode as the secret key, and only while card payments are on", () => {
   process.env.STRIPE_PUBLISHABLE_KEY = "pk_test_ABC";
   assert.equal(publishableKey(), "pk_test_ABC");
