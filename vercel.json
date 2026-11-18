@@ -7,6 +7,14 @@
     "minimumCacheTTL": 2678400,
     "formats": ["image/webp"]
   },
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "host", "value": "www.fonkiart.com" }],
+      "destination": "https://fonkiart.com/:path",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/api/cron/reminders", "destination": "/api/store?op=reminders" }
   ],
