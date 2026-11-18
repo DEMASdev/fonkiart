@@ -142,9 +142,10 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const sendStatusEmail = async (order, status) => {
     const client = clients.find(c => c.email === order.client_email);
     const name = client?.name?.split(" ")[0] || "there";
+    // paid: Andy's tracking sentence, the same as the paid invoice (src/pages/InvoicePage.jsx).
     const msgs = {
       confirmed: { sub:`Your order is confirmed — ${order.item_title}`, body:`Great news! Your order for <strong>${esc(order.item_title)}</strong> has been confirmed. We'll notify you once it ships.` },
-      paid:      { sub:`Payment received — ${order.item_title}`,       body:`Thank you! We received your payment for <strong>${esc(order.item_title)}</strong>. We'll let you know as soon as it ships.` },
+      paid:      { sub:`Payment received — ${order.item_title}`,       body:`Thank you! We received your payment for <strong>${esc(order.item_title)}</strong>. We will be sending you a tracking number or delivery updates if shipping is needed.` },
       shipped:   { sub:`Your order has shipped — ${order.item_title}`,   body:`Your order for <strong>${esc(order.item_title)}</strong> is on its way! Fonkiart will follow up with any tracking details.` },
       delivered: { sub:`Order delivered — ${order.item_title}`,           body:`Your order for <strong>${esc(order.item_title)}</strong> has been marked as delivered. We hope you love it!` },
     };

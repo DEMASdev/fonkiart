@@ -150,6 +150,7 @@ test("back from Stripe, paid: the order turns Paid ONCE, the shop and the client
   const client = mail.sent.find(m => m.to === "ana@example.com");
   assert.equal(client.subject, "Payment received — Frida the manatee · Fonkiart");
   assert.match(client.htmlContent, /FA-261117161956080/);
+  assert.match(client.htmlContent, /We will be sending you a tracking number or delivery updates if shipping is needed\./, "the paid invoice's tracking sentence");
   // A reload (or a second tab) must not mark it again or email again.
   assert.deepEqual(await opCardPaid(db, { token: TOKEN, session: SESSION }, mail), { paid: true });
   assert.equal(db.updates.length, 1);

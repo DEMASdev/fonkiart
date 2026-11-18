@@ -275,7 +275,8 @@ export function paymentReceived({ order, invNum }) {
     p(`Hi ${e(first)},`)
     + p(`Thank you! We received your payment of <strong>${amount}</strong> for <strong>${e(order.item_title)}</strong>.`)
     + panel("Receipt", field("Invoice", e(invNum)) + field("Amount paid", amount) + field("Paid with", "Card"))
-    + p(`We'll let you know as soon as it ships.`)
+    // Andy's tracking sentence, the same as the paid invoice (src/pages/InvoicePage.jsx).
+    + p(`We will be sending you a tracking number or delivery updates if shipping is needed.`)
     + footnote);
 }
 
