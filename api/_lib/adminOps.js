@@ -18,6 +18,34 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PAID_METHODS = new Set(["card", "zelle", "venmo", "cashapp", "cash", "other"]);
 const WRITES = new Set(["insert", "update", "upsert"]);
 
+// Tracking, saved when an order goes out with a carrier (Andy, 2026-11-17). The link made from
+// it goes into the client's email and onto their invoice page, so only these are saved:
+//  - tracking_carrier: usps, ups, fedex, dhl or other, or pickup (a pickup / hand delivery,
+//    which has no number and no link);
+//  - tracking_number: letters, digits, spaces and dashes, 4 to 60 of them, trimmed;
+//  - tracking_url (Other's own tracking page): https:// only, so never a "javascript:" link;
+//  - null clears any of them.
+// Browser copy, with the carrier names and the links: src/lib/tracking.js
+// (tests/tracking.test.js checks the two agree).
+export const TRACKING_CARRIERS = new Set(["usps", "ups", "fedex", "dhl", "other", "pickup"]);
+const TRACKING_NUMBER_RE = /^[A-Za-z0-9][A-Za-z0-9 -]{2,58}[A-Za-z0-9]$/;
+const hasControl = (s) => [...s].some(c => { const n = c.codePointAt(0); return n < 32 || n === 127; });
+export function isHttpsLink(value) {
+  if (typeof value !== "string" || value.length > 2000) return false;
+  if (!/^https:\/\//i.test(value) || /[\s"'<>`\\]/.test(value) || hasControl(value)) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" && !!u.hostname;
+  } catch {
+    return false;
+  }
+}
+const TRACKING_RULES = [
+  ["tracking_carrier", (v) => TRACKING_CARRIERS.has(v), "Bad carrier"],
+  ["tracking_number", (v) => typeof v === "string" && TRACKING_NUMBER_RE.test(v), "Bad tracking number"],
+  ["tracking_url", isHttpsLink, "Bad tracking link"],
+];
+
 export function validateChain(table, chain) {
   if (!ADMIN_TABLES.has(table)) throw new InputError("Unknown table");
   if (!Array.isArray(chain) || chain.length === 0 || chain.length > 30) throw new InputError("Bad query");
@@ -25,12 +53,17 @@ export function validateChain(table, chain) {
     if (!step || typeof step.m !== "string" || !Array.isArray(step.a ?? [])) throw new InputError("Bad query");
     if (!(i === 0 ? ACTIONS : MODIFIERS).has(step.m)) throw new InputError(`Not allowed: ${step.m}`);
   });
-  // A write that sets paid_method must use one of the six; anything else is refused (400)
-  // before the database is touched, so nothing is saved.
+  // A write that sets paid_method must use one of the six, and one that sets tracking must
+  // follow TRACKING_RULES; anything else is refused (400) before the database is touched, so
+  // nothing is saved.
   if (table === "Orders" && WRITES.has(chain[0].m)) {
     for (const row of [].concat(chain[0].a?.[0] ?? [])) {
-      if (row && typeof row === "object" && Object.hasOwn(row, "paid_method") && !PAID_METHODS.has(row.paid_method)) {
+      if (!row || typeof row !== "object") continue;
+      if (Object.hasOwn(row, "paid_method") && !PAID_METHODS.has(row.paid_method)) {
         throw new InputError("Bad payment method");
+      }
+      for (const [column, ok, refusal] of TRACKING_RULES) {
+        if (Object.hasOwn(row, column) && row[column] !== null && !ok(row[column])) throw new InputError(refusal);
       }
     }
   }
