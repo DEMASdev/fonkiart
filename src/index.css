@@ -825,12 +825,12 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
 }
 
 /* The copy button beside an invoice number (src/components/CopyButton.jsx). */
-.copy-btn { display:inline-flex;align-items:center;justify-content:center;gap:4px;vertical-align:middle;min-width:28px;min-height:28px;padding:4px 6px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:.06em;line-height:1; }
+.copy-btn { display:inline-flex;align-items:center;justify-content:center;gap:4px;vertical-align:middle;min-width:28px;min-height:28px;padding:4px 6px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:inherit;font-size:16px;letter-spacing:.06em;line-height:1; }
 .copy-btn:hover, .copy-btn:focus-visible { color:var(--ink);border-color:var(--gold); }
 .copy-btn.is-copied { color:#2d6a4f;border-color:#a3d4b3;background:#e8f5ee; }
 p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 /* The pay lines: "Tap here to copy to your clipboard [icon]" on its own line (Andy, 2026-11-17). */
-.copy-btn.copy-btn-line { display:flex;width:100%;gap:6px;margin-top:6px;padding:7px 6px;min-height:34px;font-size:11px;line-height:1.3;letter-spacing:0;color:var(--ink);background:rgba(255,255,255,.6); }
+.copy-btn.copy-btn-line { display:flex;width:100%;gap:6px;margin-top:6px;padding:7px 6px;min-height:34px;font-size:16px;line-height:1.3;letter-spacing:0;color:var(--ink);background:rgba(255,255,255,.6); }
 .copy-btn.copy-btn-line svg { flex-shrink:0; } /* never squeeze the icon away on a narrow phone */
 /* Admin -> Orders: "Mark paid" (Andy, 2026-11-17). Two taps, because it emails the client a receipt.
    Sizes: Andy's pick, 17px for the question, 16px for its buttons; nothing under 16px. */
@@ -838,6 +838,43 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .mark-paid-ask { display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:17px;color:var(--ink); }
 .mark-paid-yes { padding:4px 10px;background:#2d6a4f;border:1px solid #2d6a4f;color:#fff;cursor:pointer;font-size:16px; }
 .mark-paid-no { padding:4px 10px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px; }
+/* Admin -> Orders, Andy's text sizes (2026-11-17): the row's buttons and DELETE (13px before),
+   the phone card labels (11px before), all 16px. */
+.order-btns > .tap, .order-btns > .btn-d { font-size:16px; }
+/* The questions' red answer: Delete an order, Remove its tracking (no browser pop-ups). */
+.ask-danger { padding:4px 10px;background:#c0392b;border:1px solid #c0392b;color:#fff;cursor:pointer;font-size:16px; }
+/* "🔗 Link": the client's link on a line of its own, then Copy link and Close. */
+.ask-link-url { flex:1 1 100%;min-width:0;overflow-wrap:anywhere;font-size:16px;color:var(--ink); }
+.ask-link .copy-btn.copy-btn-line { width:auto;margin-top:0;padding:4px 10px;min-height:0; }
+/* Shipping and tracking (Andy, 2026-11-17: "if shipping was used ... check mark and activate a
+   box to enter the tracking number"). A row under each Paid / Shipped / Delivered order.
+   17px text, 16px boxes and buttons; nothing under 16px. */
+.track { display:flex;flex-direction:column;align-items:flex-start;gap:8px;font-size:17px;color:var(--ink); }
+.track-tick { display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-size:17px;color:var(--ink); }
+.track-tick input { width:18px;height:18px;margin:0;accent-color:#2d6a4f;cursor:pointer; }
+.track-form { display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%; }
+.track-form select, .track-form input { font-family:inherit;font-size:16px;color:var(--ink);background:#fff;border:1px solid var(--border);padding:6px 10px;min-width:0; }
+.track-form input { flex:1 1 220px;max-width:360px; }
+.track-save { padding:6px 16px;background:var(--ink);border:1px solid var(--ink);color:#fff;cursor:pointer;font-size:16px; }
+.track-saved { display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px; }
+.track-link { color:#7a5b14;font-weight:600;overflow-wrap:anywhere; }
+.track-btn { padding:4px 10px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px; }
+.track-ok, .track-err { margin:0;font-size:16px;line-height:1.5; }
+.track-ok { color:#2d6a4f; }
+.track-err { color:#c0392b; }
+.track .mark-paid-ask { margin-top:0; }
+/* On a computer the order and its shipping row read as one: a dashed line between them. */
+@media(min-width:701px){ .crm-table > tbody > tr.has-track > td { border-bottom:1px dashed var(--border); } }
+@media(max-width:700px){
+  .orders-table.crm-cards > tbody > tr > td[data-label]::before { font-size:16px; }
+  /* On a phone the shipping row is the bottom of the order's card (like Order Details). */
+  .crm-cards > tbody > tr.crm-track { display:block;padding:0;margin-top:-11px;border-top:none; }
+  .track-form input { max-width:none; }
+}
+@media (pointer:coarse) {
+  .track-tick { min-height:44px; }
+  .track-form input, .ask-link .copy-btn.copy-btn-line { min-height:44px; }
+}
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }

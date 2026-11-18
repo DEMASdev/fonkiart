@@ -1,12 +1,13 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { adminDb as supabase } from "../lib/adminDb";
 import { sendEmail } from "../utils/helpers";
-import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
+import { invoiceEmail, statusEmailFor } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
+import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTrackingLink, hasTrackingSaved, trackingLabel, trackingFields, trackingSave } from "../lib/tracking";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
@@ -32,11 +33,27 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const showMsg = (msg) => { setInvSent(msg); setTimeout(() => setInvSent(""), 4000); };
   const [resending, setResending] = useState({});
   const [statusErr, setStatusErr] = useState("");
-  // The one question open on this screen, or null; opening one closes any other.
+  // The one question open on this screen, or null; opening one closes any other. Never a
+  // browser pop-up (Andy's standing rule): every question sits on the order itself.
   // { kind:"paid", id }: "Money arrived? Paid by:" for an order, or for + Add Order (id NEW_ORDER).
   // { kind:"resend", id }: "This invoice was sent already... Send it again?"
+  // { kind:"ship", id }: "How did it go out?" (Carrier / Pickup / hand delivery), from the Status menu
+  // { kind:"pickup", id }: "Pickup / hand delivery. Email <client>?" (Send / Not now)
+  // { kind:"track", id }: "Email the tracking link to <client>?" (Send / Not now)
+  // { kind:"untrack", id }: "Remove the tracking from this order?" (or the pickup / hand delivery)
+  // { kind:"delete", id }: "Delete this order? This can't be undone."
+  // { kind:"link", id }: the client's invoice link, with a copy button
   const [ask, setAsk] = useState(null);
   const asking = (kind, id) => ask?.kind === kind && ask?.id === id;
+  // Tracking (Andy, 2026-11-17). track: the open tracking forms, by order id, each
+  // { carrier, number, url, err, shipFrom }; shipFrom only when the form was opened by picking
+  // Shipped in the Status menu. trackNote: what the last save did, by order id, { ok, text }.
+  // trackBusy: the button working right now, by order id ("send", "save" or "clear").
+  // saving: the same, read at once, so a second tap on Send can't send a second email.
+  const [track, setTrack] = useState({});
+  const [trackNote, setTrackNote] = useState({});
+  const [trackBusy, setTrackBusy] = useState({});
+  const saving = useRef(new Set());
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
@@ -143,24 +160,18 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setForm(blank); setManual({first:"",last:"",email:"",phone:"",address:"",city:"",state:"",zip:"",country:""}); setSelectedClient(null); setClientUpdate({}); setAdding(false); setClientMode("select"); load();
     setAsk(a => a?.id === NEW_ORDER ? null : a);
   };
+  // The client's email for a status (src/lib/adminEmails.js statusEmailFor). Shipped and
+  // Delivered carry the live tracking link whenever the order has tracking, so picking Shipped
+  // in the Status menu after saving the tracking sends the link too. true once it was sent.
   const sendStatusEmail = async (order, status) => {
     const client = clients.find(c => c.email === order.client_email);
     const name = client?.name?.split(" ")[0] || "there";
-    // paid: Andy's tracking sentence, the same as the paid invoice (src/pages/InvoicePage.jsx).
-    const msgs = {
-      confirmed: { sub:`Your order is confirmed — ${order.item_title}`, body:`Great news! Your order for <strong>${esc(order.item_title)}</strong> has been confirmed. We'll notify you once it ships.` },
-      paid:      { sub:`Payment received — ${order.item_title}`,       body:`Thank you! We received your payment for <strong>${esc(order.item_title)}</strong>. We will be sending you a tracking number or delivery updates if shipping is needed.` },
-      shipped:   { sub:`Your order has shipped — ${order.item_title}`,   body:`Your order for <strong>${esc(order.item_title)}</strong> is on its way! Fonkiart will follow up with any tracking details.` },
-      delivered: { sub:`Order delivered — ${order.item_title}`,           body:`Your order for <strong>${esc(order.item_title)}</strong> has been marked as delivered. We hope you love it!` },
-    };
-    const m = msgs[status]; if (!m) return;
+    const m = statusEmailFor({ status, order, name, sender: BREVO_SENDER });
+    if (!m) return false;
     try {
-      await sendEmail({
-        to: order.client_email,
-        subject: m.sub,
-        ...statusEmail({ name, message: m.body, sender: BREVO_SENDER }),
-      });
-    } catch(e) { console.warn("Status email:", e); }
+      await sendEmail({ to: order.client_email, subject: m.subject, heading: m.heading, content: m.content });
+      return true;
+    } catch(e) { console.warn("Status email:", e); return false; }
   };
   // Only change the screen and email the client once the database has really saved it.
   // It used to ignore a failed save, so the client could be told something untrue.
@@ -175,10 +186,13 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setOrders(orders.map(o=>o.id===id?{...o,...change}:o));
     if (order && email) sendStatusEmail(order, status);
   };
-  // The Status menus. "Paid" first asks "Paid by:", like ✓ Mark paid; until a method is tapped
-  // nothing is saved or emailed, and the menu keeps showing the status it had (Cancel leaves it
-  // there). Every other status saves at once, as before.
+  // The Status menus. "Paid" first asks "Paid by:", like ✓ Mark paid, and an order's "Shipped"
+  // asks how it went out (askShip, below); until that is answered nothing is saved or emailed,
+  // and the menu keeps showing the status it had (Cancel leaves it there). Every other status
+  // saves at once, as before. An order whose payment method is already known (a card payment
+  // flipped Shipped -> Paid) goes back to Paid quietly: no question, no second receipt (paidPick).
   const pickStatus = (order, status) => {
+    if (status === "shipped") return askShip(order);
     const pick = paidPick(order, status);
     if (pick === "save") return updateStatus(order.id, status);
     if (pick === "save-quietly") return updateStatus(order.id, status, undefined, { email:false });
@@ -204,10 +218,191 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
     </div>
   );
+  // Delete asks first, on the order itself (it used to be a browser pop-up). The order leaves
+  // the screen only once the database has really deleted it.
+  const deleteAsk = (order) => (
+    <div className="mark-paid-ask">
+      <span>Delete this order? This can&apos;t be undone.</span>
+      <button className="tap ask-danger" onClick={()=>deleteOrder(order.id)}>Delete</button>
+      <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+    </div>
+  );
   const deleteOrder = async (id) => {
-    if (!window.confirm("Delete this order?")) return;
-    await supabase.from("Orders").delete().eq("id",id);
-    setOrders(orders.filter(o=>o.id!==id));
+    setAsk(null); setStatusErr("");
+    const { error } = await supabase.from("Orders").delete().eq("id",id);
+    if (error) { setStatusErr(`Could not delete the order (${error.message || "unknown error"}).`); return; }
+    setOrders(list => list.filter(o=>o.id!==id));
+  };
+  // "🔗 Link": the client's invoice link, shown on the order with a copy button (it used to copy
+  // and then pop up "Invoice link copied!"). Plain text, not a link: opening the client's own
+  // link could confirm the invoice for them; "👁 Open" is the shop's read-only view.
+  const linkAsk = (order) => {
+    const link = invoiceLink(window.location.origin, order.invoice_token);
+    return (
+      <div className="mark-paid-ask ask-link">
+        <span>The client&apos;s invoice link:</span>
+        <span className="ask-link-url">{link}</span>
+        <CopyButton text={link} label="Copy invoice link" caption="Copy link" />
+        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
+      </div>
+    );
+  };
+
+  // ── Shipping and tracking (Andy, 2026-11-17: "if shipping was used ... check mark and activate
+  // a box to enter the tracking number and should ask to send an email to the customer ... with
+  // a live link to track the order", and "when marking an order as shipped it should ask for
+  // tracking number or if it was a pickup delivery"). Two ways in, one save (saveShipping):
+  //  - picking Shipped in an order's Status menu asks "How did it go out?": Carrier (the
+  //    tracking form) or Pickup / hand delivery, then whether to email the client. The order
+  //    becomes Shipped only then; Cancel leaves the status as it was, like "Paid by:".
+  //  - the "Shipped with a carrier" tick box, on every order the money is in for (Paid, Shipped,
+  //    Delivered), adds or edits the tracking.
+  const clientLabel = (o) => o.client_name || clientName(o.client_email) || o.client_email || "the client";
+  const editTrack = (id, patch) => setTrack(t => ({ ...t, [id]: { ...t[id], ...patch } }));
+  const noteTrack = (id, note) => setTrackNote(n => ({ ...n, [id]: note }));
+  // One save at a time per order: false when this order is already saving.
+  const startBusy = (id, what) => {
+    if (saving.current.has(id)) return false;
+    saving.current.add(id); setTrackBusy(b => ({ ...b, [id]: what }));
+    return true;
+  };
+  const endBusy = (id) => { saving.current.delete(id); setTrackBusy(b => { const next = { ...b }; delete next[id]; return next; }); };
+  // The form, filled in with what the order has saved (a pickup has no carrier to show).
+  const formFrom = (o) => ({ carrier: o.tracking_carrier && !isPickup(o) ? o.tracking_carrier : "", number: o.tracking_number || "", url: o.tracking_url || "", err: "" });
+  const openTrack = (o) => { noteTrack(o.id, null); setTrack(t => ({ ...t, [o.id]: formFrom(o) })); };
+  const closeTrack = (id) => {
+    setTrack(t => { const next = { ...t }; delete next[id]; return next; });
+    setAsk(a => a?.id === id && (a.kind === "track" || a.kind === "pickup") ? null : a);
+  };
+  // A form opened from the Status menu saves the order as Shipped. It counts only while the order
+  // still has the status it had then: a status picked in the menu since ends it.
+  const fromMenu = (o) => track[o.id]?.shipFrom === (o.status || "pending");
+  const askShip = (o) => { setStatusErr(""); noteTrack(o.id, null); setAsk({ kind:"ship", id:o.id }); };
+  // "Carrier": the tracking form (anything already typed in it stays).
+  const shipByCarrier = (o) => {
+    setTrack(t => ({ ...t, [o.id]: { ...(t[o.id] ?? formFrom(o)), err:"", shipFrom:o.status || "pending" } }));
+    setAsk(null);
+  };
+  // Save: check what was typed, then ask before emailing anyone.
+  const askTrack = (o) => {
+    const { problem } = trackingFields(track[o.id]);
+    editTrack(o.id, { err: problem || "" });
+    if (!problem) { setStatusErr(""); setAsk({ kind:"track", id:o.id }); }
+  };
+  // Send (email: true) or Not now (false); what each one saves is trackingSave (src/lib/tracking.js).
+  // The status goes in the same save, never through the Status menu's own save (that sends its
+  // own email), so the client gets one email at most. showError: where a failed save is told.
+  const saveShipping = async (o, fields, { email, ship }, showError) => {
+    const { change, emailStatus } = trackingSave(o, fields, { email, ship });
+    const what = isPickup(fields) ? PICKUP_LABEL : "the tracking";
+    if (!startBusy(o.id, email ? "send" : "save")) return;
+    try {
+      const { error } = await supabase.from("Orders").update(change).eq("id", o.id);
+      if (error) { setAsk(null); showError(`Could not save ${what} (${error.message || "unknown error"}). Nothing was emailed.`); return; }
+      setOrders(list => list.map(x => x.id === o.id ? { ...x, ...change } : x));
+      closeTrack(o.id);
+      const saved = isPickup(fields) ? `Saved as ${PICKUP_LABEL}` : "Tracking saved";
+      const marked = change.status ? " The order is now Shipped." : "";
+      if (!emailStatus) { noteTrack(o.id, { ok: true, text: `✓ ${saved}. No email was sent.${marked}` }); return; }
+      const sent = await sendStatusEmail({ ...o, ...change }, emailStatus);
+      noteTrack(o.id, sent
+        ? { ok: true, text: `✓ ${saved} and emailed to ${o.client_email}.${marked}` }
+        : { ok: false, text: `⚠ ${saved}, but the email to ${o.client_email} could not be sent.${marked}` });
+    } finally { endBusy(o.id); }
+  };
+  const saveTrack = (o, email) => {
+    if (saving.current.has(o.id)) return;
+    const { fields, problem } = trackingFields(track[o.id]);
+    if (problem) { setAsk(null); editTrack(o.id, { err: problem }); return; }
+    return saveShipping(o, fields, { email, ship: fromMenu(o) }, err => editTrack(o.id, { err }));
+  };
+  const savePickup = (o, email) => saveShipping(o, PICKUP_FIELDS, { email, ship: true }, err => noteTrack(o.id, { ok: false, text: `⚠ ${err}` }));
+  // Clear: asks first, then removes all three. No email, and the status stays.
+  const clearTrack = async (o) => {
+    if (!startBusy(o.id, "clear")) return;
+    const what = isPickup(o) ? PICKUP_LABEL : "Tracking";
+    try {
+      const { error } = await supabase.from("Orders").update(NO_TRACKING).eq("id", o.id);
+      setAsk(null);
+      if (error) { noteTrack(o.id, { ok: false, text: `⚠ Could not remove it (${error.message || "unknown error"}).` }); return; }
+      setOrders(list => list.map(x => x.id === o.id ? { ...x, ...NO_TRACKING } : x));
+      noteTrack(o.id, { ok: true, text: `✓ ${what} removed.` });
+    } finally { endBusy(o.id); }
+  };
+  // The shipping row shows on an order the money is in for, and on any order while picking
+  // Shipped in its Status menu is still being answered.
+  const showsShipping = (o) => isPaid(o.status) || asking("ship", o.id) || asking("pickup", o.id) || fromMenu(o);
+  const trackCell = (o) => {
+    const draft = track[o.id];
+    const note = trackNote[o.id];
+    const doing = trackBusy[o.id];
+    const busy = !!doing;
+    const link = orderTrackingLink(o);
+    const pickup = isPickup(o);
+    const tick = (checked, onChange) => (
+      <label className="track-tick"><input type="checkbox" checked={checked} onChange={onChange} />Shipped with a carrier</label>
+    );
+    const sending = doing === "send" ? "Sending…" : "Send";
+    const notNow = doing === "save" ? "Saving…" : "Not now";
+    return (
+      <div className="track">
+        {asking("ship", o.id) ? (
+          <div className="mark-paid-ask">
+            <span>How did it go out?</span>
+            <button className="tap mark-paid-yes" onClick={()=>shipByCarrier(o)}>Carrier</button>
+            <button className="tap mark-paid-yes" onClick={()=>setAsk({ kind:"pickup", id:o.id })}>{PICKUP_LABEL}</button>
+            <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+          </div>
+        ) : asking("pickup", o.id) ? (
+          <div className="mark-paid-ask">
+            <span>{PICKUP_LABEL}. Email {clientLabel(o)}?</span>
+            <button className="tap mark-paid-yes" onClick={()=>savePickup(o, true)} disabled={busy}>{sending}</button>
+            <button className="tap mark-paid-no" onClick={()=>savePickup(o, false)} disabled={busy}>{notNow}</button>
+            <button className="tap mark-paid-no" onClick={()=>setAsk(null)} disabled={busy}>Cancel</button>
+          </div>
+        ) : draft ? (<>
+          {tick(true, () => closeTrack(o.id))}
+          <div className="track-form">
+            <select aria-label="Carrier" value={draft.carrier} onChange={e=>editTrack(o.id, { carrier:e.target.value, err:"" })}>
+              <option value="">Carrier…</option>
+              {CARRIERS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+            {draft.carrier === "other"
+              ? <input type="url" inputMode="url" autoCapitalize="none" autoComplete="off" spellCheck={false} aria-label="Tracking link" placeholder="Tracking link (https://…)"
+                  value={draft.url} onChange={e=>editTrack(o.id, { url:e.target.value, err:"" })} />
+              : <input type="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} aria-label="Tracking number" placeholder="Tracking number"
+                  value={draft.number} onChange={e=>editTrack(o.id, { number:e.target.value, err:"" })} />}
+            <button className="tap track-save" onClick={()=>askTrack(o)} disabled={busy}>Save</button>
+            <button className="tap track-btn" onClick={()=>closeTrack(o.id)} disabled={busy}>Cancel</button>
+          </div>
+          {draft.err && <p className="track-err" role="alert">⚠ {draft.err}</p>}
+          {asking("track", o.id) && (
+            <div className="mark-paid-ask">
+              <span>Email the tracking link to {clientLabel(o)}?</span>
+              <button className="tap mark-paid-yes" onClick={()=>saveTrack(o, true)} disabled={busy}>{sending}</button>
+              <button className="tap mark-paid-no" onClick={()=>saveTrack(o, false)} disabled={busy}>{notNow}</button>
+            </div>
+          )}
+        </>) : hasTrackingSaved(o) ? (
+          <div className="track-saved">
+            <span>{pickup ? "Went out by:" : "Tracking:"}</span>
+            {link
+              ? <a className="track-link" href={link} target="_blank" rel="noopener noreferrer">{trackingLabel(o)} ↗</a>
+              : <span>{trackingLabel(o)}</span>}
+            <button className="tap track-btn" onClick={()=>openTrack(o)}>Edit</button>
+            <button className="tap track-btn" onClick={()=>{ noteTrack(o.id, null); setAsk({ kind:"untrack", id:o.id }); }}>Clear</button>
+          </div>
+        ) : tick(false, () => openTrack(o))}
+        {!draft && asking("untrack", o.id) && (
+          <div className="mark-paid-ask">
+            <span>{pickup ? `Remove “${PICKUP_LABEL}” from this order?` : "Remove the tracking from this order?"}</span>
+            <button className="tap ask-danger" onClick={()=>clearTrack(o)} disabled={busy}>{doing === "clear" ? "Removing…" : "Remove"}</button>
+            <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+          </div>
+        )}
+        {note && <p className={note.ok ? "track-ok" : "track-err"} role="status">{note.text}</p>}
+      </div>
+    );
   };
   const [expanded, setExpanded] = useState({});
   const toggleExpand = (id) => setExpanded(prev => ({...prev,[id]:!prev[id]}));
@@ -462,17 +657,17 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       </div>
       {loading ? <p className="crm-empty">Loading…</p>
         : filtered.length===0 ? <p className="crm-empty">No orders match this filter.</p>
-        : <table className="crm-table crm-cards">
+        : <table className="crm-table crm-cards orders-table">
             <thead><tr><th>Ref</th><th>Client</th><th>Artwork</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
             <tbody>{filtered.map(o=>(
               <Fragment key={o.id}>
-                <tr>
+                <tr className={showsShipping(o) ? "has-track" : undefined}>
                   <td data-label="Ref" className="crm-wide" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>{o.invoice_token ? <>{invoiceNumber(o)}<CopyButton text={invoiceNumber(o)} /></> : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (isPaid(o.status) ? (
-                      <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:"#fff",background:"#2d6a4f",border:"1px solid #2d6a4f",padding:"1px 5px",display:"inline-block"}}>✓ PAID</div>
+                      <div style={{fontSize:16,letterSpacing:".08em",marginTop:4,color:"#fff",background:"#2d6a4f",border:"1px solid #2d6a4f",padding:"2px 8px",display:"inline-block"}}>✓ PAID</div>
                     ) : (
-                      <div style={{fontSize:10,letterSpacing:".08em",marginTop:3,color:o.invoice_approved?"#2d6a4f":"#c9a96e",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"1px 5px",display:"inline-block"}}>
+                      <div style={{fontSize:16,letterSpacing:".08em",marginTop:4,color:o.invoice_approved?"#2d6a4f":"#7a5b14",background:o.invoice_approved?"#e8f5ee":"#fff8ec",border:`1px solid ${o.invoice_approved?"#a3d4b3":"#e8d5a0"}`,padding:"2px 8px",display:"inline-block"}}>
                         {o.invoice_approved ? "✓ CLIENT APPROVED" : "INVOICE SENT"}
                       </div>
                     ))}
@@ -484,8 +679,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <td data-label="Artwork" className="crm-wide">{o.item_title}</td>
                   <td data-label="Amount">{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
                   <td data-label="Status">
-                    <select value={o.status||"pending"} onChange={e=>pickStatus(o,e.target.value)}
-                      style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
+                    <select value={o.status||"pending"} onChange={e=>pickStatus(o,e.target.value)} aria-label="Status"
+                      style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer",fontSize:16,fontFamily:"inherit",color:"var(--ink)"}}>
                       {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                     </select>
                     {/* Mark paid: two taps, because it emails the client a receipt. The second
@@ -498,13 +693,15 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   </td>
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                   <td className="crm-wide">
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                    {/* The row's buttons at 16px, the same as its questions (they had no size of
+                        their own, so the browser drew them at 13px). */}
+                    <div className="order-btns" style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                       {o.invoice_token && (<>
                         <a className="tap" href={invoiceLink(window.location.origin, o.invoice_token, { shopView: true })} target="_blank" rel="noopener noreferrer"
                           style={{background:"none",border:"1px solid var(--border)",padding:"3px 8px",color:"var(--muted)",textDecoration:"none",display:"inline-block"}}>
                           👁 Open
                         </a>
-                        <button className="tap" onClick={()=>{ const link=`${window.location.origin}/?invoice=${o.invoice_token}`; navigator.clipboard.writeText(link).then(()=>alert("Invoice link copied!")); }}
+                        <button className="tap" onClick={()=>setAsk({ kind:"link", id:o.id })}
                           style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>
                           🔗 Link
                         </button>
@@ -513,13 +710,22 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                           {resending[o.id] ? "…" : "✉ Resend"}
                         </button>
                       </>)}
-                      <button className="btn-d" onClick={()=>deleteOrder(o.id)}>Delete</button>
+                      <button className="btn-d" onClick={()=>setAsk({ kind:"delete", id:o.id })}>Delete</button>
                       {/* Order details (notes) last, Open first: Andy, 2026-11-17 */}
                       {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                     </div>
                     {asking("resend", o.id) && resendAsk(o)}
+                    {asking("link", o.id) && linkAsk(o)}
+                    {asking("delete", o.id) && deleteAsk(o)}
                   </td>
                 </tr>
+                {/* Shipping, under the order it belongs to: Paid, Shipped and Delivered (the shop
+                    ships once the money is in), and any order while Shipped is being picked. */}
+                {showsShipping(o) && (
+                  <tr className="crm-track">
+                    <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px"}}>{trackCell(o)}</td>
+                  </tr>
+                )}
                 {expanded[o.id] && o.notes && (
                   <tr className="crm-detail">
                     <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px",borderTop:"none"}}>
