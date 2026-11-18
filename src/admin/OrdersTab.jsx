@@ -8,6 +8,7 @@ import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
 import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTrackingLink, hasTrackingSaved, trackingLabel, trackingFields, trackingSave } from "../lib/tracking";
+import { SHIP_FIELDS, hasShipAddress, shipLines, shipForm, shipFields, shipFromClient, clientHasAddress } from "../lib/shipAddress";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
@@ -54,6 +55,10 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const [trackNote, setTrackNote] = useState({});
   const [trackBusy, setTrackBusy] = useState({});
   const saving = useRef(new Set());
+  // Shipping address (Andy, 2026-11-17). shipEdit: the open address forms, by order id (the seven
+  // fields, plus err). shipNote: what the last save did, by order id, { ok, text }.
+  const [shipEdit, setShipEdit] = useState({});
+  const [shipNote, setShipNote] = useState({});
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
@@ -329,9 +334,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       noteTrack(o.id, { ok: true, text: `✓ ${what} removed.` });
     } finally { endBusy(o.id); }
   };
-  // The shipping row shows on an order the money is in for, and on any order while picking
-  // Shipped in its Status menu is still being answered.
-  const showsShipping = (o) => isPaid(o.status) || asking("ship", o.id) || asking("pickup", o.id) || fromMenu(o);
+  // The tracking shows on an order the money is in for, and on any order while picking Shipped
+  // in its Status menu is still being answered.
+  const showsTracking = (o) => isPaid(o.status) || asking("ship", o.id) || asking("pickup", o.id) || fromMenu(o);
   const trackCell = (o) => {
     const draft = track[o.id];
     const note = trackNote[o.id];
@@ -398,6 +403,75 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <span>{pickup ? `Remove “${PICKUP_LABEL}” from this order?` : "Remove the tracking from this order?"}</span>
             <button className="tap ask-danger" onClick={()=>clearTrack(o)} disabled={busy}>{doing === "clear" ? "Removing…" : "Remove"}</button>
             <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+          </div>
+        )}
+        {note && <p className={note.ok ? "track-ok" : "track-err"} role="status">{note.text}</p>}
+      </div>
+    );
+  };
+  // ── Shipping address: "Ship to", on every order (Andy, 2026-11-17: "also make sure in the
+  // admin and for the user can add the shipping address !"). Add or Edit it here, or, while the
+  // order has none, copy the client's saved address (Admin -> Clients) in one tap. No email.
+  // The client can also add it on their invoice page.
+  const clientOf = (o) => clients.find(c => String(c.email || "").toLowerCase() === String(o.client_email || "").toLowerCase());
+  const noteShip = (id, note) => setShipNote(n => ({ ...n, [id]: note }));
+  const editShip = (id, patch) => setShipEdit(f => ({ ...f, [id]: { ...f[id], ...patch } }));
+  const openShip = (o) => { noteShip(o.id, null); setShipEdit(f => ({ ...f, [o.id]: { ...shipForm(o), err: "" } })); };
+  const closeShip = (id) => setShipEdit(f => { const next = { ...f }; delete next[id]; return next; });
+  // Saves the address; null when it worked, or what went wrong.
+  const saveShipTo = async (o, fields, done) => {
+    if (!startBusy(o.id, "ship")) return null;
+    try {
+      const { error } = await supabase.from("Orders").update(fields).eq("id", o.id);
+      if (error) return `Could not save the address (${error.message || "unknown error"}).`;
+      setOrders(list => list.map(x => x.id === o.id ? { ...x, ...fields } : x));
+      closeShip(o.id);
+      noteShip(o.id, { ok: true, text: done });
+      return null;
+    } finally { endBusy(o.id); }
+  };
+  const saveShipForm = async (o) => {
+    const { fields, problem } = shipFields(shipEdit[o.id]);
+    if (problem) { editShip(o.id, { err: problem }); return; }
+    const err = await saveShipTo(o, fields, "✓ Address saved.");
+    if (err) editShip(o.id, { err });
+  };
+  const copyClientShip = async (o) => {
+    noteShip(o.id, null);
+    const err = await saveShipTo(o, shipFromClient(clientOf(o)), "✓ Copied the client's saved address.");
+    if (err) noteShip(o.id, { ok: false, text: `⚠ ${err}` });
+  };
+  const shipCell = (o) => {
+    const form = shipEdit[o.id];
+    const note = shipNote[o.id];
+    const busy = !!trackBusy[o.id];
+    const saved = hasShipAddress(o);
+    return (
+      <div className="ship">
+        {form ? (<>
+          <span className="ship-head">Ship to</span>
+          <div className="ship-form">
+            {SHIP_FIELDS.map(([column, label]) => (
+              <label key={column} className="ship-field">
+                <span>{label}</span>
+                <input type={column === "ship_phone" ? "tel" : "text"} autoComplete="off" value={form[column]}
+                  onChange={e=>editShip(o.id, { [column]: e.target.value, err: "" })} />
+              </label>
+            ))}
+          </div>
+          <div className="ship-actions">
+            <button className="tap track-save" onClick={()=>saveShipForm(o)} disabled={busy}>{trackBusy[o.id] === "ship" ? "Saving…" : "Save"}</button>
+            <button className="tap track-btn" onClick={()=>closeShip(o.id)} disabled={busy}>Cancel</button>
+          </div>
+          {form.err && <p className="track-err" role="alert">⚠ {form.err}</p>}
+        </>) : (
+          <div className="track-saved">
+            <span>Ship to:</span>
+            {saved ? <span className="ship-lines">{shipLines(o).join(" · ")}</span> : <span className="ship-none">no address yet</span>}
+            <button className="tap track-btn" onClick={()=>openShip(o)}>{saved ? "Edit" : "Add"}</button>
+            {!saved && clientHasAddress(clientOf(o)) && (
+              <button className="tap track-btn" onClick={()=>copyClientShip(o)} disabled={busy}>Use the client&apos;s saved address</button>
+            )}
           </div>
         )}
         {note && <p className={note.ok ? "track-ok" : "track-err"} role="status">{note.text}</p>}
@@ -661,7 +735,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <thead><tr><th>Ref</th><th>Client</th><th>Artwork</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr></thead>
             <tbody>{filtered.map(o=>(
               <Fragment key={o.id}>
-                <tr className={showsShipping(o) ? "has-track" : undefined}>
+                <tr className="has-track">
                   <td data-label="Ref" className="crm-wide" style={{fontFamily:"monospace",color:"var(--muted)",whiteSpace:"nowrap"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>{o.invoice_token ? <>{invoiceNumber(o)}<CopyButton text={invoiceNumber(o)} /></> : `#${String(o.id).slice(0,8).toUpperCase()}`}</div>
                     {o.invoice_token && (isPaid(o.status) ? (
@@ -719,13 +793,15 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     {asking("delete", o.id) && deleteAsk(o)}
                   </td>
                 </tr>
-                {/* Shipping, under the order it belongs to: Paid, Shipped and Delivered (the shop
-                    ships once the money is in), and any order while Shipped is being picked. */}
-                {showsShipping(o) && (
-                  <tr className="crm-track">
-                    <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px"}}>{trackCell(o)}</td>
-                  </tr>
-                )}
+                {/* Shipping, under the order it belongs to: where it goes (every order), then how it
+                    went out (Paid, Shipped and Delivered, since the shop ships once the money is
+                    in, and any order while Shipped is being picked). */}
+                <tr className="crm-track">
+                  <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px"}}>
+                    {shipCell(o)}
+                    {showsTracking(o) && trackCell(o)}
+                  </td>
+                </tr>
                 {expanded[o.id] && o.notes && (
                   <tr className="crm-detail">
                     <td colSpan={7} style={{background:"#fffbf5",padding:"10px 14px 14px",borderTop:"none"}}>

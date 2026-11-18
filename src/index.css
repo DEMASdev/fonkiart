@@ -875,6 +875,18 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .track-tick { min-height:44px; }
   .track-form input, .ask-link .copy-btn.copy-btn-line { min-height:44px; }
 }
+/* Shipping address (Andy, 2026-11-17: "also make sure in the admin and for the user can add
+   the shipping address !"). Admin -> Orders: "Ship to" on every order, above its tracking. */
+.ship { display:flex;flex-direction:column;align-items:flex-start;gap:8px;font-size:17px;color:var(--ink); }
+.ship + .track { margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);width:100%; }
+.ship-head { font-size:16px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted); }
+.ship-form { display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 12px;width:100%; }
+.ship-field { display:flex;flex-direction:column;gap:4px;font-size:16px;color:var(--muted);min-width:0; }
+.ship-field input { font-family:inherit;font-size:16px;color:var(--ink);background:#fff;border:1px solid var(--border);padding:6px 10px;width:100%;min-width:0; }
+.ship-actions { display:flex;flex-wrap:wrap;gap:8px; }
+.ship-lines { overflow-wrap:anywhere; }
+.ship-none { color:var(--muted); }
+@media (pointer:coarse) { .ship-field input { min-height:44px; } }
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }
