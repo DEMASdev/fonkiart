@@ -33,12 +33,28 @@ export const cardReady = () => /^(sk|rk)_(live|test)_\S+$/.test(key());
 // It must be the same mode as the secret key (both live or both test), or Stripe.js can't
 // open the page. With none, or a mismatch, the Cart sends the buyer to Stripe's own page.
 export function publishableKey() {
-  const pk = String(process.env.STRIPE_PUBLISHABLE_KEY || "").trim();
-  const mode = /^pk_(live|test)_\S+$/.exec(pk)?.[1];
+  const { pk, mode, why } = pkCheck();
   if (!mode || !cardReady()) return null;
-  if (key().includes(`_${mode}_`)) return pk;
+  if (!why) return pk;
   console.warn(`stripe: STRIPE_PUBLISHABLE_KEY is a ${mode} key and STRIPE_SECRET_KEY is not; the Cart uses Stripe's own page`);
   return null;
+}
+
+// The publishable key as Vercel has it, and what is wrong with it: "no-key" (not set), "bad-key"
+// (not a pk_live_ / pk_test_ key: a stray quote or space, or another key pasted in by mistake) or
+// "mode-mismatch" (live with a test secret key, or the other way round). null: nothing wrong.
+function pkCheck() {
+  const pk = String(process.env.STRIPE_PUBLISHABLE_KEY || "").trim();
+  const mode = /^pk_(live|test)_\S+$/.exec(pk)?.[1];
+  const why = !pk ? "no-key" : !mode ? "bad-key" : cardReady() && !key().includes(`_${mode}_`) ? "mode-mismatch" : null;
+  return { pk, mode, why };
+}
+
+// The shop's own look at the card setup (op "card-setup"), without making a Stripe page: card
+// payments on, the Cart's card form able to open inside fonkiart.com, and if not, why. Only
+// these three answers: NEVER any part of a key (the answer goes to whoever asks).
+export function cardSetup() {
+  return { card: cardReady(), form: !!publishableKey(), why: pkCheck().why };
 }
 
 export function toCents(amount) {

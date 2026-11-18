@@ -9,7 +9,7 @@ import { cardPicture, markSoldForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
+import { cardReady, cardSetup, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, isCartPage, cartStripeEvent } from "./cartCheckout.js";
 
@@ -429,6 +429,8 @@ export const STORE_OPS = {
   // Paying that same saved order again, and asking whether it is paid: never a second order.
   "cart-again": (db, req, mail) => opCartAgain(db, req.body || {}, mail),
   "cart-order": (db, req, mail) => opCartOrder(db, req.body || {}, mail),
+  // Is the card form ready to open inside fonkiart.com, and if not, why (stripe.js). Never a key.
+  "card-setup": () => cardSetup(),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),
