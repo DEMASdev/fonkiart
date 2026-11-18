@@ -21,7 +21,7 @@ export default function Footer({ settings, onTrackOrder }) {
       </div>
       <div style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontSize:11, letterSpacing:".12em", textTransform:"uppercase", color:"var(--muted)", marginBottom:8 }}>Accepted Payments</div>
+          <div style={{ fontSize:16, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>Accepted Payments</div>
           <div className="payment-logos">
             <svg viewBox="0 0 48 30" xmlns="http://www.w3.org/2000/svg" aria-label="Visa"><rect width="48" height="30" rx="4" fill="#1A1F71"/><text x="24" y="21" fontFamily="Arial,sans-serif" fontSize="14" fontWeight="bold" fontStyle="italic" fill="#FFFFFF" textAnchor="middle">VISA</text></svg>
             <svg viewBox="0 0 48 30" xmlns="http://www.w3.org/2000/svg" aria-label="Mastercard"><rect width="48" height="30" rx="4" fill="#fff" stroke="#e0e0e0" strokeWidth="1"/><circle cx="18" cy="15" r="9" fill="#EB001B"/><circle cx="30" cy="15" r="9" fill="#F79E1B"/><path d="M24 7.7a9 9 0 0 1 0 14.6A9 9 0 0 1 24 7.7z" fill="#FF5F00"/></svg>

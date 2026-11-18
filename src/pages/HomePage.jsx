@@ -18,8 +18,8 @@ export default function HomePage({ setPage, data }) {
           <h1 className="hero-title">Where <em>art</em><br />meets the soul</h1>
           <p className="hero-sub">Curated works available for purchase. Each piece is original and ships worldwide.</p>
           <div className="hero-buttons" style={{ display:"flex", gap:10, marginTop:20, flexWrap:"wrap" }}>
-            <button className="btn-p" onClick={() => setPage("catalog")} style={{ background:"var(--gold)", fontSize:13, letterSpacing:".18em", padding:"13px 28px" }}>Shop Now →</button>
-            <button className="btn-s" onClick={() => setPage("catalog")} style={{ color:"rgba(255,255,255,.6)", borderColor:"rgba(255,255,255,.25)", fontSize:11 }}>Shop the Collection</button>
+            <button className="btn-p" onClick={() => setPage("catalog")} style={{ background:"var(--gold)" }}>Shop Now →</button>
+            <button className="btn-s" onClick={() => setPage("catalog")} style={{ color:"rgba(255,255,255,.6)", borderColor:"rgba(255,255,255,.25)" }}>Shop the Collection</button>
           </div>
         </div>
         <div className="hero-right">

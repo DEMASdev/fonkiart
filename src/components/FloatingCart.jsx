@@ -16,8 +16,8 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
               {cart.length === 0 ? (
                 <div className="cart-empty">
                   <div className="cart-empty-icon">🛒</div>
-                  <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, fontWeight:300, marginBottom:8 }}>Your cart is empty</p>
-                  <p style={{ fontSize:13, color:"var(--muted)" }}>Browse the collection and add pieces you love.</p>
+                  <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:24, fontWeight:300, marginBottom:8 }}>Your cart is empty</p>
+                  <p style={{ fontSize:16, color:"var(--muted)" }}>Browse the collection and add pieces you love.</p>
                 </div>
               ) : cart.map(item => (
                 <div key={item.id} className="cart-drawer-item">
@@ -38,7 +38,7 @@ export default function FloatingCart({ cart, removeFromCart, cartOpen, setCartOp
             {cart.length > 0 && (
               <div className="cart-drawer-foot">
                 <button className="cart-drawer-view-btn" onClick={() => { setCartOpen(false); onViewCart && onViewCart(); }}>View Cart</button>
-                <button className="tap" style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
+                <button className="tap" style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, letterSpacing:".08em", textTransform:"uppercase", color:"var(--muted)", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}
                   onClick={() => { cart.forEach(i => removeFromCart(i.id)); }}>Clear Cart</button>
               </div>
             )}

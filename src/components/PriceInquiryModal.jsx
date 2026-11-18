@@ -23,7 +23,7 @@ export default function PriceInquiryModal({ item, onClose }) {
       <div className="checkout" style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize:48, marginBottom:14 }}>✉️</div>
         <h2 style={{ marginBottom:10 }}>Inquiry Sent!</h2>
-        <p style={{ color:"var(--muted)", fontSize:14, lineHeight:1.7, marginBottom:24 }}>
+        <p style={{ color:"var(--muted)", fontSize:17, lineHeight:1.6, marginBottom:24 }}>
           Thank you for your interest in <strong>{item.title}</strong>.<br />
           Aliana will reply to <strong>{form.email}</strong> shortly with pricing and availability.
         </p>
@@ -38,7 +38,7 @@ export default function PriceInquiryModal({ item, onClose }) {
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
         <h2>Request Pricing</h2>
         <p className="checkout-sub">{item.title}{item.category ? ` · ${item.category}` : ""}</p>
-        <p style={{ fontSize:13, color:"var(--muted)", lineHeight:1.7, marginBottom:20 }}>
+        <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.6, marginBottom:20 }}>
           This piece is available by request. Fill in your details and Aliana will get back to you with pricing and availability.
         </p>
         <div className="stack-phone" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:4 }}>

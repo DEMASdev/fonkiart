@@ -27,19 +27,19 @@ export default function CollectorsSection() {
       <div className="collectors-form">
         {submitted ? (
           <div style={{ background:"#fff", border:"2px solid var(--label)", padding:"24px", textAlign:"center" }}>
-            <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>Welcome to the Club</div>
-            <p style={{ fontSize:13, color:"var(--muted)", lineHeight:1.7 }}>You're on the list. We'll be in touch with exclusive access.</p>
+            <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:26, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>Welcome to the Club</div>
+            <p style={{ fontSize:17, color:"var(--muted)", lineHeight:1.6 }}>You're on the list. We'll be in touch with exclusive access.</p>
           </div>
         ) : (
           <>
-            <p style={{ fontSize:13, color:"var(--ink)", opacity:.7, lineHeight:1.6 }}>Enter your email to join. Free, instant access.</p>
+            <p style={{ fontSize:16, color:"var(--ink)", opacity:.7, lineHeight:1.5 }}>Enter your email to join. Free, instant access.</p>
             <input className="collectors-input" type="email" placeholder="your@email.com" value={email}
               onChange={e => { setEmail(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && handleJoin()} />
-            {err && <p style={{ fontSize:12, color:"#c0392b", marginTop:-4 }}>{err}</p>}
+            {err && <p style={{ fontSize:16, color:"#c0392b", marginTop:-4 }}>{err}</p>}
             <button className="collectors-submit" onClick={handleJoin} disabled={loading}>
               {loading ? "Joining…" : "Join the Collectors Club →"}
             </button>
-            <p style={{ fontSize:11, color:"var(--ink)", opacity:.45, letterSpacing:".08em" }}>No spam. Unsubscribe anytime.</p>
+            <p style={{ fontSize:16, color:"var(--ink)", opacity:.45, letterSpacing:".03em" }}>No spam. Unsubscribe anytime.</p>
           </>
         )}
       </div>

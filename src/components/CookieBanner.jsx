@@ -15,7 +15,7 @@ export default function CookieBanner({ onContact }) {
       </p>
       <button
         className="btn-p"
-        style={{ background:"var(--gold)", padding:"8px 20px", fontSize:11, letterSpacing:".1em", whiteSpace:"nowrap", flexShrink:0 }}
+        style={{ background:"var(--gold)", padding:"10px 22px", fontSize:16, letterSpacing:".1em", whiteSpace:"nowrap", flexShrink:0 }}
         onClick={() => { localStorage.setItem("fonkiart-cookie-ok","1"); setVisible(false); }}
       >
         Got it

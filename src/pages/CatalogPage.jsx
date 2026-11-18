@@ -43,7 +43,7 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
       <div className="catalog-search-wrap">
         <input className="catalog-search" placeholder="Search artworks…" value={search} onChange={e => handleSearch(e.target.value)} />
         <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}
-          style={{ border:"1px solid var(--border)", padding:"8px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".06em", background:"var(--cream)", color:"var(--ink)", outline:"none", cursor:"pointer" }}>
+          style={{ border:"1px solid var(--border)", padding:"8px 12px", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".04em", background:"var(--cream)", color:"var(--ink)", outline:"none", cursor:"pointer" }}>
           <option value="default">Sort: Default</option>
           <option value="price-asc">Price: Low → High</option>
           <option value="price-desc">Price: High → Low</option>
@@ -54,25 +54,25 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
         {paginated.length === 0
           ? <div className="gallery-empty">
               <h3>{search ? "No results found" : "No works in this collection yet"}</h3>
-              <p style={{ fontSize:13 }}>{search ? `No artworks match "${search}"` : "Add pieces via the Admin panel."}</p>
+              <p style={{ fontSize:17 }}>{search ? `No artworks match "${search}"` : "Add pieces via the Admin panel."}</p>
             </div>
           : <div className="gallery-grid">
               {paginated.map(item => (
                 <div key={item.id} className="card" onClick={() => setSelected(item)}>
                   <Pic src={item.image} w={640} alt={item.title} loading="lazy" />
                   {item.isChildren && <div className="card-children">❤️</div>}
-                  {item.isSold && <div className="card-badge" style={{top:10,background:"#1c1a18",color:"#fff",letterSpacing:".14em"}}>Sold</div>}
+                  {item.isSold && <div className="card-badge" style={{top:10,background:"#1c1a18",color:"#fff",letterSpacing:".12em"}}>Sold</div>}
                   {!item.isSold && item.salePrice && <div className="card-badge card-badge-sale" style={{top:10}}>Sale</div>}
-                  {!item.isSold && item.isNew && <div className="card-badge card-badge-new" style={{top:item.salePrice?34:10}}>New</div>}
+                  {!item.isSold && item.isNew && <div className="card-badge card-badge-new" style={{top:item.salePrice?44:10}}>New</div>}
                   <div className="card-over">
                     <div className="card-cat">{item.category}</div>
                     <div className="card-title">{item.title}</div>
                     {item.salePrice
                       ? <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
                           <span className="card-price" style={{marginBottom:0,color:"var(--gold)"}}>${Number(item.salePrice).toLocaleString()}</span>
-                          {item.price && <span style={{fontSize:11,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</span>}
+                          {item.price && <span style={{fontSize:16,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</span>}
                         </div>
-                      : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span style={{fontSize:11,letterSpacing:".1em",opacity:.75}}>Price on request</span>}</div>
+                      : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span style={{fontSize:16,letterSpacing:".06em",opacity:.75}}>Price on request</span>}</div>
                     }
                     {item.isSold
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>

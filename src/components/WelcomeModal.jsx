@@ -64,18 +64,18 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
                 <p>Enter your email and we'll send your unique coupon instantly.</p>
                 <input type="email" autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="your@email.com" onKeyDown={e => e.key === "Enter" && handleSubmit()}
                   style={{ width:"100%", border:"1px solid var(--border)", padding:"11px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:16, outline:"none", marginBottom:8 }} />
-                {err && <p style={{ color:"#c0392b", fontSize:14, marginBottom:6 }}>{err}</p>}
-                <button className="btn-p" style={{ width:"100%", background:"var(--gold)", marginBottom:10, padding:"14px", fontSize:15 }} onClick={handleSubmit} disabled={loading}>
+                {err && <p style={{ color:"#c0392b", fontSize:16, marginBottom:6 }}>{err}</p>}
+                <button className="btn-p" style={{ width:"100%", background:"var(--gold)", marginBottom:10, padding:"14px", fontSize:16 }} onClick={handleSubmit} disabled={loading}>
                   {loading ? "Sending…" : "Get My Coupon →"}
                 </button>
-                <p style={{ fontSize:13, color:"var(--muted)", textAlign:"center" }}>No spam. Unsubscribe anytime.</p>
+                <p style={{ fontSize:16, color:"var(--muted)", textAlign:"center" }}>No spam. Unsubscribe anytime.</p>
               </>
             ) : (
               <>
                 {alreadyUsed ? (
                   <>
                     <p>Your welcome coupon has already been redeemed — thank you for your purchase!</p>
-                    <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:15, marginTop:8 }} onClick={onClose}>Browse the Collection</button>
+                    <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:16, marginTop:8 }} onClick={onClose}>Browse the Collection</button>
                   </>
                 ) : (
                   <>
@@ -84,8 +84,8 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
                       <span className="coupon-code">{generatedCode}</span>
                       <button className="coupon-copy" onClick={copy}>{copied ? "✓ Copied!" : "Copy"}</button>
                     </div>
-                    <p style={{ fontSize:15, color:"var(--muted)", marginBottom:10 }}>One use only · {discount}% off · tied to your email.</p>
-                    <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:15 }} onClick={onClose}>Browse the Collection</button>
+                    <p style={{ fontSize:16, color:"var(--muted)", marginBottom:10 }}>One use only · {discount}% off · tied to your email.</p>
+                    <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:16 }} onClick={onClose}>Browse the Collection</button>
                   </>
                 )}
               </>

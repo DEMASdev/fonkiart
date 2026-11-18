@@ -14,21 +14,21 @@ export default function SpecialsPage({ data, addToCart, cart }) {
       </div>
       <div className="gallery">
         {items.length === 0
-          ? <div className="gallery-empty"><h3>No specials right now</h3><p style={{fontSize:13}}>Add a sale price to artworks in the Admin panel.</p></div>
+          ? <div className="gallery-empty"><h3>No specials right now</h3><p style={{fontSize:17}}>Add a sale price to artworks in the Admin panel.</p></div>
           : <div className="gallery-grid">
               {items.map(item => (
                 <div key={item.id} className="card" onClick={() => setSelected(item)}>
                   <Pic src={item.image} w={640} alt={item.title} loading="lazy" />
                   {item.isChildren && <div className="card-children">❤️</div>}
-                  {item.isSold && <div className="card-badge" style={{top:10,background:"#1c1a18",color:"#fff",letterSpacing:".14em"}}>Sold</div>}
+                  {item.isSold && <div className="card-badge" style={{top:10,background:"#1c1a18",color:"#fff",letterSpacing:".12em"}}>Sold</div>}
                   {!item.isSold && <div className="card-badge card-badge-sale" style={{top:10}}>Sale</div>}
-                  {!item.isSold && item.isNew && <div className="card-badge card-badge-new" style={{top:34}}>New</div>}
+                  {!item.isSold && item.isNew && <div className="card-badge card-badge-new" style={{top:44}}>New</div>}
                   <div className="card-over">
                     <div className="card-cat">{item.category}</div>
                     <div className="card-title">{item.title}</div>
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                       <div className="card-price" style={{color:"var(--gold)"}}>${Number(item.salePrice).toLocaleString()}</div>
-                      {item.price && <div style={{fontSize:13,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</div>}
+                      {item.price && <div style={{fontSize:16,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</div>}
                     </div>
                     {item.isSold
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>

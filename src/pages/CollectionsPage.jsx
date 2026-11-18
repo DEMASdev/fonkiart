@@ -11,7 +11,7 @@ export default function CollectionsPage({ data, goToCategory }) {
       </div>
       <div className="gallery">
         {categories.length === 0
-          ? <div className="gallery-empty"><h3>No collections yet</h3><p style={{fontSize:13}}>Add categories in the Admin panel.</p></div>
+          ? <div className="gallery-empty"><h3>No collections yet</h3><p style={{fontSize:17}}>Add categories in the Admin panel.</p></div>
           : <div className="gallery-grid">
               {categories.map(cat => {
                 const preview = data.items.find(i => i.category === cat && i.image);
@@ -22,7 +22,7 @@ export default function CollectionsPage({ data, goToCategory }) {
                       : <div style={{ width:"100%", aspectRatio:"1/1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
                     }
                     <div className="card-over" style={{ opacity:1, background:"linear-gradient(to top,rgba(10,8,6,.75) 0%,transparent 60%)" }}>
-                      <div className="card-title" style={{ fontSize:20 }}>{cat}</div>
+                      <div className="card-title">{cat}</div>
                       <button className="card-btn">Explore →</button>
                     </div>
                   </div>

@@ -41,8 +41,8 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
       {cart.length === 0 ? (
         <div className="cart-empty">
           <div className="cart-empty-icon">🛒</div>
-          <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:300, marginBottom:8 }}>Your cart is empty</p>
-          <p style={{ fontSize:14, color:"var(--muted)", marginBottom:20 }}>Browse the collection and add pieces you love.</p>
+          <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:26, fontWeight:300, marginBottom:8 }}>Your cart is empty</p>
+          <p style={{ fontSize:17, color:"var(--muted)", marginBottom:20 }}>Browse the collection and add pieces you love.</p>
           <button className="btn-p" onClick={() => setPage("catalog")}>Shop Now</button>
         </div>
       ) : (
@@ -56,7 +56,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
                   <div className="cart-page-item-title" onClick={() => setSelected(item)}>{item.title}</div>
                   <div className="cart-page-item-price">
                     {item.salePrice
-                      ? <>${Number(item.salePrice).toLocaleString()} <span style={{fontSize:13,color:"var(--muted)",textDecoration:"line-through",marginLeft:6}}>{item.price ? `$${Number(item.price).toLocaleString()}` : ""}</span></>
+                      ? <>${Number(item.salePrice).toLocaleString()} <span style={{fontSize:16,color:"var(--muted)",textDecoration:"line-through",marginLeft:6}}>{item.price ? `$${Number(item.price).toLocaleString()}` : ""}</span></>
                       : item.price ? `$${Number(item.price).toLocaleString()}` : "Price on request"}
                   </div>
                 </div>
