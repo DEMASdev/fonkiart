@@ -435,7 +435,7 @@ export const STORE_OPS = {
   "thread-reply": (db, req, mail) => opThreadReply(db, req.body || {}, mail),
   "inbound": (db, req, mail) => opInbound(db, req, mail),
   "reminders": (db, req, mail) => opReminders(db, req, mail),
-  "ship-address": (db, req) => opShipAddress(db, req.body || {}),
+  "ship-address": (db, req, mail) => opShipAddress(db, req.body || {}, mail),
 };
 
 // Ops a plain GET may call: only Vercel's daily cron, which can't POST.
@@ -446,7 +446,11 @@ export const GET_OPS = new Set(["reminders"]);
 // link can set it, like opInvoice, before or after paying. Once the order has gone out
 // (Shipped, Delivered) it can't be changed here any more: the client asks Fonkiart instead.
 // Every field has the checkout's limits (opOrder); only the seven address columns are written.
-export async function opShipAddress(db, body) {
+// When the client really adds or changes it, the shop gets one short email (Andy, 2026-11-18:
+// "7ab Yes"): "added" while the order had no street yet, else "changed", with the old address.
+// Saving the same address again sends nothing. The address is saved first, so an email that
+// fails never loses it and the client still sees it saved. Never emails the client.
+export async function opShipAddress(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
   if (order.status === "shipped" || order.status === "delivered") {
     throw new InputError("This order has already gone out, so the address can't be changed here. Please contact Fonkiart.", 409);
@@ -458,5 +462,16 @@ export async function opShipAddress(db, body) {
   }
   const { error } = await db.from("Orders").update(address).eq("id", order.id);
   if (error) throw error;
+  // What it had, as it would be saved (trimmed, empty as null), so only a real change counts.
+  const before = Object.fromEntries(Object.keys(SHIP_LIMITS).map(column =>
+    [column, order[column] == null ? null : String(order[column]).trim() || null]));
+  const changed = Object.keys(SHIP_LIMITS).some(column => before[column] !== address[column]);
+  if (changed && mail) {
+    const had = before.ship_address ? before : null; // an address counts once it has a street
+    const invNum = invoiceNumber(order);
+    await mail.send({ to: mail.sender, subject: T.shipAddressSubject({ order, invNum, changed: !!had }),
+      htmlContent: T.shipAddressShop({ order, invNum, address, before: had }) })
+      .catch(e => console.warn("store ship-address email:", e?.message || e));
+  }
   return { ok: true, address };
 }

@@ -247,6 +247,31 @@ export function invoiceApproved({ order, invNum }) {
     + footnote);
 }
 
+// To the shop when a client adds or changes the shipping address on their invoice page (Andy,
+// 2026-11-18: "7ab Yes"). Only the client's own save sends it (storeOps.js opShipAddress); the
+// shop's own edits in Admin -> Orders never do. The address in the same lines as the admin's
+// (src/lib/shipAddress.js shipLines): name, street, "City, ST ZIP", country, phone.
+const shipLines = (a) => {
+  const v = (column) => String(a?.[column] ?? "").trim();
+  const cityLine = [v("ship_city"), [v("ship_state"), v("ship_zip")].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  return [v("ship_name"), v("ship_address"), cityLine, v("ship_country"), v("ship_phone")].filter(Boolean);
+};
+const addressLines = (a) => `<p style="margin:0;font-size:17px;line-height:1.6;">${shipLines(a).map(line => e(line)).join("<br/>")}</p>`;
+export function shipAddressSubject({ order, invNum, changed }) {
+  return `Shipping address ${changed ? "changed" : "added"} — ${order.item_title} · ${invNum}`;
+}
+// before: the address it had (with a street), when the client changed it; null when added.
+export function shipAddressShop({ order, invNum, address, before = null }) {
+  const did = before ? "changed" : "added";
+  return frame(`Shipping address ${did}`,
+    p(`<strong>${clientWho(order)}</strong> ${did} the shipping address for <strong>${e(order.item_title)}</strong> on the invoice page.`)
+    + p(`<strong>Invoice:</strong> ${e(invNum)}`)
+    + panel(before ? "New address" : "Ship to", addressLines(address))
+    + (before ? panel("Before", addressLines(before)) : "")
+    + p(`See it in <strong>Admin → Orders</strong>.`)
+    + footnote);
+}
+
 // To the shop when a client pays an invoice by card. Stripe confirmed it to the server,
 // so the website marked the order Paid by itself.
 export function cardPaidSubject(order) {
