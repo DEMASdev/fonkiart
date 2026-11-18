@@ -5,6 +5,7 @@ import { bearer } from "./adminToken.js";
 import { checkPassword } from "./adminSecret.js";
 import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
+import { cardPicture } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
@@ -228,8 +229,10 @@ export async function opCardCheckout(db, body) {
   if (PAID_STATUSES.includes(order.status)) return { paid: true };
   if (!order.invoice_approved) throw new InputError("Please confirm the invoice first", 409);
   if (!cardTicked(order)) throw new InputError("Card payment is not offered on this invoice", 409);
+  // The artwork's picture beside the item on Stripe's page; none if it can't be had (artworks.js).
+  const image = await cardPicture(db, order.item_title);
   try {
-    return { url: await createCheckout({ order, invNum: invoiceNumber(order), site: siteUrl() }) };
+    return { url: await createCheckout({ order, invNum: invoiceNumber(order), site: siteUrl(), image }) };
   } catch (e) {
     if (!(e instanceof StripeError)) throw e;
     console.error("store card-checkout:", e.code, e.message);

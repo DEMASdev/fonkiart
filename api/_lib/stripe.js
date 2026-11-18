@@ -19,8 +19,9 @@ const API = "https://api.stripe.com/v1";
 const VERSION = "2024-06-20"; // pinned: a change in Stripe's default can't change what we send
 export const MIN_CENTS = 50;  // Stripe's smallest US card charge
 
+// httpStatus: Stripe's own HTTP answer (400 = it refused what we sent), when it answered at all.
 export class StripeError extends Error {
-  constructor(message, code) { super(message); this.code = code; }
+  constructor(message, code, httpStatus) { super(message); this.code = code; this.httpStatus = httpStatus; }
 }
 
 const key = () => String(process.env.STRIPE_SECRET_KEY || "").trim();
@@ -61,7 +62,7 @@ async function stripe(path, body) {
     throw new StripeError(`Could not reach Stripe: ${e?.message || e}`, "network");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new StripeError(data?.error?.message || `Stripe answered ${res.status}`, data?.error?.code || `http-${res.status}`);
+  if (!res.ok) throw new StripeError(data?.error?.message || `Stripe answered ${res.status}`, data?.error?.code || `http-${res.status}`, res.status);
   return data;
 }
 
@@ -73,23 +74,27 @@ export const isSessionId = (id) => /^cs_(live|test)_[A-Za-z0-9]{10,250}$/.test(S
 // Every payment page we make: one item, paid once, in dollars, by CARD ONLY. Cards only, so
 // no slower method (a bank transfer) can come back "not paid yet" when the client returns.
 // Apple Pay and Google Pay still show: Stripe counts them as cards.
-function paymentPage({ cents, name, description, ...rest }) {
+// image: one picture shown beside the item (Stripe's product_data.images), or none.
+function paymentPage({ cents, name, description, image, ...rest }) {
   return {
     mode: "payment",
     payment_method_types: ["card"],
-    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name, description } } }],
+    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name, description, images: image ? [image] : undefined } } }],
     ...rest,
   };
 }
 
 // The payment page for one invoice. Returns the address to send the client to.
-export async function createCheckout({ order, invNum, site }) {
+// image: the artwork's picture (artworks.js cardPicture), or nothing. A picture never stops a
+// payment: if Stripe refuses the page with it (a 400), the page is asked for again without it.
+export async function createCheckout({ order, invNum, site, image }) {
   const cents = toCents(order.amount);
   if (cents < MIN_CENTS) throw new StripeError("This invoice is too small for a card payment", "too-small");
   const back = `${site}/?invoice=${encodeURIComponent(order.invoice_token)}`;
   const title = String(order.item_title || "Fonkiart artwork").slice(0, 200);
-  const session = await stripe("/checkout/sessions", paymentPage({
-    cents, name: title, description: `Invoice ${invNum}`,
+  const picture = typeof image === "string" && image.startsWith("https://") ? image : undefined;
+  const page = (img) => paymentPage({
+    cents, name: title, description: `Invoice ${invNum}`, image: img,
     customer_email: EMAIL_RE.test(order.client_email || "") ? order.client_email : undefined,
     client_reference_id: invNum,
     metadata: { invoice: invNum, invoice_token: order.invoice_token, order_id: order.id },
@@ -98,7 +103,15 @@ export async function createCheckout({ order, invNum, site }) {
     // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the client back.
     success_url: `${back}&card={CHECKOUT_SESSION_ID}`,
     cancel_url: back,
-  }));
+  });
+  let session;
+  try {
+    session = await stripe("/checkout/sessions", page(picture));
+  } catch (e) {
+    if (!picture || !(e instanceof StripeError) || e.httpStatus !== 400) throw e;
+    console.warn("stripe: Stripe refused the payment page with the picture; making it without:", e.code, e.message);
+    session = await stripe("/checkout/sessions", page(undefined));
+  }
   if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
   return session.url;
 }
