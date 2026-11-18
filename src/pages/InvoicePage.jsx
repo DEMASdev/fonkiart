@@ -144,7 +144,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <div className="inv-num-row">
         <div>
           <div style={{fontSize:"var(--inv-small)",letterSpacing:".14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:3}}>Invoice</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontFamily:"monospace",fontSize:"clamp(15px,3.6vw,18px)",fontWeight:600,color:"var(--ink)",letterSpacing:".04em",whiteSpace:"nowrap"}}>{invNum}<CopyButton text={invNum} /></div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontFamily:"monospace",fontSize:"clamp(16px,4.2vw,18px)",fontWeight:600,color:"var(--ink)",letterSpacing:".04em",whiteSpace:"nowrap"}}>{invNum}<CopyButton text={invNum} /></div>
         </div>
         <div className="inv-num-dates">
           {invDate && <div style={{fontSize:"var(--inv-small)",color:"var(--muted)"}}>Date: {invDate}</div>}

@@ -593,11 +593,12 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 @media(max-width:600px){ .cart-drawer { width:100vw; } }
 
 /* ── INVOICE PAGE ── */
-/* Its text sizes, in one place (Andy, 2026-11-17: "some people can't see well and a small font is
-   hard to read"). --inv-small: labels, dates, captions, fine print; nothing a person reads goes
-   under 14px. --inv-text: sentences. --inv-num: the total. Names are --inv-text + 1px and the
-   pay addresses + 3px. The big titles keep their own sizes. */
-.inv-embed, .invoice-page { --inv-small:14px;--inv-text:16px;--inv-num:30px; }
+/* Its text sizes, in one place. Andy picked them on 2026-11-17 from a sheet of samples
+   ("3 , 8 , 9 ! perfect"): --inv-text 17px for sentences, --inv-small 16px for labels, dates,
+   captions and fine print, and the total (--inv-num) in the serif with clear 1s, below. Why big:
+   "some people can't see well and a small font is hard to read". Names are --inv-text + 1px and
+   the pay addresses + 3px. The big titles keep their own sizes. */
+.inv-embed, .invoice-page { --inv-small:16px;--inv-text:17px;--inv-num:34px; }
 .invoice-page { min-height:100vh;background:#fdfcf8;display:flex;align-items:center;justify-content:center;padding:40px 20px; }
 .invoice-card { background:#fff;border:1px solid var(--border);max-width:560px;width:100%;padding:48px; }
 .invoice-header { text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--border); }
@@ -617,10 +618,10 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .invoice-value { font-size:calc(var(--inv-text) + 1px);color:var(--ink);font-weight:500; }
 .invoice-total { display:flex;justify-content:space-between;align-items:baseline;padding:14px 0 0;margin-top:4px; }
 .invoice-total .invoice-label { font-size:var(--inv-text);color:var(--ink);font-weight:500; }
-/* The total in the plain sans, not the serif (Andy, 2026-11-17, on "TOTAL PAID $1": "the number 1
-   can't be read well in that font"). Cormorant draws a 1 like a Roman I, and even its lining 1
-   has only a tiny flag. Same gold; tabular-nums keeps every digit the same width. */
-.invoice-total .invoice-value { font-family:'DM Sans',sans-serif;font-size:var(--inv-num);color:var(--gold);font-weight:500;font-variant-numeric:tabular-nums; }
+/* The total keeps the Fonkiart serif, with LINING figures, so a 1 is a real 1 and not a Roman I
+   (Andy, 2026-11-17, on "TOTAL PAID $1": "the number 1 can't be read well in that font"). He saw it
+   next to the plain-font version and chose this one ("9" on his sheet). */
+.invoice-total .invoice-value { font-family:'Cormorant Garamond',serif;font-size:var(--inv-num);color:var(--gold);font-weight:600;letter-spacing:.02em;font-variant-numeric:lining-nums; }
 .invoice-pay-section { margin-top:32px;padding-top:24px;border-top:1px solid var(--border); }
 .invoice-pay-option { background:var(--cream);border:1px solid var(--border);padding:20px 24px;margin-bottom:12px; }
 .invoice-pay-title { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
