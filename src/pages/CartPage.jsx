@@ -5,6 +5,10 @@ import Pic from "../components/Pic";
 
 export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage }) {
   const [checkout, setCheckout] = useState(false);
+  // The items of the order just placed. The cart itself is emptied the moment the order is
+  // saved, so closing the tab on the thank-you screen leaves no paid cart behind; that screen
+  // names the order from this copy.
+  const [placed, setPlaced] = useState(null);
   const [selected, setSelected] = useState(null);
 
   const itemPrice = (i) => Number(i.salePrice || i.price || 0);
@@ -20,11 +24,11 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
   if (checkout) {
     return (
       <CheckoutModal
-        items={cart}
+        items={placed || cart}
         settings={settings}
         fullPage
-        onClose={() => setCheckout(false)}
-        onSuccess={() => { cart.forEach(i => removeFromCart(i.id)); setCheckout(false); setPage("catalog"); }}
+        onClose={() => { setCheckout(false); if (placed) { setPlaced(null); setPage("catalog"); } }}
+        onSuccess={() => { setPlaced([...cart]); cart.forEach(i => removeFromCart(i.id)); }}
       />
     );
   }
