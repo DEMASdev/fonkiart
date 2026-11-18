@@ -131,9 +131,9 @@ export function welcomeCoupon({ code, discount }) {
 
 export function orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender }) {
   const rows = items.map(i => `<p style="margin:0 0 4px;font-size:19px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
-  const summary = (orderRef ? `<p style="margin:0 0 8px;font-size:15px;color:${C.muted};">Reference: <strong style="font-family:monospace;letter-spacing:.05em;color:${C.ink};">${e(orderRef)}</strong></p>` : "")
+  const summary = (orderRef ? `<p style="margin:0 0 8px;font-size:16px;color:${C.muted};">Reference: <strong style="font-family:monospace;letter-spacing:.05em;color:${C.ink};">${e(orderRef)}</strong></p>` : "")
     + rows
-    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:15px;color:${C.green};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
+    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:16px;color:${C.green};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
     + (addr ? `<p style="margin:10px 0 0;font-size:16px;color:${C.muted};"><strong>Ship to:</strong> ${e(addr)}</p>` : "");
   return frame(`Thank you, ${e(firstName)}!`,
     p("Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.")
@@ -306,7 +306,7 @@ const MAX_ROWS = 15;
 const more = (n) => n > MAX_ROWS ? `<p style="margin:6px 0 0;font-size:16px;color:${C.muted};">…and ${n - MAX_ROWS} more in the admin.</p>` : "";
 // A thin gold line BETWEEN rows, none under the last one.
 const row = (html, i) => `<div style="${i ? `margin:14px 0 0;padding:14px 0 0;border-top:1px solid ${C.line};` : "margin:0;"}">${html}</div>`;
-const note = (html) => `<p style="margin:0;font-size:14px;letter-spacing:.06em;color:${C.muted};">${html}</p>`;
+const note = (html) => `<p style="margin:0;font-size:16px;letter-spacing:.06em;color:${C.muted};">${html}</p>`;
 
 export function reminderStore({ requests, orders }) {
   const reqRows = requests.slice(0, MAX_ROWS).map((r, i) => row(
