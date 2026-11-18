@@ -86,18 +86,18 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
   if (done) return (
     <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
-      <div className={`checkout${fullPage ? " checkout-fullpage" : ""}`} style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
+      <div className={`checkout checkout-buy${fullPage ? " checkout-fullpage" : ""}`} style={{ textAlign:"center" }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize:50, marginBottom:14 }}>🎨</div>
         <h2 style={{ marginBottom:10 }}>Thank you!</h2>
-        <p style={{ color:"var(--muted)", fontSize:14, lineHeight:1.7, marginBottom:16 }}>
+        <p style={{ color:"var(--muted)", fontSize:16, lineHeight:1.7, marginBottom:16 }}>
           Your order for <strong>{itemsLabel}</strong> has been received.<br />
           Fonkiart will confirm and reach out about shipping.
         </p>
         {orderRef && (
           <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"12px 20px", marginBottom:24, display:"inline-block" }}>
-            <div style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Reference</div>
+            <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Reference</div>
             <div style={{ fontFamily:"monospace", fontSize:20, letterSpacing:".08em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
-            <div style={{ fontSize:11, color:"var(--muted)", marginTop:4 }}>Also in your confirmation email</div>
+            <div style={{ fontSize:16, color:"var(--muted)", marginTop:4 }}>Also in your confirmation email</div>
           </div>
         )}
         <button className="btn-p" style={{ width:"100%" }} onClick={onClose}>Close</button>
@@ -107,7 +107,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
   return (
     <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
-      <div className={`checkout${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
+      <div className={`checkout checkout-buy${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
         <h2>Purchase</h2>
         <div className="checkout-items" style={{ marginBottom:24 }}>
@@ -116,14 +116,14 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               {i.image && <Pic src={i.image} w={320} alt={i.title} className="checkout-item-thumb" />}
               <p className="checkout-sub" style={{ margin:0 }}>
                 {i.title}{itemEffective(i) ? ` · $${Number(itemEffective(i)).toLocaleString()}` : ""}
-                {couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
+                {couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
               </p>
             </div>
           ))}
           {items.length > 1 && (
             <p className="checkout-sub" style={{ marginTop:6, fontWeight:600 }}>
               Total{effectivePrice ? ` · $${Number(effectivePrice).toLocaleString()}` : ""}
-              {couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:11,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
+              {couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
             </p>
           )}
         </div>
@@ -140,14 +140,14 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               ))}
             </div>
             <div style={{ borderTop:"1px solid var(--border)", paddingTop:18, marginBottom:4 }}>
-              <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
+              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div className="fld"><label>First Name *</label><input autoComplete="given-name" value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
                 <div className="fld"><label>Last Name *</label><input autoComplete="family-name" value={customer.lastName} onChange={e=>cv("lastName",e.target.value)} placeholder="Smith" /></div>
               </div>
               <div className="fld"><label>Email *</label><input type="email" autoComplete="email" autoCapitalize="none" value={customer.email} onChange={e=>cv("email",e.target.value)} placeholder="jane@email.com" /></div>
               <div className="fld"><label>Phone</label><input type="tel" autoComplete="tel" value={customer.phone} onChange={e=>cv("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
-              <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"12px 0 10px" }}>Shipping Address</p>
+              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"12px 0 10px" }}>Shipping Address</p>
               <div className="fld"><label>Street</label><input autoComplete="street-address" value={customer.address} onChange={e=>cv("address",e.target.value)} placeholder="123 Main St" /></div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div className="fld"><label>City</label><input autoComplete="address-level2" value={customer.city} onChange={e=>cv("city",e.target.value)} placeholder="Miami" /></div>
@@ -157,40 +157,40 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
                 <div className="fld"><label>ZIP</label><input autoComplete="postal-code" inputMode="numeric" value={customer.zip} onChange={e=>cv("zip",e.target.value)} placeholder="33101" /></div>
                 <div className="fld"><label>Country</label><input autoComplete="country-name" value={customer.country} onChange={e=>cv("country",e.target.value)} placeholder="USA" /></div>
               </div>
-              <p style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
+              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
               <div style={{ display:"flex", gap:8 }}>
                 <input autoCapitalize="characters" autoComplete="off" value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
                   placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
-                  style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:13, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
+                  style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
                 />
                 {couponStatus !== "valid"
                   ? <button className="btn-s" onClick={applyCoupon} disabled={couponStatus==="checking"||!couponCode.trim()} style={{whiteSpace:"nowrap"}}>{couponStatus==="checking"?"Checking…":"Apply"}</button>
                   : <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
                 }
               </div>
-              {couponStatus==="valid"       && <p style={{fontSize:12,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied — you save ${(basePrice-effectivePrice).toLocaleString()}</p>}
-              {couponStatus==="invalid"     && <p style={{fontSize:12,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
-              {couponStatus==="used"        && <p style={{fontSize:12,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}
-              {couponStatus==="need-email"  && <p style={{fontSize:12,color:"#c0392b",marginTop:6}}>Enter your email address first, then apply the coupon.</p>}
-              {couponStatus==="wrong-email" && <p style={{fontSize:12,color:"#c0392b",marginTop:6}}>This coupon is not linked to this email address.</p>}
+              {couponStatus==="valid"       && <p style={{fontSize:16,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied — you save ${(basePrice-effectivePrice).toLocaleString()}</p>}
+              {couponStatus==="invalid"     && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
+              {couponStatus==="used"        && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}
+              {couponStatus==="need-email"  && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Enter your email address first, then apply the coupon.</p>}
+              {couponStatus==="wrong-email" && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon is not linked to this email address.</p>}
             </div>
             <button className="confirm-btn" style={{ background:canNext?"var(--gold)":"var(--border)", marginTop:12 }} onClick={handleContinue}>Continue →</button>
-            {checkoutError && <p style={{ fontSize:12, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+            {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}
 
         {step === 2 && (
           <>
-            <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>
+            <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>
             {method === "zelle" && (
               <div className="pay-detail">
                 <h4>Send via Zelle</h4>
                 <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:12,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <div style={{ fontSize:13, color:"var(--muted)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div>
+                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                <div style={{ fontSize:16, color:"var(--muted)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div>
                 <div className="zelle-contact">{settings.zelleContact}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
                   <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
                 </div>
                 <div className="zelle-steps">1. Open your bank app → Zelle<br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: copy <strong>{orderRef}</strong> and paste it into your Zelle transaction memo/note<br />4. Confirm below — we ship once payment clears ✓</div>
@@ -200,10 +200,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               <div className="pay-detail">
                 <h4>Send via Venmo</h4>
                 <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:12,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
                 <div className="zelle-contact">{venmoHandle}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
                   <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
                 </div>
                 <div className="zelle-steps">1. Open Venmo → Search <strong>{venmoHandle}</strong><br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong><br />3. Note: copy <strong>{orderRef}</strong> and paste it into the Venmo note<br />4. Confirm below — we ship once payment clears ✓</div>
@@ -213,10 +213,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               <div className="pay-detail">
                 <h4>Send via Cash App</h4>
                 <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:12,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
                 <div className="zelle-contact">{cashAppHandle}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:11, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
                   <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
                 </div>
                 <div className="zelle-steps">1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong><br />3. Note: copy <strong>{orderRef}</strong> and paste it into the Cash App note<br />4. Confirm below — we ship once payment clears ✓</div>
@@ -225,15 +225,15 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
             {method === "card" && (
               <div className="pay-detail">
                 <h4>Secure Credit Card via Stripe</h4>
-                {couponStatus==="valid" && <p style={{fontSize:12,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.7 }}>You'll be redirected to our secure Stripe checkout to complete your purchase of <strong>{itemsLabel}</strong>{effectivePrice ? ` for $${Number(effectivePrice).toLocaleString()}` : ""}.</p>
+                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>You'll be redirected to our secure Stripe checkout to complete your purchase of <strong>{itemsLabel}</strong>{effectivePrice ? ` for $${Number(effectivePrice).toLocaleString()}` : ""}.</p>
               </div>
             )}
             {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="card"    && <button className="stripe-btn"  onClick={handleCard}           disabled={saving}>{saving?"Saving…":"Pay Securely with Card →"}</button>}
-            {checkoutError && <p style={{ fontSize:12, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+            {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}
       </div>

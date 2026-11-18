@@ -901,6 +901,14 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .inv-ship-ok { color:#2d6a4f; }
 .inv-ship-err { color:#c0392b; }
 @media (max-width:520px) { .inv-ship-form { grid-template-columns:1fr; } .inv-ship { padding:16px 14px; } }
+/* The shop's checkout (src/components/CheckoutModal.jsx), Andy's text sizes: nothing under 16px
+   (these were 11-15px). Only inside the checkout: other modals share some of these classes.
+   The amount to send is money in Cormorant Garamond, so 600 with lining figures (Andy,
+   2026-11-17: "the number 1 can't be read well in that font"). */
+.checkout-buy .checkout-sub, .checkout-buy .pay-opt-label, .checkout-buy .pay-opt-sub, .checkout-buy .pay-detail h4,
+.checkout-buy .zelle-steps, .checkout-buy .confirm-btn, .checkout-buy .stripe-btn,
+.checkout-buy .fld label, .checkout-buy .fld input, .checkout-buy .btn-s, .checkout-buy .btn-p { font-size:16px; }
+.checkout-buy .zelle-amount { font-weight:600;font-variant-numeric:lining-nums; }
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }
