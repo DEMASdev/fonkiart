@@ -40,3 +40,14 @@ export function markPaidChoices(paymentMethods) {
   const ways = offered.length ? offered : [...INVOICE_WAYS.values()];
   return PAID_METHODS.filter(([v]) => ways.includes(v) || v === "cash" || v === "other");
 }
+
+// Picking "Paid" from a Status menu (an order's, or "+ Add Order") first asks the same
+// question as "Mark paid", so the invoice can say "Paid by ...". Every other status saves at once.
+export const asksPaidMethod = (status) => status === "paid";
+
+// What a status change saves. paid_method goes only with Paid, and only once a method was
+// chosen: the server refuses an empty one (api/_lib/adminOps.js). Any other status leaves the
+// order's paid_method as it is.
+export function statusChange(status, paidMethod) {
+  return status === "paid" && paidMethod ? { status, paid_method: paidMethod } : { status };
+}

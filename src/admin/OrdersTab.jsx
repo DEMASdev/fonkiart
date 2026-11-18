@@ -6,7 +6,9 @@ import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
-import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices } from "../lib/orderStatus";
+import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange } from "../lib/orderStatus";
+// confirmPaid's value while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
+const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -30,7 +32,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const showMsg = (msg) => { setInvSent(msg); setTimeout(() => setInvSent(""), 4000); };
   const [resending, setResending] = useState({});
   const [statusErr, setStatusErr] = useState("");
-  const [confirmPaid, setConfirmPaid] = useState(null); // the order id asking "Paid?"
+  const [confirmPaid, setConfirmPaid] = useState(null); // who is asking "Paid by?": an order id, or NEW_ORDER
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
@@ -131,8 +133,11 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       await supabase.from("Clients").update(clientUpdate).eq("id", selectedClient.id);
     }
     if (!email||!form.item_title) return;
-    await supabase.from("Orders").insert([{...form, client_email:email}]);
+    // paid_method only with Paid, once "Paid by:" was answered (statusChange); never empty.
+    const { paid_method, ...rest } = form;
+    await supabase.from("Orders").insert([{...rest, ...statusChange(form.status, paid_method), client_email:email}]);
     setForm(blank); setManual({first:"",last:"",email:"",phone:"",address:"",city:"",state:"",zip:"",country:""}); setSelectedClient(null); setClientUpdate({}); setAdding(false); setClientMode("select"); load();
+    setConfirmPaid(c => c === NEW_ORDER ? null : c);
   };
   const sendStatusEmail = async (order, status) => {
     const client = clients.find(c => c.email === order.client_email);
@@ -154,10 +159,10 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   };
   // Only change the screen and email the client once the database has really saved it.
   // It used to ignore a failed save, so the client could be told something untrue.
-  // paidMethod: how the money came, from "Mark paid" (the invoice then says "Paid by ...").
+  // paidMethod: how the money came, from "Paid by:" (the invoice then says "Paid by ...").
   const updateStatus = async (id, status, paidMethod) => {
     setStatusErr("");
-    const change = paidMethod ? { status, paid_method: paidMethod } : { status };
+    const change = statusChange(status, paidMethod);
     const { error } = await supabase.from("Orders").update(change).eq("id",id);
     if (error) { setStatusErr(`Could not save the new status (${error.message || "unknown error"}). Nothing was emailed.`); return false; }
     setConfirmPaid(null);
@@ -165,6 +170,24 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setOrders(orders.map(o=>o.id===id?{...o,...change}:o));
     if (order) sendStatusEmail(order, status);
   };
+  // The Status menus. "Paid" first asks "Paid by:", like ✓ Mark paid; until a method is tapped
+  // nothing is saved or emailed, and the menu keeps showing the status it had (Cancel leaves it
+  // there). Every other status saves at once, as before.
+  const pickStatus = (order, status) => {
+    if (!asksPaidMethod(status)) return updateStatus(order.id, status);
+    setStatusErr(""); setConfirmPaid(order.id);
+  };
+  const pickNewOrderStatus = (status) => asksPaidMethod(status) ? setConfirmPaid(NEW_ORDER) : f("status", status);
+  // The one "Money arrived? Paid by:" question: ✓ Mark paid, the Status menus and + Add Order.
+  const paidByAsk = (paymentMethods, onPick) => (
+    <div className="mark-paid-ask">
+      <span>Money arrived? Paid by:</span>
+      {markPaidChoices(paymentMethods).map(([method, label]) => (
+        <button key={method} className="tap mark-paid-yes" onClick={()=>onPick(method)}>{label}</button>
+      ))}
+      <button className="tap mark-paid-no" onClick={()=>setConfirmPaid(null)}>Cancel</button>
+    </div>
+  );
   const deleteOrder = async (id) => {
     if (!window.confirm("Delete this order?")) return;
     await supabase.from("Orders").delete().eq("id",id);
@@ -394,11 +417,14 @@ export default function OrdersTab({ data, action, onActionHandled }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <div className="fld"><label>Amount (USD)</label><input type="number" value={form.amount} onChange={e=>f("amount",e.target.value)} placeholder={formAmountHint} /></div>
                 <div className="fld"><label>Status</label>
-                  <select value={form.status} onChange={e=>f("status",e.target.value)}>
+                  <select value={form.status} onChange={e=>pickNewOrderStatus(e.target.value)}>
                     {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                   </select>
                 </div>
               </div>
+              {confirmPaid === NEW_ORDER && (
+                <div className="fld">{paidByAsk(null, method => { setForm(fm => ({...fm, status:"paid", paid_method:method})); setConfirmPaid(null); })}</div>
+              )}
               <div className="fld"><label>Notes</label><textarea value={form.notes} onChange={e=>f("notes",e.target.value)} placeholder="Any notes about this order…" style={{minHeight:80}} /></div>
             </div>
           </div>
@@ -442,23 +468,17 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   <td data-label="Artwork" className="crm-wide">{o.item_title}</td>
                   <td data-label="Amount">{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
                   <td data-label="Status">
-                    <select value={o.status||"pending"} onChange={e=>updateStatus(o.id,e.target.value)}
+                    <select value={o.status||"pending"} onChange={e=>pickStatus(o,e.target.value)}
                       style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
                       {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                     </select>
                     {/* Mark paid: two taps, because it emails the client a receipt. The second
-                        tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ..."). */}
-                    {canMarkPaid(o.status) && (confirmPaid === o.id ? (
-                      <div className="mark-paid-ask">
-                        <span>Money arrived? Paid by:</span>
-                        {markPaidChoices(o.payment_methods).map(([method, label]) => (
-                          <button key={method} className="tap mark-paid-yes" onClick={()=>updateStatus(o.id,"paid",method)}>{label}</button>
-                        ))}
-                        <button className="tap mark-paid-no" onClick={()=>setConfirmPaid(null)}>Cancel</button>
-                      </div>
-                    ) : (
+                        tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ...").
+                        Picking Paid in the menu above opens the same question, from any status. */}
+                    {confirmPaid === o.id ? paidByAsk(o.payment_methods, method => updateStatus(o.id,"paid",method))
+                      : canMarkPaid(o.status) && (
                       <button className="tap mark-paid" onClick={()=>{ setStatusErr(""); setConfirmPaid(o.id); }}>✓ Mark paid</button>
-                    ))}
+                    )}
                   </td>
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                   <td className="crm-wide">

@@ -5,7 +5,8 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { formBody, toCents, createCheckout, checkoutPaidFor, cardCheck, cardReady } from "../api/_lib/stripe.js";
 import { opCardCheckout, opCardPaid, opInvoice, STORE_OPS } from "../api/_lib/storeOps.js";
-import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices } from "../src/lib/orderStatus.js";
+import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices, asksPaidMethod, statusChange } from "../src/lib/orderStatus.js";
+import { validateChain } from "../api/_lib/adminOps.js";
 import storeHandler from "../api/store.js";
 
 const TOKEN = "85d82763-0000-4000-8000-0000000000aa";
@@ -213,6 +214,20 @@ test("Mark paid asks how the money came: the ways the invoice offered (its card 
   assert.deepEqual(offered(null), all, "an old invoice saved no ways: all four");
   assert.deepEqual(offered(""), all, "nothing ticked: all four");
   assert.deepEqual(markPaidChoices("zelle,venmo,cashapp,stripe").map(([, label]) => label), ["Zelle", "Venmo", "Cash App", "Card", "Cash", "Other"]);
+});
+
+// Picking Paid in a Status menu (an order's, or "+ Add Order") asks the same question first.
+// The server refuses an empty paid_method (a 400), so a status change must never carry one.
+test("Status menus: only Paid asks 'Paid by:' first; paid_method goes only with Paid, never empty, and the server takes every change", () => {
+  assert.deepEqual(ORDER_STATUSES.map(([v]) => asksPaidMethod(v)), [false, false, true, false, false]);
+  assert.deepEqual(statusChange("paid", "zelle"), { status: "paid", paid_method: "zelle" });
+  for (const none of [undefined, null, ""]) assert.deepEqual(statusChange("paid", none), { status: "paid" }, JSON.stringify(none));
+  for (const s of ["pending", "confirmed", "shipped", "delivered"]) assert.deepEqual(statusChange(s, "zelle"), { status: s }, `${s} leaves paid_method alone`);
+  for (const [status] of ORDER_STATUSES) for (const method of [undefined, null, "", ...markPaidChoices(null).map(([v]) => v)]) {
+    const change = statusChange(status, method), why = `${status}, ${JSON.stringify(method)}`;
+    assert.doesNotThrow(() => validateChain("Orders", [{ m: "update", a: [change] }, { m: "eq", a: ["id", 1] }]), why);
+    assert.doesNotThrow(() => validateChain("Orders", [{ m: "insert", a: [[{ item_title: "A", ...change }]] }]), `new order: ${why}`);
+  }
 });
 
 test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {
