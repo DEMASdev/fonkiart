@@ -6,7 +6,7 @@ import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
-import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion } from "../lib/orderStatus";
+import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
@@ -165,7 +165,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   // Only change the screen and email the client once the database has really saved it.
   // It used to ignore a failed save, so the client could be told something untrue.
   // paidMethod: how the money came, from "Paid by:" (the invoice then says "Paid by ...").
-  const updateStatus = async (id, status, paidMethod) => {
+  const updateStatus = async (id, status, paidMethod, { email = true } = {}) => {
     setStatusErr("");
     const change = statusChange(status, paidMethod);
     const { error } = await supabase.from("Orders").update(change).eq("id",id);
@@ -173,13 +173,15 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setAsk(null);
     const order = orders.find(o => o.id === id);
     setOrders(orders.map(o=>o.id===id?{...o,...change}:o));
-    if (order) sendStatusEmail(order, status);
+    if (order && email) sendStatusEmail(order, status);
   };
   // The Status menus. "Paid" first asks "Paid by:", like ✓ Mark paid; until a method is tapped
   // nothing is saved or emailed, and the menu keeps showing the status it had (Cancel leaves it
   // there). Every other status saves at once, as before.
   const pickStatus = (order, status) => {
-    if (!asksPaidMethod(status)) return updateStatus(order.id, status);
+    const pick = paidPick(order, status);
+    if (pick === "save") return updateStatus(order.id, status);
+    if (pick === "save-quietly") return updateStatus(order.id, status, undefined, { email:false });
     setStatusErr(""); setAsk({ kind:"paid", id:order.id });
   };
   const pickNewOrderStatus = (status) => asksPaidMethod(status) ? setAsk({ kind:"paid", id:NEW_ORDER }) : f("status", status);
@@ -491,7 +493,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                         Picking Paid in the menu above opens the same question, from any status. */}
                     {asking("paid", o.id) ? paidByAsk(o.payment_methods, method => updateStatus(o.id,"paid",method))
                       : canMarkPaid(o.status) && (
-                      <button className="tap mark-paid" onClick={()=>{ setStatusErr(""); setAsk({ kind:"paid", id:o.id }); }}>✓ Mark paid</button>
+                      <button className="tap mark-paid" onClick={()=>pickStatus(o,"paid")}>✓ Mark paid</button>
                     )}
                   </td>
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>

@@ -58,3 +58,18 @@ export function statusChange(status, paidMethod) {
 export const resendQuestion = (status) => isPaid(status)
   ? "This invoice was sent already and paid. Send it again?"
   : "This invoice was sent already. Send it again?";
+
+// The method already saved on the order, if it is one of the six; else null. An order that was
+// paid before (Paid -> Shipped -> Paid again) knows how it was paid, so nobody is asked twice.
+export function knownPaidMethod(order) {
+  const m = order && order.paid_method;
+  return PAID_METHODS.some(([v]) => v === m) ? m : null;
+}
+
+// What picking Paid (or tapping Mark paid) does for this order: "ask" = the "Paid by:" question;
+// "save-quietly" = save Paid at once, keep the method, and do NOT email "Payment received" again
+// (the client was told when the method was first recorded). Other statuses: "save" (email as usual).
+export function paidPick(order, status) {
+  if (!asksPaidMethod(status)) return "save";
+  return knownPaidMethod(order) ? "save-quietly" : "ask";
+}
