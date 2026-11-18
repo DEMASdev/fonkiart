@@ -177,13 +177,13 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           still said "not paid yet, please send"). */}
       {paid ? (
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:6}}>Thank you for your payment!</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:6,textWrap:"balance"}}>Thank you for your payment!</p>
           <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginBottom:6}}>{paidBy ? `Paid by ${paidBy} ✓` : "Paid ✓"}</p>
           <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6}}>{paidNote}</p>
         </div>
       ) : approved ? (
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:"#2d6a4f",marginBottom:8}}>Order Confirmed ✓</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:8,textWrap:"balance"}}>Order Confirmed ✓</p>
           <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6,marginBottom:hasAnyPayment?20:0}}>
             {hasAnyPayment
               ? `Your order is confirmed. It is not paid yet. Please send ${amountText} using one of these:`

@@ -599,6 +599,16 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
    "some people can't see well and a small font is hard to read". Names are --inv-text + 1px and
    the pay addresses + 3px. The big titles keep their own sizes. */
 .inv-embed, .invoice-page { --inv-small:16px;--inv-text:17px;--inv-num:34px; }
+/* The titles grow with the text (Andy, 2026-11-17: "you increased the font in some areas but the
+   titles should be increased also so it looks even as it was before"). Each one is its old size
+   x 1.31, the same step the sentences took (13px -> 17px). Scoped to .inv-embed, so the
+   conversation page, which shares the .invoice-* classes, keeps its own sizes. */
+.inv-embed .invoice-logo { font-size:34px;gap:10px; }
+.inv-embed .invoice-logo-dot { width:7px;height:7px; }
+.inv-embed .inv-congrats-title { font-size:clamp(26px,7.3vw,31px); }
+/* On a phone the tagline takes two lines; balance splits it evenly, instead of "Prints" alone
+   on the second line. Its size stays as it is. */
+.inv-embed .invoice-tagline { text-wrap:balance; }
 .invoice-page { min-height:100vh;background:#fdfcf8;display:flex;align-items:center;justify-content:center;padding:40px 20px; }
 .invoice-card { background:#fff;border:1px solid var(--border);max-width:560px;width:100%;padding:48px; }
 .invoice-header { text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--border); }
