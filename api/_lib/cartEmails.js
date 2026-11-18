@@ -3,8 +3,9 @@ import { escapeHtml as e } from "./brevo.js";
 
 // The two emails of a Cart order paid by card (cartCheckout.js): ONE to the buyer and ONE to
 // the shop for the whole cart, however many pieces it holds. The same look and words as an
-// invoice paid by card (emails.js paymentReceived / cardPaidShop): the frame, with its piece of
-// Aliana's art, comes from emails.js, and the small parts below copy its styles.
+// invoice paid by card (emails.js paymentReceived / cardPaidShop): the frame comes from emails.js,
+// with the order's own pieces at the top (never another one: emailArt.js), and the small parts
+// below copy its styles.
 // view: { ref, lines: [{ title, amount }], total, name }. Titles are escaped like everything else.
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
@@ -35,7 +36,7 @@ export function cartPaidShop({ who, email, saved = true, ...view }) {
       ? p(`The website already marked ${one ? "the order" : `all ${view.lines.length} pieces`} <strong>Paid</strong>. Ship ${one ? "it" : "them"}, then set ${one ? "it" : "each one"} to <strong>Shipped</strong> in Admin → Orders.`)
       : p(`⚠ The website could not mark the order Paid. Please tap <strong>✓ Mark paid</strong> on ${one ? "it" : `each of its ${view.lines.length} pieces`} in Admin → Orders, then ship ${one ? "it" : "them"}.`))
     + small(`The money is in your Stripe account, under Payments.`)
-    + footnote);
+    + footnote, view.lines.map(l => l.title));
 }
 
 // To the buyer, once their card payment is in.
@@ -51,5 +52,5 @@ export function cartReceived(view) {
     + panel("Receipt", pieces(view) + field("Order reference", e(view.ref)) + field("Amount paid", amount) + field("Paid with", "Card"))
     // Andy's tracking sentence, the same as the paid invoice and its email.
     + p(`We will be sending you a tracking number or delivery updates if shipping is needed.`)
-    + footnote);
+    + footnote, view.lines.map(l => l.title));
 }

@@ -3,7 +3,7 @@ import { isValidAdminToken, bearer } from "./_lib/adminToken.js";
 import { adminCredentials } from "./_lib/adminSecret.js";
 import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { adminThread, adminReply, adminInboundSetup } from "./_lib/threads.js";
-import { withRandomArt } from "./_lib/emails.js";
+import { withArt } from "./_lib/emailArt.js";
 import { InputError } from "./_lib/errors.js";
 import { signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
 import { queryMarkingSold } from "./_lib/artworks.js";
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: { message: "Admin login required" } });
   }
   const body = req.body || {};
-  const send = async (m) => sendBrevo({ ...m, htmlContent: await withRandomArt(db, m.htmlContent) });
+  const send = async (m) => sendBrevo({ ...m, htmlContent: await withArt(db, m.htmlContent) });
   try {
     // The admin's query as before; an Orders write that turns an order paid also marks its
     // artwork SOLD (Andy, 2026-11-17: "when an item is sold / paid for it should be marked as SOLD").

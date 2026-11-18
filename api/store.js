@@ -2,7 +2,7 @@ import { getServiceClient } from "./_lib/supabaseAdmin.js";
 import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { InputError } from "./_lib/errors.js";
 import { STORE_OPS, GET_OPS } from "./_lib/storeOps.js";
-import { withRandomArt } from "./_lib/emails.js";
+import { withArt } from "./_lib/emailArt.js";
 
 export default async function handler(req, res) {
   const op = String(req.query?.op || "");
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "Store not configured" });
   }
   try {
-    const send = async (m) => sendBrevo({ ...m, htmlContent: await withRandomArt(db, m.htmlContent) });
+    const send = async (m) => sendBrevo({ ...m, htmlContent: await withArt(db, m.htmlContent) });
     return res.status(200).json(await run(db, req, { sender: senderAddress(), send }));
   } catch (e) {
     if (e instanceof InputError) return res.status(e.status).json({ error: e.message });

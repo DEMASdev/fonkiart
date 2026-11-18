@@ -144,7 +144,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       }]).select().single();
       if (orderErr) throw orderErr;
       const order = { ...orderData, client_name: name, created_at: orderData?.created_at || new Date().toISOString() };
-      await sendEmail({ to: email, subject: `Invoice ${invoiceNumber(order)} — ${inv.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
+      await sendEmail({ to: email, subject: `Invoice ${invoiceNumber(order)} — ${inv.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link), pieces: [order.item_title] });
       await load();
       setInv(invBlank); setSendingInvoice(false);
       showMsg(`Invoice sent to ${email}`);
@@ -161,7 +161,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     setResending(r => ({...r, [order.id]: true}));
     try {
       const link = `${window.location.origin}/?invoice=${order.invoice_token}`;
-      await sendEmail({ to: order.client_email, subject: `Invoice ${invoiceNumber(order)} — ${order.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link) });
+      await sendEmail({ to: order.client_email, subject: `Invoice ${invoiceNumber(order)} — ${order.item_title} · Fonkiart`, ...buildInvoiceEmail(order, link), pieces: [order.item_title] });
       showMsg(`Invoice resent to ${order.client_email}`);
     } catch { showMsg("Error resending invoice."); }
     finally { setResending(r => ({...r, [order.id]: false})); }
@@ -193,7 +193,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const m = statusEmailFor({ status, order, name, sender: BREVO_SENDER });
     if (!m) return false;
     try {
-      await sendEmail({ to: order.client_email, subject: m.subject, heading: m.heading, content: m.content });
+      await sendEmail({ to: order.client_email, subject: m.subject, heading: m.heading, content: m.content, pieces: [order.item_title] });
       return true;
     } catch(e) { console.warn("Status email:", e); return false; }
   };

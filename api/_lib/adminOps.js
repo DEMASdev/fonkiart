@@ -112,11 +112,20 @@ function recipients(to) {
   return list.map(r => ({ email: String(r.email) }));
 }
 
+// The pieces an admin email is about (an invoice, an order's status: Admin -> Orders sends the
+// order's title), so its picture is exactly those (emailArt.js). Not sent: about no piece (a
+// coupon), a random piece. Sent but not a list of titles: no picture rather than a wrong one.
+function emailPieces(pieces) {
+  if (pieces === undefined || pieces === null) return undefined;
+  if (!Array.isArray(pieces)) return [];
+  return pieces.filter(t => typeof t === "string" && t.length <= 300).slice(0, 25);
+}
+
 export async function adminEmail(mail, body) {
   const subject = typeof body.subject === "string" ? body.subject.slice(0, 300) : "";
   // A heading + the inside get the shared Fonkiart frame; a ready-made htmlContent goes as is.
   const htmlContent = typeof body.heading === "string" && typeof body.content === "string"
-    ? adminFrame(body.heading, body.content)
+    ? adminFrame(body.heading, body.content, emailPieces(body.pieces))
     : typeof body.htmlContent === "string" ? body.htmlContent : "";
   if (!subject || !htmlContent || htmlContent.length > 200_000) throw new InputError("Bad email");
   const replyTo = body.replyTo && EMAIL_RE.test(String(body.replyTo)) ? String(body.replyTo) : undefined;

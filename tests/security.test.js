@@ -13,6 +13,7 @@ import * as serverPw from "../api/_lib/pwRules.js";
 import * as browserPw from "../src/lib/pwRules.js";
 import * as AE from "../src/lib/adminEmails.js";
 import * as T from "../api/_lib/emails.js";
+import { withArt } from "../api/_lib/emailArt.js";
 import { recordQuery } from "../src/lib/adminQuery.js";
 
 // Tiny in-memory stand-in for the supabase-js query builder: enough to run the
@@ -409,8 +410,9 @@ test("customer reset link: sets the sign-in and the collectors password, works o
   await assert.rejects(opCustomerResetSet(db, { token, password: "Another-pass-2" }, 90_000), /already used or replaced/);
 });
 
-// ── email look: a random piece of Aliana's art ───────────────
-test("customer emails get a random piece of Aliana's art (never a children's piece) and still send without one", async () => {
+// ── email look: a random piece of Aliana's art, in the emails about no piece ──────
+// (The emails about a piece show exactly that piece: tests/emailArt.test.js.)
+test("emails about no piece get a random piece of Aliana's art (never a children's piece) and still send without one", async () => {
   const db = fakeDb({ Artworks: [
     { id: 1, title: "Kid art", image: "https://x/kid.jpg", isChildren: true },
     { id: 2, title: "Pink <palms>", image: "https://x/palms.jpg", isChildren: false },
@@ -419,7 +421,7 @@ test("customer emails get a random piece of Aliana's art (never a children's pie
   const html = T.welcomeCoupon({ code: "FK-1", discount: 15 });
   assert.match(html, /<!--ART-->/);
   for (let i = 0; i < 10; i++) {
-    const out = await T.withRandomArt(db, html);
+    const out = await withArt(db, html);
     assert.match(out, /palms\.jpg/);
     assert.match(out, /Pink &lt;palms&gt;/);
     assert.doesNotMatch(out, /kid\.jpg|<!--ART-->|<palms>/);
@@ -427,8 +429,8 @@ test("customer emails get a random piece of Aliana's art (never a children's pie
   // Shop alerts get a picture too ("the picture to the left in all emails").
   assert.match(T.contactStore({ name: "a", email: "b@c.de", message: "m" }), /<!--ART-->/);
   // No art, or the database is down: the email still goes, just without the picture.
-  assert.doesNotMatch(await T.withRandomArt(fakeDb({ Artworks: [] }), html), /<!--ART-->|<img/);
-  assert.doesNotMatch(await T.withRandomArt(fakeDb({}, { fail: { Artworks: { code: "x", message: "down" } } }), html), /<!--ART-->|<img/);
+  assert.doesNotMatch(await withArt(fakeDb({ Artworks: [] }), html), /<!--ART-->|<img/);
+  assert.doesNotMatch(await withArt(fakeDb({}, { fail: { Artworks: { code: "x", message: "down" } } }), html), /<!--ART-->|<img/);
 });
 
 test("admin-written emails (invoice, status, coupon) get the shared frame and a picture, customer text escaped", async () => {

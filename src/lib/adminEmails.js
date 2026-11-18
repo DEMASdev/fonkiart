@@ -1,7 +1,8 @@
 // The insides of the emails the admin sends (invoice, order status, coupon).
-// The server wraps each one in the shared Fonkiart frame and adds a random piece
-// of Aliana's art (api/_lib/emails.js), so only the heading and the inside live
-// here. Anything that came from a customer (name, notes, titles) is escaped.
+// The server wraps each one in the shared Fonkiart frame with a picture (api/_lib/emails.js):
+// the order's own piece when the email is about one (send its title as `pieces`), a random
+// piece of Aliana's art when it is about none (a coupon). So only the heading and the inside
+// live here. Anything that came from a customer (name, notes, titles) is escaped.
 
 import { orderTracking, orderTrackingLink, carrierLabel, isPickup } from "./tracking.js";
 

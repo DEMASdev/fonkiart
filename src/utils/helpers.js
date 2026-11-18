@@ -15,9 +15,10 @@ export async function hashPassword(pw) {
 
 // Admin screens only: /api/admin refuses to send unless the admin is logged in.
 // Public forms send their emails from /api/store instead.
-// Pass `heading` + `content` (src/lib/adminEmails.js) for the shared Fonkiart look.
-export async function sendEmail({ to, subject, htmlContent, heading, content, replyTo } = {}) {
-  await adminSendEmail({ to, subject, htmlContent, heading, content, replyTo });
+// Pass `heading` + `content` (src/lib/adminEmails.js) for the shared Fonkiart look, and
+// `pieces` (the titles it is about) so its picture is that piece, never a random one.
+export async function sendEmail({ to, subject, htmlContent, heading, content, replyTo, pieces } = {}) {
+  await adminSendEmail({ to, subject, htmlContent, heading, content, replyTo, pieces });
 }
 
 export async function loadData() {

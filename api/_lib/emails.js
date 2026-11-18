@@ -4,8 +4,13 @@ import { escapeHtml as e } from "./brevo.js";
 // Every Fonkiart email, built on the server so a visitor can't choose the
 // recipient, subject or markup. Everything a visitor typed is escaped.
 // One look for all of them (Andy, 2026-11-01): the site's white, pink and gold,
-// and in every email a random piece of Aliana's art, dropped into ART_SLOT by
-// withRandomArt() when the email is sent ("the picture to the left in all emails").
+// and a picture of Aliana's art in every email ("the picture to the left in all emails"),
+// filled in when the email is sent (emailArt.js withArt):
+//  - an email ABOUT pieces (an order, an invoice, a payment, a price inquiry...) names them
+//    (frame's `pieces`) and shows exactly those, never another one (Andy, 2026-11-18, after an
+//    "Order Received — Flamingo Party" email showed the piece he had just taken out of his cart:
+//    "shows the one i removed but names the one i did keep in the cart !! BIG BIG BIG mistake !!!");
+//  - an email about no piece (password reset, welcome coupon, contact form...) gets a random one.
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
@@ -16,9 +21,23 @@ const SERIF = "Georgia,'Times New Roman',serif";
 const SANS = "Arial,Helvetica,sans-serif";
 const SITE = "https://fonkiart.com";
 
+// The picture's place in the frame. Plain: a random piece. With titles: exactly those pieces.
+// Each title rides as hex, so no title can end the comment early or be read as another one.
 export const ART_SLOT = "<!--ART-->";
+const hex = (s) => Buffer.from(s, "utf8").toString("hex");
+const usableTitle = (t) => typeof t === "string" && t.trim() !== "";
+export const piecesSlot = (titles) => `<!--ART:${[...new Set(titles.filter(usableTitle))].map(hex).join(",")}-->`;
+// The slot in a built email: { titles } for an email about pieces (titles may be empty: then no
+// picture), { titles: null } for a random piece, or null when the email has no slot.
+const ANY_SLOT = /<!--ART(?::([0-9a-f,]*))?-->/;
+export function readSlot(html) {
+  const m = String(html).match(ANY_SLOT);
+  if (!m) return null;
+  return { slot: m[0], titles: m[1] === undefined ? null : m[1].split(",").filter(Boolean).map(h => Buffer.from(h, "hex").toString("utf8")) };
+}
 
-function frame(heading, body) {
+// pieces: the titles of the pieces this email is about (left out when it is about none).
+function frame(heading, body, pieces) {
   return `<div style="margin:0;padding:24px 12px;background:#ffffff;">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:2px solid ${C.gold};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
@@ -29,7 +48,7 @@ function frame(heading, body) {
     // mail apps ignore. Outlook gets the same two columns from the [if mso] table.
     + `<tr><td style="padding:30px 28px 14px;font-size:0;text-align:center;">`
     + `<!--[if mso]><table role="presentation" width="536" cellpadding="0" cellspacing="0"><tr><![endif]-->`
-    + ART_SLOT
+    + (Array.isArray(pieces) ? piecesSlot(pieces) : ART_SLOT)
     + `<!--[if mso]><td width="360" valign="top"><![endif]-->`
     + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:360px;text-align:left;font-family:${SANS};font-size:18px;line-height:1.7;color:${C.ink};">`
     + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:31px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</div>`
@@ -69,25 +88,39 @@ function artCell({ href, image, alt, title, linkLabel }) {
 // by Vercel's image service (vercel.json "images" allows the Supabase bucket).
 export const emailImage = (url) => `${SITE}/_vercel/image?url=${encodeURIComponent(url)}&w=320&q=75`;
 
+const pieceHref = (art) => `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
+
 export function artRow(art) {
-  const href = `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
-  return artCell({ href, image: emailImage(art.image), alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
+  return artCell({ href: pieceHref(art), image: emailImage(art.image), alt: `${art.title}, original art by Aliana`, title: art.title, linkLabel: "See it in the shop →" });
 }
 
-// A random piece of Aliana's own art (not the children's pieces), or null.
+// Several pieces (a Cart order, the daily reminder): each one small, art first, its title under
+// it in the serif, as the Cart's card payment shows them (src/components/PayArt.jsx). A row across
+// the top of the email, 3 to a line on a computer and 2 on a phone, the message under it. Outlook
+// for Windows, which only knows tables, keeps them in the left column, one under the other.
+function artGallery(arts) {
+  const piece = (art) => `<div style="display:inline-block;vertical-align:top;width:120px;margin:0 8px 18px;text-align:left;">`
+    + `<a href="${e(pieceHref(art))}" style="text-decoration:none;"><img src="${e(emailImage(art.image))}" alt="${e(`${art.title}, original art by Aliana`)}" width="120" style="display:block;width:120px;height:auto;border:0;"></a>`
+    + `<p style="margin:8px 0 0;font-family:${SERIF};font-style:italic;font-size:16px;line-height:1.4;color:${C.ink};">“${e(art.title)}”</p>`
+    + `</div>`;
+  return `<!--[if mso]><td width="176" valign="top"><![endif]-->`
+    + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:536px;text-align:center;">`
+    + `<div style="padding:6px 0 4px;">${arts.map(piece).join("")}`
+    + `<p style="margin:0 0 18px;font-family:${SANS};font-size:16px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
+    + `</div></div>`
+    + `<!--[if mso]></td><![endif]-->`;
+}
+
+// What fills the slot: no piece, no picture; one, beside the message; several, the row.
+export const artFor = (arts) => !arts.length ? "" : arts.length === 1 ? artRow(arts[0]) : artGallery(arts);
+
+// A random piece of Aliana's own art (not the children's pieces), or null. Only for the emails
+// about no piece, and the picture in Supabase's own emails (api/art.js).
 export async function pickArt(db) {
   const { data, error } = await db.from("Artworks").select("id,title,image,isChildren");
   if (error || !Array.isArray(data)) return null;
   const pool = data.filter(a => a.image && !a.isChildren);
   return pool.length ? pool[crypto.randomInt(pool.length)] : null;
-}
-
-// Fills ART_SLOT at send time. The art never stops an email: no art, no row.
-export async function withRandomArt(db, html) {
-  if (!String(html).includes(ART_SLOT)) return html;
-  let art;
-  try { art = await pickArt(db); } catch { art = null; }
-  return html.replace(ART_SLOT, art ? artRow(art) : "");
 }
 
 // The emails Supabase sends itself, in the same look: paste the result into
@@ -139,14 +172,14 @@ export function orderBuyer({ firstName, orderRef, items, total, couponApplied, d
     p("Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.")
     + panel("Order Summary", summary)
     + small(`Questions? Reply to this email and quote your reference number. You can also reach us at ${link(`mailto:${sender}`, e(sender))}.`)
-    + signoff);
+    + signoff, items.map(i => i.title));
 }
 
 export function inquiryBuyer({ name, artTitle, sender }) {
   return frame(`Thank you, ${e(firstWord(name))}!`,
     p(`We received your inquiry about <strong>${e(artTitle)}</strong> and will get back to you shortly with pricing and availability.`)
     + small(`Questions? Contact us at ${link(`mailto:${sender}`, e(sender))}.`)
-    + signoff);
+    + signoff, [artTitle]);
 }
 
 export function contactBuyer({ name, message, sender }) {
@@ -157,20 +190,40 @@ export function contactBuyer({ name, message, sender }) {
     + signoff);
 }
 
+// A price inquiry is saved as a request whose text starts with the piece's title, in the words
+// opRequest writes (storeOps.js): Price inquiry for "<title>" — <their message>. Phone: <phone>.
+// So a conversation about it can show THAT piece. Anything else (a contact message, a
+// commission) is about no piece: "". A title or message with quotes in it could be cut in more
+// than one place; then it's "" too (no picture), never a guess that could be another piece.
+const INQUIRY_HEAD = 'Price inquiry for "';
+const INQUIRY_TAIL = /^"(?: — [\s\S]*)?\. Phone: [\s\S]*\.$/;
+export function inquiryTitle(message) {
+  const s = String(message ?? "");
+  if (!s.startsWith(INQUIRY_HEAD)) return "";
+  const rest = s.slice(INQUIRY_HEAD.length);
+  const cuts = [];
+  for (let i = rest.indexOf('"'); i !== -1; i = rest.indexOf('"', i + 1)) {
+    if (i > 0 && INQUIRY_TAIL.test(rest.slice(i))) cuts.push(rest.slice(0, i));
+  }
+  return cuts.length === 1 ? cuts[0] : "";
+}
+const aboutRequest = (requestText) => { const t = inquiryTitle(requestText); return t ? [t] : undefined; };
+
 // The shop's answer to a request, written in the admin; the button opens the
-// customer's private conversation page.
-export function requestReply({ name, message, link: href }) {
+// customer's private conversation page. requestText: what the request itself says (its piece).
+export function requestReply({ name, message, link: href, requestText }) {
   return frame(`Hi ${e(firstWord(name) || "there")},`,
     `<div style="margin:0 0 20px;">${multiline(message)}</div>`
     + button(href, "Reply on fonkiart.com")
     + small("Or simply reply to this email. Your whole conversation with us is kept on that page.")
-    + signoff);
+    + signoff, aboutRequest(requestText));
 }
 
 // Emails written in the admin (invoice, order status, coupon): the admin sends
-// the heading and the inside, the server puts them in the same frame.
-export function adminFrame(heading, content) {
-  return frame(heading, content);
+// the heading and the inside, the server puts them in the same frame. pieces: the titles the
+// email is about (an invoice, an order's status, a Cart payment), left out for none (a coupon).
+export function adminFrame(heading, content, pieces) {
+  return frame(heading, content, pieces);
 }
 
 // ── to the shop ──────────────────────────────────────────────
@@ -187,7 +240,7 @@ export function orderStore({ orderRef, items, total, couponApplied, discount, fu
     + field("Email", link(`mailto:${email}`, e(email)))
     + (phone ? field("Phone", e(phone)) : "")
     + (addr ? field("Ship to", e(addr)) : "")
-    + footnote);
+    + footnote, items.map(i => i.title));
 }
 
 export function inquiryStore({ art, name, email, phone, message }) {
@@ -205,7 +258,7 @@ export function inquiryStore({ art, name, email, phone, message }) {
       + field("Email", link(`mailto:${email}`, e(email)))
       + (phone ? field("Phone", e(phone)) : "")
       + (message ? `<p style="margin:10px 0 0;font-size:17px;"><strong>Message:</strong> ${multiline(message)}</p>` : ""))
-    + footnote);
+    + footnote, [art.title]);
 }
 
 export function contactStore({ name, email, message }) {
@@ -244,7 +297,7 @@ export function invoiceApproved({ order, invNum }) {
       ? p(`When ${amount} arrives${byHand.length ? ` by ${e(byHand.join(" or "))}` : ""}, look for "${e(order.item_title)}" or "${e(invNum)}" in the memo. Then tap <strong>✓ Mark paid</strong> on the order in Admin → Orders (the client gets a receipt) and ship it.`)
       : "")
     + (card ? p(`If they pay by card, the website marks the order Paid by itself and emails you.`) : "")
-    + footnote);
+    + footnote, [order.item_title]);
 }
 
 // To the shop when a client adds or changes the shipping address on their invoice page (Andy,
@@ -269,7 +322,7 @@ export function shipAddressShop({ order, invNum, address, before = null }) {
     + panel(before ? "New address" : "Ship to", addressLines(address))
     + (before ? panel("Before", addressLines(before)) : "")
     + p(`See it in <strong>Admin → Orders</strong>.`)
-    + footnote);
+    + footnote, [order.item_title]);
 }
 
 // To the shop when a client pays an invoice by card. Stripe confirmed it to the server,
@@ -286,7 +339,7 @@ export function cardPaidShop({ order, invNum, saved = true }) {
       ? p(`The website already marked the order <strong>Paid</strong>. Ship it, then set it to <strong>Shipped</strong> in Admin → Orders.`)
       : p(`⚠ The website could not mark the order Paid. Please tap <strong>✓ Mark paid</strong> on it in Admin → Orders, then ship it.`))
     + small(`The money is in your Stripe account, under Payments.`)
-    + footnote);
+    + footnote, [order.item_title]);
 }
 
 // To the client once their card payment is in.
@@ -302,16 +355,16 @@ export function paymentReceived({ order, invNum }) {
     + panel("Receipt", field("Invoice", e(invNum)) + field("Amount paid", amount) + field("Paid with", "Card"))
     // Andy's tracking sentence, the same as the paid invoice (src/pages/InvoicePage.jsx).
     + p(`We will be sending you a tracking number or delivery updates if shipping is needed.`)
-    + footnote);
+    + footnote, [order.item_title]);
 }
 
-export function requestReplyStore({ name, email, message, via }) {
+export function requestReplyStore({ name, email, message, via, requestText }) {
   return frame("New reply to a request",
     field("From", `${e(name || "—")}${email ? ` · ${link(`mailto:${email}`, e(email))}` : ""}`)
     + field("Came in", via === "email" ? "by email" : "on fonkiart.com")
     + `<div style="margin:14px 0 16px;padding:14px 18px;border-left:3px solid ${C.gold};background:#ffffff;font-size:17px;line-height:1.7;">${multiline(message)}</div>`
     + small("It's saved with the request. Answer it in the admin, under Requests, so the whole conversation stays in one place.")
-    + footnote);
+    + footnote, aboutRequest(requestText));
 }
 
 // An email to the reply address that matched no request: passed on so it isn't lost.
@@ -333,7 +386,10 @@ const more = (n) => n > MAX_ROWS ? `<p style="margin:6px 0 0;font-size:16px;colo
 const row = (html, i) => `<div style="${i ? `margin:14px 0 0;padding:14px 0 0;border-top:1px solid ${C.line};` : "margin:0;"}">${html}</div>`;
 const note = (html) => `<p style="margin:0;font-size:16px;letter-spacing:.06em;color:${C.muted};">${html}</p>`;
 
+// Its pictures: the pieces of the orders it lists and of the price inquiries it lists, each
+// once. When it lists none (only contact messages), a random piece, as in every email about none.
 export function reminderStore({ requests, orders }) {
+  const named = [...orders.slice(0, MAX_ROWS).map(o => o.title), ...requests.slice(0, MAX_ROWS).map(r => inquiryTitle(r.message))].filter(Boolean);
   const reqRows = requests.slice(0, MAX_ROWS).map((r, i) => row(
     `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(r.name || "—")}</strong>${r.email ? ` · ${link(`mailto:${r.email}`, e(r.email))}` : ""}</p>`
     + `<p style="margin:0 0 4px;font-size:16px;line-height:1.6;">${e(clip(r.message, 140))}</p>`
@@ -348,5 +404,5 @@ export function reminderStore({ requests, orders }) {
     + (orders.length ? panel(`Orders to send (${orders.length})`, ordRows + more(orders.length)) : "")
     + button(SITE, "Open the admin")
     + small("Answer messages under Requests and update orders under Orders. This email comes once a day, and only when something is waiting.")
-    + footnote);
+    + footnote, named.length ? named : undefined);
 }

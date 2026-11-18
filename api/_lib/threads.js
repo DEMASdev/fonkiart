@@ -64,7 +64,7 @@ const tellShop = (mail, request, message, via, replyTo) =>
   mail.send({
     to: mail.sender,
     subject: `New reply from ${oneLine(request.name || request.email || "a customer")}`,
-    htmlContent: T.requestReplyStore({ name: request.name, email: request.email, message, via }),
+    htmlContent: T.requestReplyStore({ name: request.name, email: request.email, message, via, requestText: request.message }),
     replyTo: replyTo || request.email || undefined,
   }).catch(e => console.warn("thread alert:", e?.message || e));
 
@@ -86,7 +86,7 @@ export async function adminReply(db, body, mail) {
   const sent = await mail.send({
     to: request.email,
     subject: "A reply from Fonkiart",
-    htmlContent: T.requestReply({ name: request.name, message, link: threadLink(token) }),
+    htmlContent: T.requestReply({ name: request.name, message, link: threadLink(token), requestText: request.message }),
     replyTo: INBOUND_ON ? replyAddress(token) : mail.sender,
   });
   const { error } = await db.from("RequestMessages").insert([{
