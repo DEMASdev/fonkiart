@@ -887,6 +887,20 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .ship-lines { overflow-wrap:anywhere; }
 .ship-none { color:var(--muted); }
 @media (pointer:coarse) { .ship-field input { min-height:44px; } }
+/* The client's invoice page: the "Shipping address" box. */
+.inv-ship { margin-top:24px;padding:18px 20px;border:1px solid var(--border);background:#fffdf8; }
+.inv-ship-title { font-size:var(--inv-small);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px; }
+.inv-ship-lines { font-size:var(--inv-text);color:var(--ink);line-height:1.6;overflow-wrap:anywhere; }
+.inv-ship-form { display:grid;grid-template-columns:1fr 1fr;gap:12px 14px; }
+.inv-ship-form .wide { grid-column:1 / -1; }
+.inv-ship-field { display:flex;flex-direction:column;gap:5px;font-size:var(--inv-small);color:var(--muted);min-width:0; }
+.inv-ship-field input { font-family:'DM Sans',sans-serif;font-size:var(--inv-text);color:var(--ink);background:#fff;border:1px solid var(--border);padding:10px 12px;width:100%;min-width:0; }
+.inv-ship-btn { background:var(--sidebar-bg);color:#fff;border:none;padding:12px 26px;font-size:var(--inv-text);letter-spacing:.06em;font-family:'DM Sans',sans-serif;cursor:pointer; }
+.inv-ship-link { background:none;border:1px solid var(--border);color:var(--muted);padding:8px 18px;font-size:var(--inv-small);font-family:'DM Sans',sans-serif;cursor:pointer; }
+.inv-ship-ok, .inv-ship-err { font-size:var(--inv-text);line-height:1.6;margin-top:10px; }
+.inv-ship-ok { color:#2d6a4f; }
+.inv-ship-err { color:#c0392b; }
+@media (max-width:520px) { .inv-ship-form { grid-template-columns:1fr; } .inv-ship { padding:16px 14px; } }
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }

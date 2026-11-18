@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats, paidByLabel } from "../lib/invoiceView";
 import { isPaid } from "../lib/orderStatus";
 import { orderTracking, orderTrackingLink, carrierLabel, isPickup, PICKUP_LABEL } from "../lib/tracking";
+import { SHIP_FIELDS, SHIP_AUTOFILL, hasShipAddress, shipLines, shipForm, shipFields } from "../lib/shipAddress";
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
 import { invoiceNumber } from "../lib/invoiceNumber";
+
+// The shipping address fields that take a whole line of the form.
+const SHIP_WIDE = new Set(["ship_name", "ship_address", "ship_phone"]);
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
@@ -23,6 +27,12 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const [paying, setPaying] = useState(false);
   const [cardError, setCardError] = useState(false);
   const [cardCheckFailed, setCardCheckFailed] = useState(false);
+  // The shipping address form (null while closed), whether it is saving, and what the last save said.
+  const [shipDraft, setShipDraft] = useState(null);
+  const [shipSaving, setShipSaving] = useState(false);
+  const [shipMsg, setShipMsg] = useState(null);
+  // Set the moment Save is tapped, so a double tap saves once.
+  const shipBusy = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -72,6 +82,29 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       setApproved(true);
     } catch(e) { console.warn("Approve error:", e); setApproveFailed(true); }
     finally { setApproving(false); }
+  };
+
+  // Shipping address (Andy, 2026-11-17: "also make sure in the admin and for the user can add the
+  // shipping address !"): the client adds or changes it here, before or after paying, until the
+  // order has gone out. The server checks the link and every field (op "ship-address").
+  const openShip = () => { setShipDraft(shipForm(order)); setShipMsg(null); };
+  const saveShip = async () => {
+    if (shopView || shipBusy.current || !shipDraft) return;
+    const { fields, problem } = shipFields(shipDraft);
+    if (problem) { setShipMsg({ ok: false, text: problem }); return; }
+    shipBusy.current = true;
+    setShipSaving(true);
+    setShipMsg(null);
+    try {
+      const r = await storeCall("ship-address", { token, address: fields });
+      setOrder(o => ({ ...o, ...(r?.address || fields) }));
+      setShipDraft(null);
+      setShipMsg({ ok: true, text: "✓ Saved. Thank you!" });
+    } catch (e) {
+      console.warn("Shipping address:", e);
+      const said = e?.message && !/^Store \d+$/.test(e.message) ? e.message : "";
+      setShipMsg({ ok: false, text: said || "Your address could not be saved. Please try again." });
+    } finally { shipBusy.current = false; setShipSaving(false); }
   };
 
   const shell = (content) => <div className={embedded ? "inv-embed" : "invoice-page"}>{content}</div>;
@@ -126,6 +159,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <span className="invoice-value">{order.item_title}</span>
     </div>
   );
+  const shipGone = order.status === "shipped" || order.status === "delivered";
+  const shipSaved = hasShipAddress(order);
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
@@ -291,6 +326,37 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
               Something went wrong and your order was not confirmed. Please try again, or email us at <a href={`mailto:${BREVO_SENDER}`} style={{color:"var(--gold)"}}>{BREVO_SENDER}</a>.
             </p>
           )}
+        </div>
+      )}
+
+      {/* Shipping address: shown while it can still be added, and whenever one is saved. */}
+      {(shipSaved || !shipGone) && (
+        <div className="inv-ship">
+          <p className="inv-ship-title">Shipping address</p>
+          {shipDraft ? (<>
+            <div className="inv-ship-form">
+              {SHIP_FIELDS.map(([column, label, max]) => (
+                <label key={column} className={`inv-ship-field${SHIP_WIDE.has(column) ? " wide" : ""}`}>
+                  <span>{label}</span>
+                  <input type={column === "ship_phone" ? "tel" : "text"} autoComplete={SHIP_AUTOFILL[column]} maxLength={max} value={shipDraft[column]}
+                    onChange={e => { const v = e.target.value; setShipDraft(d => ({ ...d, [column]: v })); setShipMsg(null); }} />
+                </label>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginTop:16}}>
+              <button type="button" className="tap inv-ship-btn" onClick={saveShip} disabled={shipSaving}>{shipSaving ? "Saving…" : "Save address"}</button>
+              <button type="button" className="tap inv-ship-link" onClick={() => { setShipDraft(null); setShipMsg(null); }} disabled={shipSaving}>Cancel</button>
+            </div>
+          </>) : shipSaved ? (<>
+            <div className="inv-ship-lines">{shipLines(order).map((line, i) => <div key={i}>{line}</div>)}</div>
+            {!shopView && !shipGone && <button type="button" className="tap inv-ship-link" style={{marginTop:12}} onClick={openShip}>Change</button>}
+          </>) : shopView ? (
+            <p className="inv-ship-lines" style={{color:"var(--muted)"}}>No shipping address yet.</p>
+          ) : (<>
+            <p className="inv-ship-lines" style={{color:"var(--muted)",marginBottom:12}}>Where should Fonkiart send your order?</p>
+            <button type="button" className="tap inv-ship-btn" onClick={openShip}>Add shipping address</button>
+          </>)}
+          {shipMsg && <p className={shipMsg.ok ? "inv-ship-ok" : "inv-ship-err"} role={shipMsg.ok ? "status" : "alert"}>{shipMsg.text}</p>}
         </div>
       )}
 
