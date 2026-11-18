@@ -23,7 +23,7 @@ function frame(heading, body) {
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:2px solid ${C.gold};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
     + `<a href="${SITE}" style="font-family:${SERIF};font-size:27px;letter-spacing:.32em;color:#ffffff;text-decoration:none;">FONKIART</a>`
-    + `<div style="font-family:${SANS};font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
+    + `<div style="font-family:${SANS};font-size:16px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;margin-top:6px;">Original Art &amp; Fine Art Prints</div></td></tr>`
     // Picture and message are two inline-blocks: side by side when the email is
     // wide, picture on top when it isn't (phones) — no media queries, which many
     // mail apps ignore. Outlook gets the same two columns from the [if mso] table.
@@ -35,7 +35,7 @@ function frame(heading, body) {
     + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:31px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</div>`
     + `<!--[if mso]></td></tr></table><![endif]-->`
     + `</td></tr>`
-    + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:15px;line-height:1.8;color:${C.muted};">`
+    + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:16px;line-height:1.8;color:${C.muted};">`
     + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys</td></tr>`
     + `</table></div>`;
 }
@@ -46,9 +46,9 @@ const link = (href, label) => `<a href="${e(href)}" style="color:${C.gold};">${l
 const signoff = small("— Fonkiart");
 const button = (href, label) => `<p style="text-align:center;margin:8px 0 24px;"><a href="${e(href)}" style="display:inline-block;background:${C.gold};color:#ffffff;padding:14px 30px;text-decoration:none;font-family:${SANS};font-size:16px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;">${label}</a></p>`;
 const codeBox = (code, note) => `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:31px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${code}</div>${note ? `<div style="font-size:16px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
-const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
+const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:17px;"><strong>${label}:</strong> ${html}</p>`;
-const footnote = `<p style="margin:20px 0 0;font-size:15px;color:${C.muted};">Sent from fonkiart.com</p>`;
+const footnote = `<p style="margin:20px 0 0;font-size:16px;color:${C.muted};">Sent from fonkiart.com</p>`;
 
 // The picture runs down the left third of every email, beside the message
 // (Andy, 11-01: "to the left, at 1/3 of the size" / "the picture to the left in all emails"),
@@ -59,8 +59,8 @@ function artCell({ href, image, alt, title, linkLabel }) {
     + `<div style="padding:6px 20px 18px 0;">`
     + `<a href="${e(href)}" style="text-decoration:none;"><img src="${e(image)}" alt="${e(alt)}" width="156" style="display:block;width:100%;max-width:156px;height:auto;border:0;"></a>`
     + (title ? `<p style="margin:10px 0 2px;font-family:${SERIF};font-style:italic;font-size:17px;line-height:1.4;color:${C.ink};">“${e(title)}”</p>` : "")
-    + `<p style="margin:${title ? "0" : "10px 0 0"};font-family:${SANS};font-size:13px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
-    + `<p style="margin:6px 0 0;font-family:${SANS};font-size:14px;line-height:1.5;"><a href="${e(href)}" style="font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a></p>`
+    + `<p style="margin:${title ? "0" : "10px 0 0"};font-family:${SANS};font-size:16px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
+    + `<p style="margin:6px 0 0;font-family:${SANS};font-size:16px;line-height:1.5;"><a href="${e(href)}" style="font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:${C.gold};text-decoration:none;">${linkLabel}</a></p>`
     + `</div></div>`
     + `<!--[if mso]></td><![endif]-->`;
 }
