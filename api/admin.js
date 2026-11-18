@@ -5,7 +5,8 @@ import { sendBrevo, senderAddress } from "./_lib/brevo.js";
 import { adminThread, adminReply, adminInboundSetup } from "./_lib/threads.js";
 import { withRandomArt } from "./_lib/emails.js";
 import { InputError } from "./_lib/errors.js";
-import { runQuery, signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
+import { signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
+import { queryMarkingSold } from "./_lib/artworks.js";
 import { adminReminderNow } from "./_lib/reminders.js";
 import { cardCheck } from "./_lib/stripe.js";
 import { siteUrl } from "./_lib/site.js";
@@ -30,7 +31,9 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const send = async (m) => sendBrevo({ ...m, htmlContent: await withRandomArt(db, m.htmlContent) });
   try {
-    if (body.kind === "query") return res.status(200).json(await runQuery(db, body.table, body.chain));
+    // The admin's query as before; an Orders write that turns an order paid also marks its
+    // artwork SOLD (Andy, 2026-11-17: "when an item is sold / paid for it should be marked as SOLD").
+    if (body.kind === "query") return res.status(200).json(await queryMarkingSold(db, body.table, body.chain));
     if (body.kind === "storage-sign") return res.status(200).json(await signUpload(db, body.path));
     if (body.kind === "storage-remove") return res.status(200).json(await removeFiles(db, body.paths));
     if (body.kind === "email") return res.status(200).json(await adminEmail({ send }, body));

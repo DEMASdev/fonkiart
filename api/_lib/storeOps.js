@@ -5,7 +5,7 @@ import { bearer } from "./adminToken.js";
 import { checkPassword } from "./adminSecret.js";
 import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
-import { cardPicture } from "./artworks.js";
+import { cardPicture, markSoldForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
@@ -278,6 +278,7 @@ export async function opCardPaid(db, body, mail) {
   }
   if (!paid) return { paid: false };
   await markCardPaid(db, order, mail, "redirect");
+  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
   return { paid: true };
 }
 
@@ -325,6 +326,7 @@ export async function opStripeEvent(db, event, mail) {
   if (PAID_STATUSES.includes(order.status)) return { received: true, paid: true };
   if (!paidFor(session, order)) return { received: true, ignored: "not paid" };
   await markCardPaid(db, order, mail, "webhook");
+  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
   return { received: true, paid: true };
 }
 
