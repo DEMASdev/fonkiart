@@ -152,7 +152,9 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
         </div>
       </div>
 
-      <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart. Please review the details and click <em>Confirm order</em> when you're ready.</p>
+      {/* Ask for the click only while the Confirm order button is on the page: a paid or
+          already-confirmed invoice has no such button (seen 2026-11-17 on a paid invoice). */}
+      <p style={{fontSize:13,color:"var(--muted)",lineHeight:1.7,marginBottom:24}}>Hi {firstName}, here is your invoice from Fonkiart.{!paid && !approved && <> Please review the details and click <em>Confirm order</em> when you&apos;re ready.</>}</p>
 
       {/* With a picture, Client and Artwork sit beside it (Andy, 2026-11-17: "compact it
           more, use the space next to the picture"). Without one, the plain rows. */}
