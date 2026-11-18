@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Text sizes · Fonkiart</title>
+<!-- Temporary page (2026-11-17): Andy picks the text sizes for the invoice here, then it is deleted.
+     Same font link as index.html, so every sample is drawn exactly as the site draws it. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{background:#fff;color:#1c1a18;font-family:'DM Sans',sans-serif}
+  main{max-width:760px;margin:0 auto;padding:28px 16px 40px}
+  h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:34px;line-height:1.15;margin-bottom:8px}
+  .how{font-size:18px;line-height:1.5;margin-bottom:22px}
+  .box{border:1.5px solid #e8c97a;padding:16px 16px 6px;margin-bottom:22px}
+  .box h2{font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;margin-bottom:2px}
+  .box .what{font-size:16px;color:#5e5654;margin-bottom:10px}
+  .row{display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid #f1e6c9}
+  .today{background:#f6f2ea;margin:0 -16px;padding:10px 16px}
+  .tag{flex:0 0 84px;font-size:16px;line-height:1.3}
+  .tag b{font-size:20px;font-weight:500}
+  .tag span{color:#5e5654}
+  .sample{flex:1;min-width:0;line-height:1.4;overflow-wrap:anywhere}
+  .lab{text-transform:uppercase;letter-spacing:.1em}
+  .money{flex:1;min-width:0}
+  .money .l{display:block;font-size:16px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+  .money .vals{display:flex;flex-wrap:wrap;gap:4px 20px;color:#b8923f}
+  .serif{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:34px;letter-spacing:.02em}
+  .lining{font-variant-numeric:lining-nums}
+  .sans{font-family:'DM Sans',sans-serif;font-weight:500;font-size:30px;font-variant-numeric:tabular-nums lining-nums}
+</style>
+</head>
+<body>
+<main>
+  <h1>Pick your text sizes</h1>
+  <p class="how">Choose one from each box and reply in the chat, for example <b>3s 7s 10s</b>. The shaded line in each box is what the invoice uses today.</p>
+
+  <section class="box">
+    <h2>Normal text</h2>
+    <p class="what">Sentences, names, prices, the "Hi Maria…" line</p>
+    <div class="row today"><div class="tag"><b>today</b><br><span>13 px</span></div><div class="sample" style="font-size:13px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+    <div class="row"><div class="tag"><b>1s</b><br><span>15 px</span></div><div class="sample" style="font-size:15px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+    <div class="row"><div class="tag"><b>2s</b><br><span>16 px</span></div><div class="sample" style="font-size:16px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+    <div class="row"><div class="tag"><b>3s</b><br><span>17 px</span></div><div class="sample" style="font-size:17px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+    <div class="row"><div class="tag"><b>4s</b><br><span>18 px</span></div><div class="sample" style="font-size:18px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+    <div class="row"><div class="tag"><b>5s</b><br><span>20 px</span></div><div class="sample" style="font-size:20px">Hi Maria, here is your invoice from Fonkiart.</div></div>
+  </section>
+
+  <section class="box">
+    <h2>Small text</h2>
+    <p class="what">Labels, dates, fine print</p>
+    <div class="row today"><div class="tag"><b>today</b><br><span>12 px</span></div><div class="sample lab" style="font-size:12px">Total paid · Invoice · Date: Nov 17, 2026</div></div>
+    <div class="row"><div class="tag"><b>6s</b><br><span>14 px</span></div><div class="sample lab" style="font-size:14px">Total paid · Invoice · Date: Nov 17, 2026</div></div>
+    <div class="row"><div class="tag"><b>7s</b><br><span>15 px</span></div><div class="sample lab" style="font-size:15px">Total paid · Invoice · Date: Nov 17, 2026</div></div>
+    <div class="row"><div class="tag"><b>8s</b><br><span>16 px</span></div><div class="sample lab" style="font-size:16px">Total paid · Invoice · Date: Nov 17, 2026</div></div>
+  </section>
+
+  <section class="box">
+    <h2>Money</h2>
+    <p class="what">How the total shows. Look closely at $111.</p>
+    <div class="row today"><div class="tag"><b>today</b></div><div class="money"><span class="l">Total paid</span><div class="vals serif"><span>$1</span><span>$11</span><span>$111</span><span>$120</span><span>$1,450</span></div></div></div>
+    <div class="row"><div class="tag"><b>9s</b><br><span>fancy font</span></div><div class="money"><span class="l">Total paid</span><div class="vals serif lining"><span>$1</span><span>$11</span><span>$111</span><span>$120</span><span>$1,450</span></div></div></div>
+    <div class="row"><div class="tag"><b>10s</b><br><span>plain font</span></div><div class="money"><span class="l">Total paid</span><div class="vals sans"><span>$1</span><span>$11</span><span>$111</span><span>$120</span><span>$1,450</span></div></div></div>
+  </section>
+</main>
+</body>
+</html>
