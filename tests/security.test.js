@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { issueAdminToken, isValidAdminToken, samePassword, bearer } from "../api/_lib/adminToken.js";
-import { validateChain, runQuery, adminEmail } from "../api/_lib/adminOps.js";
+import { validateChain, runQuery, adminEmail, PAID_METHODS } from "../api/_lib/adminOps.js";
+import { PAID_METHODS as BROWSER_PAID_METHODS } from "../src/lib/orderStatus.js";
 import * as store from "../api/_lib/storeOps.js";
 import { InputError } from "../api/_lib/errors.js";
 import { escapeHtml, senderAddress } from "../api/_lib/brevo.js";
@@ -111,6 +112,35 @@ test("browser recorder produces the chain the server replays", async () => {
   assert.deepEqual(seen, { kind: "query", table: "Leads", chain: [{ m: "select", a: ["id", { count: "exact", head: true }] }, { m: "eq", a: ["source", "manual"] }] });
   assert.deepEqual(res, { data: [], error: null });
   assert.doesNotThrow(() => validateChain(seen.table, seen.chain));
+});
+
+// "Mark paid" saves how the money came; the paid invoice says "Paid by ..." (Andy, 2026-11-17).
+test("admin proxy: an order's paid_method is card, zelle, venmo, cashapp, cash or other; anything else is a 400 and nothing is saved", async () => {
+  // The query exactly as the admin's Mark paid sends it (src/admin/OrdersTab.jsx), through JSON like the real request.
+  const markPaid = async (paid_method) => {
+    let seen = null;
+    await recordQuery("Orders", async (p) => { seen = p; return {}; }).update({ status: "paid", paid_method }).eq("id", 1);
+    return JSON.parse(JSON.stringify(seen.chain));
+  };
+  for (const method of ["card", "zelle", "venmo", "cashapp", "cash", "other"]) {
+    const db = fakeDb({ Orders: [{ id: 1, status: "confirmed" }] });
+    assert.equal((await runQuery(db, "Orders", await markPaid(method))).error, null, method);
+    assert.deepEqual(db.tables.Orders, [{ id: 1, status: "paid", paid_method: method }], method);
+  }
+  for (const bad of ["Zelle", "stripe", "paypal", "", " cash", null, 1, ["cash"], { cash: true }]) {
+    const db = fakeDb({ Orders: [{ id: 1, status: "confirmed" }] });
+    await assert.rejects(runQuery(db, "Orders", await markPaid(bad)),
+      e => e instanceof InputError && e.status === 400 && e.message === "Bad payment method", JSON.stringify(bad));
+    assert.equal(db.writes.length, 0, `nothing saved for ${JSON.stringify(bad)}`);
+    assert.deepEqual(db.tables.Orders, [{ id: 1, status: "confirmed" }]);
+  }
+  // A new order (insert, upsert) is held to the same rule; writes that leave paid_method alone are untouched.
+  assert.throws(() => validateChain("Orders", [{ m: "insert", a: [[{ item_title: "A" }, { item_title: "B", paid_method: "bitcoin" }]] }]), InputError);
+  assert.throws(() => validateChain("Orders", [{ m: "upsert", a: [{ id: 1, paid_method: "Card" }] }]), InputError);
+  assert.doesNotThrow(() => validateChain("Orders", [{ m: "update", a: [{ status: "shipped" }] }, { m: "eq", a: ["id", 1] }]));
+  assert.doesNotThrow(() => validateChain("Orders", [{ m: "insert", a: [[{ item_title: "A", status: "pending" }]] }]));
+  // The admin's buttons and the server's list are the same six.
+  assert.deepEqual(BROWSER_PAID_METHODS.map(([v]) => v).sort(), [...PAID_METHODS].sort());
 });
 
 test("admin email refuses a bad recipient", async () => {

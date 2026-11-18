@@ -6,7 +6,7 @@ import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
-import { ORDER_STATUSES, isPaid, canMarkPaid } from "../lib/orderStatus";
+import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices } from "../lib/orderStatus";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -154,13 +154,15 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   };
   // Only change the screen and email the client once the database has really saved it.
   // It used to ignore a failed save, so the client could be told something untrue.
-  const updateStatus = async (id, status) => {
+  // paidMethod: how the money came, from "Mark paid" (the invoice then says "Paid by ...").
+  const updateStatus = async (id, status, paidMethod) => {
     setStatusErr("");
-    const { error } = await supabase.from("Orders").update({status}).eq("id",id);
+    const change = paidMethod ? { status, paid_method: paidMethod } : { status };
+    const { error } = await supabase.from("Orders").update(change).eq("id",id);
     if (error) { setStatusErr(`Could not save the new status (${error.message || "unknown error"}). Nothing was emailed.`); return false; }
     setConfirmPaid(null);
     const order = orders.find(o => o.id === id);
-    setOrders(orders.map(o=>o.id===id?{...o,status}:o));
+    setOrders(orders.map(o=>o.id===id?{...o,...change}:o));
     if (order) sendStatusEmail(order, status);
   };
   const deleteOrder = async (id) => {
@@ -444,11 +446,14 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                       style={{border:"1px solid var(--border)",padding:"4px 8px",background:"#fff",cursor:"pointer"}}>
                       {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                     </select>
-                    {/* Mark paid: two taps, because it emails the client a receipt. */}
+                    {/* Mark paid: two taps, because it emails the client a receipt. The second
+                        tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ..."). */}
                     {canMarkPaid(o.status) && (confirmPaid === o.id ? (
                       <div className="mark-paid-ask">
-                        <span>Money arrived?</span>
-                        <button className="tap mark-paid-yes" onClick={()=>updateStatus(o.id,"paid")}>Yes, paid</button>
+                        <span>Money arrived? Paid by:</span>
+                        {markPaidChoices(o.payment_methods).map(([method, label]) => (
+                          <button key={method} className="tap mark-paid-yes" onClick={()=>updateStatus(o.id,"paid",method)}>{label}</button>
+                        ))}
                         <button className="tap mark-paid-no" onClick={()=>setConfirmPaid(null)}>Cancel</button>
                       </div>
                     ) : (

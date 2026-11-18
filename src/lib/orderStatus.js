@@ -18,3 +18,25 @@ export const isPaid = (status) => status === "paid" || status === "shipped" || s
 
 // The "Mark paid" button shows while the money hasn't come in yet.
 export const canMarkPaid = (status) => !status || status === "pending" || status === "confirmed";
+
+// How the client paid, saved on the order as paid_method; the paid invoice says "Paid by ..."
+// (Andy, 2026-11-17). Only these six: the server refuses anything else (api/_lib/adminOps.js).
+export const PAID_METHODS = [
+  ["zelle", "Zelle"],
+  ["venmo", "Venmo"],
+  ["cashapp", "Cash App"],
+  ["card", "Card"],
+  ["cash", "Cash"],
+  ["other", "Other"],
+];
+
+// An invoice's ways to pay (its payment_methods, e.g. "zelle,stripe"), as paid_method values.
+const INVOICE_WAYS = new Map([["zelle", "zelle"], ["venmo", "venmo"], ["cashapp", "cashapp"], ["stripe", "card"]]);
+
+// "Mark paid" asks how the money came: one button per way the invoice offered, then Cash and
+// Other. An old invoice saved no ways (null): all four.
+export function markPaidChoices(paymentMethods) {
+  const offered = String(paymentMethods || "").split(",").map(m => INVOICE_WAYS.get(m.trim())).filter(Boolean);
+  const ways = offered.length ? offered : [...INVOICE_WAYS.values()];
+  return PAID_METHODS.filter(([v]) => ways.includes(v) || v === "cash" || v === "other");
+}

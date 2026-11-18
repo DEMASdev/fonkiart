@@ -5,7 +5,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { formBody, toCents, createCheckout, checkoutPaidFor, cardCheck, cardReady } from "../api/_lib/stripe.js";
 import { opCardCheckout, opCardPaid, opInvoice, STORE_OPS } from "../api/_lib/storeOps.js";
-import { isPaid, canMarkPaid, ORDER_STATUSES } from "../src/lib/orderStatus.js";
+import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices } from "../src/lib/orderStatus.js";
 import storeHandler from "../api/store.js";
 
 const TOKEN = "85d82763-0000-4000-8000-0000000000aa";
@@ -140,7 +140,7 @@ test("back from Stripe, paid: the order turns Paid ONCE, the shop and the client
   const mail = mailbox();
   fakeStripe(() => ({ json: { payment_status: "paid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN } } }));
   assert.deepEqual(await opCardPaid(db, { token: TOKEN, session: SESSION }, mail), { paid: true });
-  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true }]);
+  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true, paid_method: "card" }]);
   assert.equal(row.status, "paid");
   assert.deepEqual(mail.sent.map(m => m.to).sort(), ["ana@example.com", "shop@fonkiart.com"]);
   const shop = mail.sent.find(m => m.to === "shop@fonkiart.com");
@@ -204,6 +204,17 @@ test("the order steps: Paid sits between Confirmed and Shipped; money is in from
   assert.deepEqual([undefined, "pending", "confirmed", "paid", "shipped"].map(canMarkPaid), [true, true, true, false, false]);
 });
 
+test("Mark paid asks how the money came: the ways the invoice offered (its card is 'stripe'), then Cash and Other", () => {
+  const offered = (methods) => markPaidChoices(methods).map(([v]) => v);
+  assert.deepEqual(offered("zelle,stripe"), ["zelle", "card", "cash", "other"]);
+  assert.deepEqual(offered("venmo"), ["venmo", "cash", "other"]);
+  assert.deepEqual(offered("cashapp,venmo,zelle"), ["zelle", "venmo", "cashapp", "cash", "other"], "always in the same order");
+  const all = ["zelle", "venmo", "cashapp", "card", "cash", "other"];
+  assert.deepEqual(offered(null), all, "an old invoice saved no ways: all four");
+  assert.deepEqual(offered(""), all, "nothing ticked: all four");
+  assert.deepEqual(markPaidChoices("zelle,venmo,cashapp,stripe").map(([, label]) => label), ["Zelle", "Venmo", "Cash App", "Card", "Cash", "Other"]);
+});
+
 test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {
   fakeStripe(() => ({ json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } }));
   await createCheckout({ order: order(), invNum: "FA-261117161956080", site: "https://fonkiart.com" });
@@ -225,13 +236,24 @@ test("Stripe's message, paid: the order turns Paid, the shop and the client each
   fakeStripe(() => ({ json: paidPage() }));
   assert.deepEqual(await webhook(db, stripeEvent(), mail), { received: true, paid: true });
   assert.deepEqual(calls.map(c => [c.method, c.url]), [["GET", `https://api.stripe.com/v1/checkout/sessions/${SESSION}`]], "asked Stripe itself");
-  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true }]);
+  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true, paid_method: "card" }]);
   assert.equal(row.status, "paid");
   assert.deepEqual(mail.sent.map(m => m.to).sort(), ["ana@example.com", "shop@fonkiart.com"]);
   const shop = mail.sent.find(m => m.to === "shop@fonkiart.com");
   assert.equal(shop.subject, "Paid by card ✓ — Frida the manatee · $450");
   assert.match(shop.htmlContent, /already marked the order <strong>Paid<\/strong>/);
   assert.equal(mail.sent.find(m => m.to === "ana@example.com").subject, "Payment received — Frida the manatee · Fonkiart");
+});
+
+// The paid invoice says "Paid by ..." from the order's paid_method (Andy, 2026-11-17).
+test("a card payment is saved as paid by card, whether the client comes back or Stripe's message comes first", async () => {
+  fakeStripe(() => ({ json: paidPage() }));
+  const back = order();
+  assert.deepEqual(await opCardPaid(fakeDb([back]), { token: TOKEN, session: SESSION }, mailbox()), { paid: true });
+  const message = order();
+  assert.deepEqual(await webhook(fakeDb([message]), stripeEvent(), mailbox()), { received: true, paid: true });
+  assert.deepEqual([back.status, back.paid_method], ["paid", "card"], "the client came back");
+  assert.deepEqual([message.status, message.paid_method], ["paid", "card"], "Stripe's message");
 });
 
 test("the same Stripe message twice, one after the other or both at once: the emails go out once", async () => {

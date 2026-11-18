@@ -12,6 +12,12 @@ const BUCKET = "artworks";
 const PATH_RE = /^(?!.*\.\.)(?!\/)[A-Za-z0-9/_.-]{1,200}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// How an order was paid: the paid invoice says "Paid by ...". Orders.paid_method holds only
+// these (Andy, 2026-11-17). The admin's "Mark paid" saves one; a card payment saves "card" by
+// itself (storeOps.js). Browser copy, with the button labels: src/lib/orderStatus.js.
+export const PAID_METHODS = new Set(["card", "zelle", "venmo", "cashapp", "cash", "other"]);
+const WRITES = new Set(["insert", "update", "upsert"]);
+
 export function validateChain(table, chain) {
   if (!ADMIN_TABLES.has(table)) throw new InputError("Unknown table");
   if (!Array.isArray(chain) || chain.length === 0 || chain.length > 30) throw new InputError("Bad query");
@@ -19,6 +25,15 @@ export function validateChain(table, chain) {
     if (!step || typeof step.m !== "string" || !Array.isArray(step.a ?? [])) throw new InputError("Bad query");
     if (!(i === 0 ? ACTIONS : MODIFIERS).has(step.m)) throw new InputError(`Not allowed: ${step.m}`);
   });
+  // A write that sets paid_method must use one of the six; anything else is refused (400)
+  // before the database is touched, so nothing is saved.
+  if (table === "Orders" && WRITES.has(chain[0].m)) {
+    for (const row of [].concat(chain[0].a?.[0] ?? [])) {
+      if (row && typeof row === "object" && Object.hasOwn(row, "paid_method") && !PAID_METHODS.has(row.paid_method)) {
+        throw new InputError("Bad payment method");
+      }
+    }
+  }
 }
 
 export async function runQuery(db, table, chain) {

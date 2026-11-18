@@ -234,7 +234,8 @@ export async function opCardCheckout(db, body) {
   }
 }
 
-// Stripe says this invoice is paid: mark the order Paid, then email the shop and the client.
+// Stripe says this invoice is paid: mark the order Paid, by card (the paid invoice says "Paid by
+// Card"), then email the shop and the client.
 // The update only matches an order that is still Pending or Confirmed, so whoever gets there
 // first (the client coming back, Stripe's webhook, a second tab, a replay) sends the two
 // emails, and everyone after them sends none.
@@ -242,7 +243,7 @@ export async function opCardCheckout(db, body) {
 //  - via "redirect" (the client coming back): email anyway, telling the shop to mark it by hand;
 //  - via "webhook" (Stripe's message): email nobody and answer 500, so Stripe sends it again later.
 async function markCardPaid(db, order, mail, via) {
-  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true })
+  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true, paid_method: "card" })
     .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
   if (error) {
     console.error(`store card-paid (${via}): could not mark the order Paid:`, error.message);
