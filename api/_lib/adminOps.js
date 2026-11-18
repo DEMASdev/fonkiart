@@ -1,5 +1,6 @@
 import { InputError } from "./errors.js";
 import { adminFrame } from "./emails.js";
+import { SHIP_LIMITS } from "./shipAddress.js";
 
 // The admin screens still describe their queries the way supabase-js does
 // (from().select().eq()...); the browser sends that description here and the
@@ -53,9 +54,10 @@ export function validateChain(table, chain) {
     if (!step || typeof step.m !== "string" || !Array.isArray(step.a ?? [])) throw new InputError("Bad query");
     if (!(i === 0 ? ACTIONS : MODIFIERS).has(step.m)) throw new InputError(`Not allowed: ${step.m}`);
   });
-  // A write that sets paid_method must use one of the six, and one that sets tracking must
-  // follow TRACKING_RULES; anything else is refused (400) before the database is touched, so
-  // nothing is saved.
+  // A write that sets paid_method must use one of the six, one that sets tracking must follow
+  // TRACKING_RULES, and a shipping address field must be text no longer than the checkout
+  // allows (SHIP_LIMITS); anything else is refused (400) before the database is touched, so
+  // nothing is saved. null clears any of them.
   if (table === "Orders" && WRITES.has(chain[0].m)) {
     for (const row of [].concat(chain[0].a?.[0] ?? [])) {
       if (!row || typeof row !== "object") continue;
@@ -64,6 +66,10 @@ export function validateChain(table, chain) {
       }
       for (const [column, ok, refusal] of TRACKING_RULES) {
         if (Object.hasOwn(row, column) && row[column] !== null && !ok(row[column])) throw new InputError(refusal);
+      }
+      for (const [column, max] of Object.entries(SHIP_LIMITS)) {
+        const v = row[column];
+        if (Object.hasOwn(row, column) && v !== null && !(typeof v === "string" && v.length <= max)) throw new InputError("Bad shipping address");
       }
     }
   }

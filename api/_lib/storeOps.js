@@ -10,6 +10,7 @@ import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
 import { cardReady, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
+import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -179,8 +180,13 @@ export async function opOrder(db, body, mail) {
   const discount = await couponDiscount(db);
   const notes = [`Order Ref: ${orderRef}`, fullName, phone, addr].filter(Boolean).join(" · ") + (couponLead ? ` · ${discount}% coupon applied` : "");
 
+  // The address also goes on the order itself (Andy, 2026-11-17: "also make sure in the admin
+  // and for the user can add the shipping address !"): Admin -> Orders and the invoice page
+  // read it from there. The notes keep it in words, exactly as before.
+  const ship = { ship_name: fullName || null, ship_address: address || null, ship_city: city || null, ship_state: state || null, ship_zip: zip || null, ship_country: country || null, ship_phone: phone || null };
+
   const { data: existing } = await db.from("Clients").select("id").eq("email", email).limit(1);
-  const { error: orderErr } = await db.from("Orders").insert(items.map(i => ({ client_email: email, item_title: i.title, amount: i.amount, status: "pending", notes })));
+  const { error: orderErr } = await db.from("Orders").insert(items.map(i => ({ client_email: email, item_title: i.title, amount: i.amount, status: "pending", notes, ...ship })));
   if (orderErr) console.error("store order insert:", orderErr.message);
 
   const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
@@ -410,7 +416,28 @@ export const STORE_OPS = {
   "thread-reply": (db, req, mail) => opThreadReply(db, req.body || {}, mail),
   "inbound": (db, req, mail) => opInbound(db, req, mail),
   "reminders": (db, req, mail) => opReminders(db, req, mail),
+  "ship-address": (db, req) => opShipAddress(db, req.body || {}),
 };
 
 // Ops a plain GET may call: only Vercel's daily cron, which can't POST.
 export const GET_OPS = new Set(["reminders"]);
+
+// The client's shipping address, from their invoice page (Andy, 2026-11-17: "also make sure in
+// the admin and for the user can add the shipping address !"). Only someone with the invoice
+// link can set it, like opInvoice, before or after paying. Once the order has gone out
+// (Shipped, Delivered) it can't be changed here any more: the client asks Fonkiart instead.
+// Every field has the checkout's limits (opOrder); only the seven address columns are written.
+export async function opShipAddress(db, body) {
+  const order = await findInvoice(db, invoiceToken(body.token));
+  if (order.status === "shipped" || order.status === "delivered") {
+    throw new InputError("This order has already gone out, so the address can't be changed here. Please contact Fonkiart.", 409);
+  }
+  const typed = body.address && typeof body.address === "object" ? body.address : {};
+  const address = {};
+  for (const [column, max] of Object.entries(SHIP_LIMITS)) {
+    address[column] = text(typed[column], max, SHIP_WORDS[column], { required: SHIP_REQUIRED.has(column) }) || null;
+  }
+  const { error } = await db.from("Orders").update(address).eq("id", order.id);
+  if (error) throw error;
+  return { ok: true, address };
+}
