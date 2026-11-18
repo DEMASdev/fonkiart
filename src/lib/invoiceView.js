@@ -67,3 +67,12 @@ export function findArtwork(artworks = [], title) {
 export function paidCongrats(status) {
   return isPaid(status) ? { title: "Congratulations, you made it yours!", sub: "A one of a kind!" } : null;
 }
+
+// How a paid invoice was paid, in words for "Paid by <label> ✓" (Andy, 2026-11-17: "should say
+// Thank you for your payment ! then under Paid by ... and the method used"). The order's
+// paid_method holds one of: card, zelle, venmo, cashapp, cash, other. "other", empty (older
+// orders) or a word not on this list: null, and the page says just "Paid ✓".
+const PAID_BY = new Map([["card", "card"], ["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"], ["cash", "cash"]]);
+export function paidByLabel(method) {
+  return PAID_BY.get(String(method ?? "").trim().toLowerCase()) ?? null;
+}

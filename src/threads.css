@@ -52,9 +52,16 @@
 .rq-page-intro { font-size:15px;color:var(--muted);line-height:1.7;margin-bottom:22px; }
 .rq-page-foot { text-align:center;margin-top:24px; }
 .rq-page-foot a { color:var(--gold); }
-/* The invoice inside the full site (?invoice= link), centred under the top bar. */
-.inv-embed { display:flex;justify-content:center;padding:32px 20px 64px; }
-@media(max-width:600px){ .inv-embed { padding:16px 12px 48px; } .inv-embed .invoice-card { padding:24px 16px; } }
+/* The invoice inside the full site (?invoice= link), centred under the top bar and kept close
+   to it (Andy, 2026-11-17: "make that page nicer please there's a lot of space from the top
+   down"). The card, header and tagline are set here, not on the shared .invoice-* classes,
+   so the conversation page, which uses them too, does not change. */
+.inv-embed { display:flex;justify-content:center;padding:14px 20px 64px; }
+.inv-embed .invoice-card { padding:28px 48px 40px; }
+.inv-embed .invoice-header { margin-bottom:16px;padding-bottom:14px; }
+.inv-embed .invoice-tagline { font-size:var(--inv-small); }
+.inv-embed .copy-btn, .inv-embed .copy-btn.copy-btn-line { font-size:var(--inv-small); }
+@media(max-width:600px){ .inv-embed { padding:10px 12px 48px; } .inv-embed .invoice-card { padding:20px 16px 24px; } }
 /* The artwork the invoice is for: small and to the left, the same size as in the
    emails (156px wide). Andy, 2026-11-17: "just keep it small like in the email". */
 .inv-art-row { display:flex;gap:18px;align-items:flex-start; }

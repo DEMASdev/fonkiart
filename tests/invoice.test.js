@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, paidCongrats, SHOP_VIEW } from "../src/lib/invoiceView.js";
+import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, paidCongrats, paidByLabel, SHOP_VIEW } from "../src/lib/invoiceView.js";
 import { invoiceNumber } from "../src/lib/invoiceNumber.js";
 import { invoiceNumber as serverInvoiceNumber } from "../api/_lib/invoiceNumber.js";
 import { opInvoiceApprove } from "../api/_lib/storeOps.js";
@@ -104,6 +104,15 @@ test("a paid invoice congratulates the client, in Andy's words; never before the
   const words = { title: "Congratulations, you made it yours!", sub: "A one of a kind!" };
   for (const status of ["paid", "shipped", "delivered"]) assert.deepEqual(paidCongrats(status), words, status);
   for (const status of ["pending", "confirmed", undefined, null, ""]) assert.equal(paidCongrats(status), null, String(status));
+});
+
+test("a paid invoice says how it was paid: 'Paid by <label> ✓'; unknown or 'other' says just 'Paid ✓'", () => {
+  const labels = { card: "card", zelle: "Zelle", venmo: "Venmo", cashapp: "Cash App", cash: "cash" };
+  for (const [method, label] of Object.entries(labels)) assert.equal(paidByLabel(method), label, method);
+  assert.equal(paidByLabel(" Zelle "), "Zelle", "case and spaces don't matter");
+  for (const method of ["other", "", null, undefined, "stripe", "bitcoin", "constructor", "__proto__", 0]) {
+    assert.equal(paidByLabel(method), null, String(method));
+  }
 });
 
 test("the server's invoice number (emails) and the browser's (invoice page) are always the same", () => {

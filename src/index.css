@@ -593,6 +593,11 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 @media(max-width:600px){ .cart-drawer { width:100vw; } }
 
 /* ── INVOICE PAGE ── */
+/* Its text sizes, in one place (Andy, 2026-11-17: "some people can't see well and a small font is
+   hard to read"). --inv-small: labels, dates, captions, fine print; nothing a person reads goes
+   under 14px. --inv-text: sentences. --inv-num: the total. Names are --inv-text + 1px and the
+   pay addresses + 3px. The big titles keep their own sizes. */
+.inv-embed, .invoice-page { --inv-small:14px;--inv-text:16px;--inv-num:30px; }
 .invoice-page { min-height:100vh;background:#fdfcf8;display:flex;align-items:center;justify-content:center;padding:40px 20px; }
 .invoice-card { background:#fff;border:1px solid var(--border);max-width:560px;width:100%;padding:48px; }
 .invoice-header { text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid var(--border); }
@@ -602,22 +607,31 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 /* Paid: the congratulations under the title (Andy, 2026-11-17: "very nicely and elegant").
    The logo's gold dot between two hairlines, the title serif in italic, then the gold small caps.
    padding-left balances the space letter-spacing leaves after the last letter, so it sits centred. */
-.inv-congrats { margin-top:18px; }
-.inv-congrats-rule { display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px; }
+.inv-congrats { margin-top:12px; }
+.inv-congrats-rule { display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px; }
 .inv-congrats-rule::before, .inv-congrats-rule::after { content:"";width:40px;height:1px;background:var(--border); }
 .inv-congrats-title { font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:clamp(20px,5.6vw,24px);line-height:1.25;color:var(--ink);text-wrap:balance; }
-.inv-congrats-sub { font-family:'Cormorant Garamond',serif;font-weight:600;font-size:13px;letter-spacing:.24em;padding-left:.24em;text-transform:uppercase;color:var(--gold);margin-top:6px; }
+.inv-congrats-sub { font-family:'Cormorant Garamond',serif;font-weight:600;font-size:calc(var(--inv-small) + 1px);letter-spacing:.24em;padding-left:.24em;text-transform:uppercase;color:var(--gold);margin-top:6px; }
 .invoice-row { display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--border); }
-.invoice-label { font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted); }
-.invoice-value { font-size:15px;color:var(--ink);font-weight:500; }
-.invoice-total { display:flex;justify-content:space-between;align-items:baseline;padding:20px 0 0;margin-top:4px; }
-.invoice-total .invoice-label { font-size:14px;color:var(--ink);font-weight:500; }
-.invoice-total .invoice-value { font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--gold);font-weight:600; }
+.invoice-label { font-size:var(--inv-small);letter-spacing:.1em;text-transform:uppercase;color:var(--muted); }
+.invoice-value { font-size:calc(var(--inv-text) + 1px);color:var(--ink);font-weight:500; }
+.invoice-total { display:flex;justify-content:space-between;align-items:baseline;padding:14px 0 0;margin-top:4px; }
+.invoice-total .invoice-label { font-size:var(--inv-text);color:var(--ink);font-weight:500; }
+/* The total in the plain sans, not the serif (Andy, 2026-11-17, on "TOTAL PAID $1": "the number 1
+   can't be read well in that font"). Cormorant draws a 1 like a Roman I, and even its lining 1
+   has only a tiny flag. Same gold; tabular-nums keeps every digit the same width. */
+.invoice-total .invoice-value { font-family:'DM Sans',sans-serif;font-size:var(--inv-num);color:var(--gold);font-weight:500;font-variant-numeric:tabular-nums; }
 .invoice-pay-section { margin-top:32px;padding-top:24px;border-top:1px solid var(--border); }
 .invoice-pay-option { background:var(--cream);border:1px solid var(--border);padding:20px 24px;margin-bottom:12px; }
-.invoice-pay-title { font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
-.invoice-pay-value { font-size:17px;color:var(--ink);font-weight:500; }
-.invoice-approved-banner { background:#f0f9f4;border:1px solid #a3d4b3;padding:24px;text-align:center;margin-top:28px; }
+.invoice-pay-title { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
+.invoice-pay-value { font-size:calc(var(--inv-text) + 3px);color:var(--ink);font-weight:500; }
+.invoice-approved-banner { background:#f0f9f4;border:1px solid #a3d4b3;padding:20px 24px;text-align:center;margin-top:20px; }
+/* The invoice number and its dates: side by side; on a phone the dates go under the number,
+   each line whole, instead of breaking "November 14, | 2026". */
+.inv-num-row { display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px 16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border); }
+.inv-num-dates { text-align:right;margin-left:auto; }
+.inv-num-dates > div { white-space:nowrap; }
+@media(max-width:480px){ .inv-num-row { flex-direction:column; } .inv-num-dates { text-align:left;margin-left:0; } }
 @media(max-width:600px){ .invoice-card { padding:28px 20px; } }
 
 /* ════════════════════════════════════════════════════════════════════
