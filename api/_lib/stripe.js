@@ -27,6 +27,20 @@ export class StripeError extends Error {
 const key = () => String(process.env.STRIPE_SECRET_KEY || "").trim();
 export const cardReady = () => /^(sk|rk)_(live|test)_\S+$/.test(key());
 
+// The account's PUBLIC key, which Stripe.js needs to open the Cart's card form inside
+// fonkiart.com (cartCheckout.js). Vercel variable STRIPE_PUBLISHABLE_KEY (pk_live_...).
+// Public by design: Stripe.js hands it to every browser. It still lives in Vercel, not in git.
+// It must be the same mode as the secret key (both live or both test), or Stripe.js can't
+// open the page. With none, or a mismatch, the Cart sends the buyer to Stripe's own page.
+export function publishableKey() {
+  const pk = String(process.env.STRIPE_PUBLISHABLE_KEY || "").trim();
+  const mode = /^pk_(live|test)_\S+$/.exec(pk)?.[1];
+  if (!mode || !cardReady()) return null;
+  if (key().includes(`_${mode}_`)) return pk;
+  console.warn(`stripe: STRIPE_PUBLISHABLE_KEY is a ${mode} key and STRIPE_SECRET_KEY is not; the Cart uses Stripe's own page`);
+  return null;
+}
+
 export function toCents(amount) {
   const n = Number(amount);
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
@@ -114,6 +128,55 @@ export async function createCheckout({ order, invNum, site, image }) {
   }
   if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
   return session.url;
+}
+
+// The payment page for a Cart order (cartCheckout.js): one line per piece, each with its name,
+// its picture and the price the SERVER found for it. The page carries the order's rows
+// (metadata order_ids) and its reference (cart_ref), so the return and Stripe's own message
+// find the order from Stripe's answer, never from the browser.
+//  - embedded: the card form opens inside fonkiart.com (Stripe.js; ui_mode "embedded"), and
+//    Stripe sends the buyer to return_url once paid. Returns { clientSecret }.
+//  - otherwise Stripe's own page, reached by a same-tab redirect. Returns { url }.
+// lines: [{ title, amount, image }]. A picture never stops a payment: if Stripe refuses the
+// page with pictures (a 400), it is asked for again without them.
+export async function createCartCheckout({ ref, ids, lines, email, site, embedded }) {
+  const cents = lines.map(l => toCents(l.amount));
+  if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
+  if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
+  const back = `${site}/?cart=${encodeURIComponent(ref)}&card=`;
+  const names = lines.map(l => String(l.title || "Fonkiart artwork").slice(0, 200));
+  const tags = { cart_ref: ref, order_ids: ids.join(",") };
+  const page = (withPictures) => ({
+    mode: "payment",
+    payment_method_types: ["card"], // as invoices: cards only, so nothing comes back "not paid yet"
+    line_items: lines.map((l, n) => {
+      const picture = withPictures && typeof l.image === "string" && l.image.startsWith("https://") ? [l.image] : undefined;
+      return { quantity: 1, price_data: { currency: "usd", unit_amount: cents[n], product_data: { name: names[n], images: picture } } };
+    }),
+    customer_email: EMAIL_RE.test(email || "") ? email : undefined,
+    client_reference_id: ref,
+    metadata: tags,
+    // What Aliana sees on the payment in Stripe's own list.
+    payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
+    // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the buyer back.
+    ...(embedded
+      ? { ui_mode: "embedded", return_url: `${back}{CHECKOUT_SESSION_ID}` }
+      : { success_url: `${back}{CHECKOUT_SESSION_ID}`, cancel_url: `${back}cancelled` }),
+  });
+  let session;
+  try {
+    session = await stripe("/checkout/sessions", page(true));
+  } catch (e) {
+    if (!lines.some(l => l.image) || !(e instanceof StripeError) || e.httpStatus !== 400) throw e;
+    console.warn("stripe: Stripe refused the Cart's payment page with the pictures; making it without:", e.code, e.message);
+    session = await stripe("/checkout/sessions", page(false));
+  }
+  if (embedded) {
+    if (!session?.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
+    return { clientSecret: session.client_secret };
+  }
+  if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
+  return { url: session.url };
 }
 
 // Stripe's own record of a payment page (null for an id that isn't one). Whatever a browser

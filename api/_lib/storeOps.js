@@ -11,6 +11,7 @@ import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
 import { cardReady, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
+import { opCartCard, opCartPaid, isCartPage, cartStripeEvent } from "./cartCheckout.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -151,7 +152,12 @@ export async function opCoupon(db, body) {
   return { status: "valid" };
 }
 
-export async function opOrder(db, body, mail) {
+// price (server only, never from a browser): the Cart's card payment (cartCheckout.js). It
+// prices every piece from the Artworks table, after the coupon is checked and BEFORE anything
+// is saved; the order rows, both emails and Stripe then use its prices, never the browser's.
+// A piece it can't price refuses the order, and nothing is saved. With it, the answer also
+// carries what the card payment needs: the new rows' ids, the prices and the reference.
+export async function opOrder(db, body, mail, { price } = {}) {
   const c = body.customer || {};
   const firstName = text(c.firstName, 100, "first name", { required: true });
   const lastName = text(c.lastName, 100, "last name", { required: true });
@@ -164,10 +170,13 @@ export async function opOrder(db, body, mail) {
   const country = text(c.country, 100, "country");
   const list = Array.isArray(body.items) ? body.items : [];
   if (!list.length || list.length > 25) throw new InputError("Bad items");
-  const items = list.map(i => ({ title: text(i?.title, 300, "item", { required: true }), amount: amountField(i?.amount) }));
-  const total = amountField(body.total);
-  const orderRef = text(body.orderRef, 20, "order reference");
+  let items = list.map(i => ({ title: text(i?.title, 300, "item", { required: true }), amount: amountField(i?.amount) }));
+  let total = amountField(body.total);
+  let orderRef = text(body.orderRef, 20, "order reference");
   if (orderRef && !/^FA-\d{1,9}$/.test(orderRef)) throw new InputError("Bad order reference");
+  // Stripe's page and the way back need a reference: if the browser has none (its "next-ref"
+  // call failed), the server predicts it the same way.
+  if (price && !orderRef) orderRef = (await opNextRef(db)).ref;
 
   const fullName = `${firstName} ${lastName}`.trim();
   const addr = [address, city, state, zip, country].filter(Boolean).join(", ");
@@ -178,6 +187,7 @@ export async function opOrder(db, body, mail) {
     if (lead && !lead.coupon_used && String(lead.email || "").toLowerCase() === email.toLowerCase()) couponLead = lead;
   }
   const discount = await couponDiscount(db);
+  if (price) ({ items, total } = await price(items, couponLead ? discount : 0));
   const notes = [`Order Ref: ${orderRef}`, fullName, phone, addr].filter(Boolean).join(" · ") + (couponLead ? ` · ${discount}% coupon applied` : "");
 
   // The address also goes on the order itself (Andy, 2026-11-17: "also make sure in the admin
@@ -186,7 +196,8 @@ export async function opOrder(db, body, mail) {
   const ship = { ship_name: fullName || null, ship_address: address || null, ship_city: city || null, ship_state: state || null, ship_zip: zip || null, ship_country: country || null, ship_phone: phone || null };
 
   const { data: existing } = await db.from("Clients").select("id").eq("email", email).limit(1);
-  const { error: orderErr } = await db.from("Orders").insert(items.map(i => ({ client_email: email, item_title: i.title, amount: i.amount, status: "pending", notes, ...ship })));
+  const insert = db.from("Orders").insert(items.map(i => ({ client_email: email, item_title: i.title, amount: i.amount, status: "pending", notes, ...ship })));
+  const { data: savedRows, error: orderErr } = await (price ? insert.select("id") : insert);
   if (orderErr) console.error("store order insert:", orderErr.message);
 
   const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
@@ -199,7 +210,9 @@ export async function opOrder(db, body, mail) {
     mail.send({ to: mail.sender, subject: `🎨 New Order ${orderRef}: ${itemsLabel} — ${fullName}`,
       htmlContent: T.orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed: !!orderErr }) }),
   ]);
-  return { ok: true, saved: !orderErr };
+  if (!price) return { ok: true, saved: !orderErr };
+  const ids = (savedRows || []).map(r => r.id).filter(id => Number.isSafeInteger(id));
+  return { ok: true, saved: !orderErr && ids.length === items.length, ids, items, total, orderRef, email };
 }
 
 function invoiceToken(value) {
@@ -321,6 +334,8 @@ export async function opStripeEvent(db, event, mail) {
     console.error("store stripe-event:", e.code, e.message);
     throw new InputError("Couldn't check the payment with Stripe right now", 502);
   }
+  // A Cart order names its rows in the page's metadata instead of an invoice (cartCheckout.js).
+  if (isCartPage(session)) return cartStripeEvent(db, session, mail);
   let order;
   try {
     order = await findInvoice(db, invoiceToken(session?.metadata?.invoice_token));
@@ -407,6 +422,10 @@ export const STORE_OPS = {
   "card-checkout": (db, req) => opCardCheckout(db, req.body || {}),
   "card-paid": (db, req, mail) => opCardPaid(db, req.body || {}, mail),
   "stripe-event": (db, req, mail) => opStripeEvent(db, req.body || {}, mail),
+  // The Cart's card payment (cartCheckout.js). It saves the order with opOrder, handed in here
+  // so that file needs nothing from this one.
+  "cart-card": (db, req, mail) => opCartCard(db, req.body || {}, mail, opOrder),
+  "cart-paid": (db, req, mail) => opCartPaid(db, req.body || {}, mail),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),

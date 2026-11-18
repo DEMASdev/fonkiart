@@ -31,6 +31,29 @@ export async function findArtworkByTitle(db, title) {
   return rows.length === 1 ? rows[0] : null;
 }
 
+// ── the price, for the Cart's card payment ──────────────────────
+// The Cart charges the shop's own price, never one the browser sends (cartCheckout.js). Same
+// rule as above: exactly one artwork with exactly this title, or null. Its own read, so the
+// lookups above keep asking for no more than they need.
+export async function findPricedArtwork(db, title) {
+  if (!usable(title)) return null;
+  const { data, error } = await db.from("Artworks").select("id,title,image,isSold,category,price,salePrice").eq("title", title).limit(2);
+  if (error) throw new Error(`Artworks read: ${error.message}`);
+  return Array.isArray(data) && data.length === 1 ? data[0] : null;
+}
+
+// What the shop sells a piece for: its sale price when it has one, else its price, the way the
+// shop shows it (Admin -> Artworks "Sale Price ... leave blank if not on sale"). null when
+// neither is an amount above zero ("Price on request").
+export function artPrice(art) {
+  for (const value of [art?.salePrice, art?.price]) {
+    if (value === null || value === undefined || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
 // ── the picture on Stripe's card page ───────────────────────────
 // The originals are full-size photos (up to 24 MB), so Stripe gets a 640px copy from Vercel's
 // image service: the same width and quality as the shop's cards, so it is usually made already.
