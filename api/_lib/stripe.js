@@ -135,8 +135,9 @@ export async function createCheckout({ order, invNum, site, image }) {
 // (metadata order_ids) and its reference (cart_ref), so the return and Stripe's own message
 // find the order from Stripe's answer, never from the browser.
 //  - embedded: the card form opens inside fonkiart.com (Stripe.js; ui_mode "embedded"), and
-//    Stripe sends the buyer to return_url once paid. Returns { clientSecret }.
-//  - otherwise Stripe's own page, reached by a same-tab redirect. Returns { url }.
+//    Stripe sends the buyer to return_url once paid. Returns { id, clientSecret }.
+//  - otherwise Stripe's own page, reached by a same-tab redirect. Returns { id, url }.
+// id: the page's own id, kept by the checkout so paying again re-opens THIS order (cart-again).
 // lines: [{ title, amount, image }]. A picture never stops a payment: if Stripe refuses the
 // page with pictures (a 400), it is asked for again without them.
 export async function createCartCheckout({ ref, ids, lines, email, site, embedded }) {
@@ -171,12 +172,22 @@ export async function createCartCheckout({ ref, ids, lines, email, site, embedde
     console.warn("stripe: Stripe refused the Cart's payment page with the pictures; making it without:", e.code, e.message);
     session = await stripe("/checkout/sessions", page(false));
   }
+  if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
   if (embedded) {
-    if (!session?.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
-    return { clientSecret: session.client_secret };
+    if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
+    return { id: session.id, clientSecret: session.client_secret };
   }
-  if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
-  return { url: session.url };
+  if (!session.url) throw new StripeError("Stripe sent no payment page", "no-url");
+  return { id: session.id, url: session.url };
+}
+
+// Closes a payment page nobody has paid, so it can never take money (Stripe's "expire"). The
+// Cart does this before it opens a new page for the same order (cartCheckout.js opCartAgain):
+// only ONE page per order can ever be paid. Stripe refuses it for a page that is already paid
+// or closed; the caller then asks Stripe what the page is now.
+export async function expireCheckout(sessionId) {
+  if (!isSessionId(sessionId)) throw new StripeError("Not a payment page id", "bad-id");
+  return stripe(`/checkout/sessions/${sessionId}/expire`, {});
 }
 
 // Stripe's own record of a payment page (null for an id that isn't one). Whatever a browser

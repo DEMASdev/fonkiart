@@ -11,7 +11,7 @@ import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
 import { cardReady, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
-import { opCartCard, opCartPaid, isCartPage, cartStripeEvent } from "./cartCheckout.js";
+import { opCartCard, opCartPaid, opCartAgain, opCartOrder, isCartPage, cartStripeEvent } from "./cartCheckout.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -426,6 +426,9 @@ export const STORE_OPS = {
   // so that file needs nothing from this one.
   "cart-card": (db, req, mail) => opCartCard(db, req.body || {}, mail, opOrder),
   "cart-paid": (db, req, mail) => opCartPaid(db, req.body || {}, mail),
+  // Paying that same saved order again, and asking whether it is paid: never a second order.
+  "cart-again": (db, req, mail) => opCartAgain(db, req.body || {}, mail),
+  "cart-order": (db, req, mail) => opCartOrder(db, req.body || {}, mail),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),

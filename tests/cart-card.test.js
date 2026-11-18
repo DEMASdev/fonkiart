@@ -29,15 +29,29 @@ afterEach(() => {
 // ── fakes ───────────────────────────────────────────────────────
 
 // Answers like Stripe: makes payment pages (remembering them, with the total of their lines),
-// and tells what it knows about one. refuse(body) can answer an error instead of a new page.
-function fakeStripe({ refuse } = {}) {
+// tells what it knows about one, and closes an open one ("expire"; anything else is refused, as
+// Stripe does). refuse(body) can answer an error instead of a new page; onExpire(page) can answer
+// one instead of closing it; fake.down = true answers every call "Stripe is down".
+function fakeStripe({ refuse, onExpire } = {}) {
   const sessions = new Map(), calls = [];
   let made = 0;
   const reply = (status, json) => ({ ok: status < 400, status, json: async () => json });
+  const fake = { calls, sessions, down: false };
   globalThis.fetch = async (url, init = {}) => {
     const body = init.body ? new URLSearchParams(init.body) : null;
     calls.push({ url: String(url), method: init.method, body });
+    if (fake.down) return reply(503, { error: { message: "Stripe is down", code: "api_error" } });
     const path = String(url).replace("https://api.stripe.com/v1", "");
+    const closing = /^\/checkout\/sessions\/([^/?]+)\/expire$/.exec(path);
+    if (init.method === "POST" && closing) {
+      const s = sessions.get(closing[1]);
+      if (!s) return reply(404, { error: { code: "resource_missing", message: "No such checkout.session" } });
+      const no = onExpire?.(s);
+      if (no) return reply(no.status, { error: { message: no.message, code: no.code } });
+      if (s.status !== "open") return reply(400, { error: { code: "checkout_session_not_open", message: "Only open Checkout Sessions can be expired" } });
+      s.status = "expired";
+      return reply(200, { ...s });
+    }
     if (init.method === "POST" && path === "/checkout/sessions") {
       const no = refuse?.(body, calls.length);
       if (no) return reply(no.status, { error: { message: no.message, code: no.code } });
@@ -62,7 +76,7 @@ function fakeStripe({ refuse } = {}) {
     throw new Error(`unexpected Stripe call: ${init.method} ${url}`);
   };
   const last = () => [...sessions.values()].at(-1);
-  return { calls, sessions, last, pay: (id = last().id, over = {}) => Object.assign(sessions.get(id), { status: "complete", payment_status: "paid" }, over) };
+  return Object.assign(fake, { last, pay: (id = last().id, over = {}) => Object.assign(sessions.get(id), { status: "complete", payment_status: "paid" }, over) });
 }
 
 // The shop's tables the way supabase-js reads and writes them; filters run when the query is
@@ -139,6 +153,11 @@ const checkout = (over = {}) => ({
 });
 const cartCard = (db, body, mail = mailbox()) => STORE_OPS["cart-card"](db, { body }, mail);
 const cartPaid = (db, body, mail = mailbox()) => STORE_OPS["cart-paid"](db, { body }, mail);
+const cartAgain = (db, body, mail = mailbox()) => STORE_OPS["cart-again"](db, { body }, mail);
+const cartOrder = (db, body, mail = mailbox()) => STORE_OPS["cart-order"](db, { body }, mail);
+// What the checkout keeps after "Pay by card" (src/lib/cartOrder.js) and sends to pay it again.
+const kept = (out, over = {}) => ({ ref: out.ref, ids: out.ids, email: "jane@x.co", titles: out.lines.map(l => l.title), session: out.session, ...over });
+const inserts = (db) => db.writes.filter(w => w.table === "Orders" && w.op === "insert").length;
 const webhook = (db, id, mail = mailbox()) => STORE_OPS["stripe-event"](db, { body: { type: "checkout.session.completed", data: { object: { id } } } }, mail);
 const cartRows = (db) => db.tables.Orders.filter(r => r.id >= 1000);
 const orderWrites = (db) => db.writes.filter(w => w.table === "Orders");
@@ -176,8 +195,12 @@ test("the charged amounts come from the Artworks table: a browser price of $1 fo
   assert.equal(body.get("client_reference_id"), "FA-1752");
   assert.match(rows[0].notes, /^Order Ref: FA-1752 · Jane Smith/);
 
-  // What the page shows: the server's prices, not the browser's.
-  assert.deepEqual(out, { ref: "FA-1752", lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800, url: stripe.last().url });
+  // What the page shows: the server's prices, not the browser's. ids and session: what the
+  // checkout keeps to pay this same order again.
+  assert.deepEqual(out, {
+    ref: "FA-1752", ids: rows.map(r => r.id), session: stripe.last().id,
+    lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800, url: stripe.last().url,
+  });
 
   // Both "order received" emails, as for Zelle, with the server's prices.
   assert.deepEqual(mail.sent.map(m => m.to), ["jane@x.co", "shop@fonkiart.com"]);
@@ -260,14 +283,16 @@ test("card payments OFF: today's message, and nothing is saved or asked of Strip
 test("with the publishable key set and Stripe.js ready, the card form opens INSIDE fonkiart.com", async () => {
   process.env.STRIPE_PUBLISHABLE_KEY = "pk_test_FAKEPUBLISHABLE";
   const stripe = fakeStripe();
-  const out = await cartCard(shop(), checkout({ embedded: true }));
+  const db = shop();
+  const out = await cartCard(db, checkout({ embedded: true }));
   const body = stripe.calls[0].body;
   assert.equal(body.get("ui_mode"), "embedded");
   assert.equal(body.get("return_url"), "https://fonkiart.com/?cart=FA-1752&card={CHECKOUT_SESSION_ID}");
   assert.equal(body.has("success_url"), false);
   assert.equal(body.has("cancel_url"), false);
   assert.deepEqual(out, {
-    ref: "FA-1752", lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800,
+    ref: "FA-1752", ids: cartRows(db).map(r => r.id), session: stripe.last().id,
+    lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800,
     clientSecret: stripe.last().client_secret, publishableKey: "pk_test_FAKEPUBLISHABLE",
   });
 });
@@ -305,12 +330,28 @@ test("publishableKey: only a pk_ key of the same mode as the secret key, and onl
   assert.equal(publishableKey(), null, "no secret key: no card payments");
 });
 
-test("Stripe failing after the order is saved: the buyer is told it is saved and how to finish paying", async () => {
-  fakeStripe({ refuse: () => ({ status: 503, message: "Stripe is down", code: "api_error" }) });
-  const db = shop();
-  await assert.rejects(cartCard(db, checkout()), (e) => e.status === 502
-    && /Your order FA-1752 is saved, but the card payment couldn't open right now\. Please email shop@fonkiart\.com/.test(e.message));
-  assert.equal(cartRows(db).length, 2, "the order stays saved: it can still be paid another way");
+test("Stripe failing after the order is saved: the checkout keeps the order and says so; paying again later is the SAME order", async () => {
+  const stripe = fakeStripe();
+  stripe.down = true;
+  const db = shop(), mail = mailbox();
+  const out = await cartCard(db, checkout(), mail);
+  assert.deepEqual(out, {
+    ref: "FA-1752", ids: cartRows(db).map(r => r.id),
+    lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800,
+    cardError: "Your order FA-1752 is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.",
+  });
+  assert.equal(cartRows(db).length, 2, "the order stays saved: it can be paid again, by card or another way");
+  assert.equal(mail.sent.length, 2, "both 'order received' emails went out with it");
+
+  // Stripe back: paying again opens a page for those rows (no page to vouch for them, so
+  // today's prices do), and saves nothing more.
+  stripe.down = false;
+  const again = await cartAgain(db, kept(out), mail);
+  assert.equal(again.url, stripe.last().url);
+  assert.equal(stripe.last().amount_total, 80000);
+  assert.equal(stripe.last().metadata.order_ids, out.ids.join(","));
+  assert.equal(inserts(db), 1);
+  assert.equal(mail.sent.length, 2);
 });
 
 test("a picture Stripe refuses never stops the payment: the page is made again without pictures", async () => {
@@ -506,12 +547,219 @@ test("the database refusing the change: Stripe's message gets a 500 and no email
   assert.match(mail.sent[0].htmlContent, /could not mark the order Paid/);
 });
 
+// ── ONE order per cart, however the buyer retries ───────────────
+
+const TWO = [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }];
+
+test("paying again re-opens the SAME order: no second order or email, the same rows and cents, and the page before is closed first", async () => {
+  const stripe = fakeStripe();
+  const db = shop(), mail = mailbox();
+  const first = await cartCard(db, checkout(), mail);
+  assert.equal(mail.sent.length, 2, "the two 'order received' emails, once");
+
+  // Closing the card form and opening it again, back from Stripe's page without paying, a reload.
+  let again = first;
+  for (let n = 0; n < 3; n++) {
+    const before = again.session;
+    again = await cartAgain(db, kept(first, { session: before }), mail);
+    assert.equal(stripe.sessions.get(before).status, "expired", "the page before can't take money any more");
+    assert.notEqual(again.session, before);
+    assert.equal(stripe.sessions.get(again.session).status, "open");
+  }
+  assert.equal(inserts(db), 1, "still ONE order");
+  assert.deepEqual(cartRows(db).map(r => [r.item_title, r.amount, r.status]), [["Frida the manatee", 500, "pending"], ["Madame Mango", 300, "pending"]]);
+  assert.equal(mail.sent.length, 2, "no second 'order received' email");
+  assert.deepEqual(again, { ref: "FA-1752", ids: first.ids, session: stripe.last().id, lines: TWO, total: 800, url: stripe.last().url });
+  assert.equal([...stripe.sessions.values()].filter(p => p.status === "open").length, 1, "only one page can be paid");
+  const body = stripe.calls.at(-1).body;
+  assert.equal(body.get("metadata[order_ids]"), first.ids.join(","));
+  assert.equal(body.get("metadata[cart_ref]"), "FA-1752");
+  assert.equal(line(body, 0, "[unit_amount]"), "50000");
+  assert.equal(line(body, 1, "[unit_amount]"), "30000");
+  assert.equal(line(body, 0, "[product_data][images][0]"), PICTURE("frida"), "the pictures again");
+
+  // Paying the newest page: Paid once, one email each, exactly as for the first page.
+  stripe.pay(again.session);
+  const back = mailbox();
+  assert.equal((await cartPaid(db, { ref: "FA-1752", session: again.session }, back)).paid, true);
+  assert.deepEqual(back.sent.map(m => m.to), ["shop@fonkiart.com", "jane@x.co"]);
+  assert.deepEqual(cartRows(db).map(r => r.status), ["paid", "paid"]);
+});
+
+test("paying again opens the card form inside fonkiart.com too; a form that couldn't open asks for Stripe's own page", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = "pk_test_FAKEPUBLISHABLE";
+  const stripe = fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout({ embedded: true }));
+  const again = await cartAgain(db, kept(first, { embedded: true }));
+  assert.equal(stripe.calls.at(-1).body.get("ui_mode"), "embedded");
+  assert.deepEqual([again.clientSecret, again.publishableKey], [stripe.last().client_secret, "pk_test_FAKEPUBLISHABLE"]);
+  assert.equal("url" in again, false);
+  const hosted = await cartAgain(db, kept(first, { session: again.session }));
+  assert.equal(stripe.calls.at(-1).body.has("ui_mode"), false);
+  assert.equal(hosted.url, stripe.last().url);
+  assert.equal("clientSecret" in hosted, false);
+  assert.equal(stripe.sessions.get(again.session).status, "expired");
+  assert.equal(inserts(db), 1);
+});
+
+test("paying again needs the order exactly as saved: its reference, rows and email, and the cart's own pieces", async () => {
+  const stripe = fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  const other = await cartCard(db, checkout({ orderRef: "FA-1760", items: [{ title: "Sea Turtle Print", amount: 1 }], total: 1 }));
+  const pages = stripe.sessions.size;
+  for (const [label, over] of [
+    ["another email", { email: "someone@x.co" }],
+    ["no email", { email: "" }],
+    ["another reference", { ref: "FA-1753" }],
+    ["a reference that only starts the same", { ref: "FA-175" }],
+    ["titles that aren't the rows'", { titles: ["Frida the manatee", "Sea Turtle Print"] }],
+    ["the same title twice", { titles: ["Frida the manatee", "Frida the manatee"] }],
+    ["one title fewer", { titles: ["Frida the manatee"] }],
+    ["another order's row", { ids: [first.ids[0], other.ids[0]], titles: ["Frida the manatee", "Sea Turtle Print"] }],
+    ["a row that isn't there", { ids: [first.ids[0], 999999] }],
+    ["the same row twice", { ids: [first.ids[0], first.ids[0]] }],
+    ["ids that aren't numbers", { ids: first.ids.map(String) }],
+    ["no ids", { ids: undefined }],
+    ["another order's payment page", { session: other.session }],
+    ["a page Stripe doesn't have", { session: "cs_test_nosuchpage0000000000" }],
+    ["not a page id", { session: "https://evil.example/" }],
+  ]) {
+    await assert.rejects(cartAgain(db, kept(first, over)), (e) => e.status === 404 && e.message === "We couldn't find that order.", label);
+  }
+  assert.equal(stripe.sessions.size, pages, "no page made");
+  assert.ok([...stripe.sessions.values()].every(p => p.status === "open"), "no page closed");
+  assert.equal(inserts(db), 2);
+
+  // Control: the same order, the email in other capitals and spaces, the cart in another order.
+  const ok = await cartAgain(db, kept(first, { email: " Jane@X.co ", titles: ["Madame Mango", "Frida the manatee"] }));
+  assert.equal(ok.url, stripe.last().url);
+});
+
+test("paying again: only while every row is still Pending and no piece has been sold since", async () => {
+  for (const [label, change, said] of [
+    ["cancelled by the shop", (rows) => { rows[0].status = "cancelled"; }, /^This order can't be paid here any more\. Please contact Fonkiart\.$/],
+    ["confirmed on an invoice", (rows) => { rows[1].status = "confirmed"; }, /can't be paid here any more/],
+    ["one piece marked Paid by hand", (rows) => { rows[0].status = "paid"; }, /can't be paid here any more/],
+    ["a piece sold since", (rows, db) => { db.tables.Artworks[1].isSold = true; }, /^“Madame Mango” has already been sold, so this order can't be paid by card\. Please contact Fonkiart\.$/],
+  ]) {
+    const stripe = fakeStripe();
+    const db = shop();
+    const first = await cartCard(db, checkout());
+    change(cartRows(db), db);
+    await assert.rejects(cartAgain(db, kept(first)), (e) => e.status === 409 && said.test(e.message), label);
+    assert.equal(stripe.sessions.size, 1, `${label}: no new page`);
+  }
+});
+
+test("rows a browser priced (the plain order op) never get a card page; the shop's own prices do, with or without a page", async () => {
+  // A plain order at $1 a piece, then "pay by card again" for it: refused, Stripe never asked.
+  let stripe = fakeStripe();
+  let db = shop();
+  await STORE_OPS.order(db, { body: checkout() }, mailbox());
+  const crafted = (d) => ({ ref: "FA-1752", ids: cartRows(d).map(r => r.id), email: "jane@x.co", titles: ["Frida the manatee", "Madame Mango"] });
+  await assert.rejects(cartAgain(db, crafted(db)), (e) => e.status === 409
+    && e.message === "This order can't be paid by card here. You can still pay it with Zelle, Venmo or Cash App, or contact Fonkiart.");
+  assert.equal(stripe.calls.length, 0);
+
+  // Control: the same plain order at the shop's own prices: today's prices vouch for it.
+  stripe = fakeStripe();
+  db = shop();
+  await STORE_OPS.order(db, { body: checkout({ items: TWO, total: 800 }) }, mailbox());
+  assert.equal((await cartAgain(db, crafted(db))).url, stripe.last().url);
+  assert.equal(stripe.last().amount_total, 80000);
+
+  // A coupon order: its own page vouches for the 15% off...
+  stripe = fakeStripe();
+  db = shop();
+  const coupon = await cartCard(db, checkout({ couponCode: "FK-1111-2222" }));
+  assert.equal((await cartAgain(db, kept(coupon))).total, 680);
+  assert.equal(stripe.last().amount_total, 68000);
+  // ...and with no page (Stripe failed as it was saved), nothing can: Zelle, Venmo or Cash App.
+  stripe = fakeStripe();
+  db = shop({ Leads: [{ id: 7, email: "jane@x.co", coupon_code: "FK-1111-2222", coupon_used: false }] });
+  stripe.down = true;
+  const failed = await cartCard(db, checkout({ couponCode: "FK-1111-2222" }));
+  assert.ok(failed.cardError);
+  stripe.down = false;
+  await assert.rejects(cartAgain(db, kept(failed)), (e) => e.status === 409 && /Zelle, Venmo or Cash App/.test(e.message));
+  assert.equal(stripe.sessions.size, 0);
+});
+
+test("paying again when the page before was paid after all: recorded Paid with one email each, and no new page", async () => {
+  const stripe = fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  stripe.pay(first.session);
+  const mail = mailbox();
+  assert.deepEqual(await cartAgain(db, kept(first), mail), { paid: true, ref: "FA-1752", name: "Jane", lines: TWO, total: 800 });
+  assert.equal(stripe.sessions.size, 1, "no new page");
+  assert.deepEqual(cartRows(db).map(r => [r.status, r.paid_method]), [["paid", "card"], ["paid", "card"]]);
+  assert.deepEqual(mail.sent.map(m => m.to), ["shop@fonkiart.com", "jane@x.co"]);
+  const later = mailbox();
+  assert.equal((await cartAgain(db, kept(first), later)).paid, true);
+  assert.equal(later.sent.length, 0, "no second email");
+});
+
+test("paying again while the page before is being paid: Stripe won't close it, so that payment is recorded and no new page is made", async () => {
+  // The payment lands between our look at the page and our "close it".
+  const stripe = fakeStripe({ onExpire: (page) => { Object.assign(page, { status: "complete", payment_status: "paid" }); return { status: 400, message: "Only open Checkout Sessions can be expired", code: "checkout_session_not_open" }; } });
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  const mail = mailbox();
+  const out = await cartAgain(db, kept(first), mail);
+  assert.equal(out.paid, true);
+  assert.equal(stripe.sessions.size, 1);
+  assert.deepEqual(mail.sent.map(m => m.to), ["shop@fonkiart.com", "jane@x.co"]);
+
+  // Stripe failing to close an open page: no new page (two could be paid), and the buyer is told to try again.
+  const stuck = fakeStripe({ onExpire: () => ({ status: 503, message: "Stripe is down", code: "api_error" }) });
+  const db2 = shop();
+  const o2 = await cartCard(db2, checkout());
+  await assert.rejects(cartAgain(db2, kept(o2)), (e) => e.status === 502 && /try again in a moment/.test(e.message));
+  assert.equal(stuck.sessions.size, 1);
+  assert.equal(stuck.sessions.get(o2.session).status, "open");
+});
+
+test("asking about a saved order: open (the rows' prices), paid, or closed; a page Stripe says is paid is recorded right there", async () => {
+  const stripe = fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  assert.deepEqual(await cartOrder(db, kept(first)), { state: "open", ref: "FA-1752", lines: TWO, total: 800 });
+  assert.equal(stripe.sessions.get(first.session).status, "open", "asking changes nothing");
+
+  // Stripe out of reach: the rows answer.
+  stripe.down = true;
+  assert.equal((await cartOrder(db, kept(first))).state, "open");
+  stripe.down = false;
+
+  // Paid, then the tab closed before coming back, Stripe's own message not here yet.
+  stripe.pay(first.session);
+  const mail = mailbox();
+  assert.deepEqual(await cartOrder(db, kept(first), mail), { state: "paid", ref: "FA-1752", name: "Jane", lines: TWO, total: 800 });
+  assert.deepEqual(cartRows(db).map(r => r.status), ["paid", "paid"]);
+  assert.deepEqual(mail.sent.map(m => m.to), ["shop@fonkiart.com", "jane@x.co"]);
+  const later = mailbox();
+  assert.equal((await cartOrder(db, kept(first), later)).state, "paid");
+  assert.equal(later.sent.length, 0, "no second email");
+
+  // Closed by the shop: the checkout starts afresh. Not this buyer's: not found.
+  fakeStripe();
+  const db2 = shop();
+  const o2 = await cartCard(db2, checkout());
+  cartRows(db2)[0].status = "cancelled";
+  assert.deepEqual(await cartOrder(db2, kept(o2)), { state: "closed" });
+  await assert.rejects(cartOrder(db2, kept(o2, { email: "someone@x.co" })), (e) => e.status === 404);
+});
+
 // ── the router and the emails ───────────────────────────────────
 
-test("router: cart-card and cart-paid are store ops, POST only; the plain order op is unchanged", async () => {
-  assert.equal(typeof STORE_OPS["cart-card"], "function");
-  assert.equal(typeof STORE_OPS["cart-paid"], "function");
-  assert.equal(GET_OPS.has("cart-card") || GET_OPS.has("cart-paid"), false);
+test("router: cart-card, cart-paid, cart-again and cart-order are store ops, POST only; the plain order op is unchanged", async () => {
+  for (const op of ["cart-card", "cart-paid", "cart-again", "cart-order"]) {
+    assert.equal(typeof STORE_OPS[op], "function", op);
+    assert.equal(GET_OPS.has(op), false, op);
+  }
   // The plain "order" op (Zelle, Venmo, Cash App) still saves the browser's order as before and
   // answers the same; nothing from a browser can hand it a price function.
   const db = shop();
