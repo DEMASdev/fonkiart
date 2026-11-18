@@ -3,6 +3,7 @@ import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats, paidByLabel } from "../lib/invoiceView";
 import { isPaid } from "../lib/orderStatus";
+import { orderTracking, orderTrackingLink, carrierLabel, isPickup, PICKUP_LABEL } from "../lib/tracking";
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
 import { invoiceNumber } from "../lib/invoiceNumber";
@@ -87,14 +88,21 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, card: payCard, any: hasAnyPayment } = paymentOptions(order, settings, { cardReady });
   const paid = isPaid(order.status);
   const congrats = paidCongrats(order.status);
+  // Gone out by pickup / hand delivery (Andy, 2026-11-17): no tracking link; the page says so,
+  // and a Shipped one says it is ready, like its email (src/lib/adminEmails.js).
+  const pickup = (order.status === "shipped" || order.status === "delivered") && isPickup(order);
   // Paid, not shipped yet (Andy, 2026-11-17: "also we will be sending you a tracking number
   // or delivery updates if a shipping is needed !").
   const paidNote = order.status === "delivered" ? "Your order was delivered."
-    : order.status === "shipped" ? "Your order has shipped."
+    : order.status === "shipped" ? (pickup ? "Your order is ready, and Fonkiart will arrange the pickup or hand delivery with you." : "Your order has shipped.")
     : "We will be sending you a tracking number or delivery updates if shipping is needed.";
   // Andy, 2026-11-17: "should say Thank you for your payment ! then under Paid by ... and the
   // method used". null (an older order, or "other"): just "Paid ✓".
   const paidBy = paidByLabel(order.paid_method);
+  // Shipped or Delivered with tracking saved in the admin: "Track your package" (Andy, 2026-11-17:
+  // "a live link to track the order"). The link is only ever https:// (src/lib/tracking.js).
+  const trackHref = order.status === "shipped" || order.status === "delivered" ? orderTrackingLink(order) : null;
+  const { carrier: trackCarrier, number: trackNumber } = orderTracking(order);
   const amountText = `$${Number(order.amount).toLocaleString()}`;
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
@@ -180,6 +188,18 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:6,textWrap:"balance"}}>Thank you for your payment!</p>
           <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginBottom:6}}>{paidBy ? `Paid by ${paidBy} ✓` : "Paid ✓"}</p>
           <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6}}>{paidNote}</p>
+          {trackHref && (
+            <div style={{marginTop:16}}>
+              <a className="tap" href={trackHref} target="_blank" rel="noopener noreferrer"
+                style={{display:"inline-block",background:"#2d6a4f",color:"#fff",padding:"12px 28px",fontSize:"var(--inv-text)",letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",textDecoration:"none"}}>
+                Track your package →
+              </a>
+              {trackCarrier !== "other" && trackNumber && (
+                <p style={{fontSize:"var(--inv-small)",color:"#4a8c6a",lineHeight:1.6,marginTop:8,overflowWrap:"anywhere"}}>{carrierLabel(trackCarrier)} tracking number: {trackNumber}</p>
+              )}
+            </div>
+          )}
+          {pickup && <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginTop:14}}>{PICKUP_LABEL}</p>}
         </div>
       ) : approved ? (
         <div className="invoice-approved-banner">

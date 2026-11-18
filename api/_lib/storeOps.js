@@ -208,6 +208,9 @@ async function findInvoice(db, token) {
   return data[0];
 }
 
+// The whole order row (findInvoice selects "*"): the invoice page also reads its tracking
+// (tracking_carrier, tracking_number, tracking_url) for "Track your package". If this is ever
+// narrowed to named columns, keep those three (tests/tracking.test.js checks they come back).
 export async function opInvoice(db, body) {
   const order = await findInvoice(db, invoiceToken(body.token));
   const { data: settings } = await db.from("Settings").select("*").eq("id", 1).maybeSingle();
