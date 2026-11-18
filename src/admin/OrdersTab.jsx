@@ -6,8 +6,8 @@ import { invoiceEmail, statusEmail, esc } from "../lib/adminEmails";
 import { invoiceLink } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
-import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange } from "../lib/orderStatus";
-// confirmPaid's value while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
+import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion } from "../lib/orderStatus";
+// The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
@@ -32,7 +32,11 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const showMsg = (msg) => { setInvSent(msg); setTimeout(() => setInvSent(""), 4000); };
   const [resending, setResending] = useState({});
   const [statusErr, setStatusErr] = useState("");
-  const [confirmPaid, setConfirmPaid] = useState(null); // who is asking "Paid by?": an order id, or NEW_ORDER
+  // The one question open on this screen, or null; opening one closes any other.
+  // { kind:"paid", id }: "Money arrived? Paid by:" for an order, or for + Add Order (id NEW_ORDER).
+  // { kind:"resend", id }: "This invoice was sent already... Send it again?"
+  const [ask, setAsk] = useState(null);
+  const asking = (kind, id) => ask?.kind === kind && ask?.id === id;
   const [invAmountHint, setInvAmountHint] = useState("350");
   const [formAmountHint, setFormAmountHint] = useState("350");
 
@@ -137,7 +141,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const { paid_method, ...rest } = form;
     await supabase.from("Orders").insert([{...rest, ...statusChange(form.status, paid_method), client_email:email}]);
     setForm(blank); setManual({first:"",last:"",email:"",phone:"",address:"",city:"",state:"",zip:"",country:""}); setSelectedClient(null); setClientUpdate({}); setAdding(false); setClientMode("select"); load();
-    setConfirmPaid(c => c === NEW_ORDER ? null : c);
+    setAsk(a => a?.id === NEW_ORDER ? null : a);
   };
   const sendStatusEmail = async (order, status) => {
     const client = clients.find(c => c.email === order.client_email);
@@ -166,7 +170,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const change = statusChange(status, paidMethod);
     const { error } = await supabase.from("Orders").update(change).eq("id",id);
     if (error) { setStatusErr(`Could not save the new status (${error.message || "unknown error"}). Nothing was emailed.`); return false; }
-    setConfirmPaid(null);
+    setAsk(null);
     const order = orders.find(o => o.id === id);
     setOrders(orders.map(o=>o.id===id?{...o,...change}:o));
     if (order) sendStatusEmail(order, status);
@@ -176,9 +180,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   // there). Every other status saves at once, as before.
   const pickStatus = (order, status) => {
     if (!asksPaidMethod(status)) return updateStatus(order.id, status);
-    setStatusErr(""); setConfirmPaid(order.id);
+    setStatusErr(""); setAsk({ kind:"paid", id:order.id });
   };
-  const pickNewOrderStatus = (status) => asksPaidMethod(status) ? setConfirmPaid(NEW_ORDER) : f("status", status);
+  const pickNewOrderStatus = (status) => asksPaidMethod(status) ? setAsk({ kind:"paid", id:NEW_ORDER }) : f("status", status);
   // The one "Money arrived? Paid by:" question: ✓ Mark paid, the Status menus and + Add Order.
   const paidByAsk = (paymentMethods, onPick) => (
     <div className="mark-paid-ask">
@@ -186,7 +190,16 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       {markPaidChoices(paymentMethods).map(([method, label]) => (
         <button key={method} className="tap mark-paid-yes" onClick={()=>onPick(method)}>{label}</button>
       ))}
-      <button className="tap mark-paid-no" onClick={()=>setConfirmPaid(null)}>Cancel</button>
+      <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+    </div>
+  );
+  // Resend asks first, in the same look: Andy, 2026-11-17, it should warn the invoice "was sent
+  // already ... or ... was sent already and paid". "Send again" does exactly what Resend did.
+  const resendAsk = (order) => (
+    <div className="mark-paid-ask">
+      <span>{resendQuestion(order.status)}</span>
+      <button className="tap mark-paid-yes" onClick={()=>{ setAsk(null); resendInvoice(order); }}>Send again</button>
+      <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
     </div>
   );
   const deleteOrder = async (id) => {
@@ -423,8 +436,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                   </select>
                 </div>
               </div>
-              {confirmPaid === NEW_ORDER && (
-                <div className="fld">{paidByAsk(null, method => { setForm(fm => ({...fm, status:"paid", paid_method:method})); setConfirmPaid(null); })}</div>
+              {asking("paid", NEW_ORDER) && (
+                <div className="fld">{paidByAsk(null, method => { setForm(fm => ({...fm, status:"paid", paid_method:method})); setAsk(null); })}</div>
               )}
               <div className="fld"><label>Notes</label><textarea value={form.notes} onChange={e=>f("notes",e.target.value)} placeholder="Any notes about this order…" style={{minHeight:80}} /></div>
             </div>
@@ -476,9 +489,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                     {/* Mark paid: two taps, because it emails the client a receipt. The second
                         tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ...").
                         Picking Paid in the menu above opens the same question, from any status. */}
-                    {confirmPaid === o.id ? paidByAsk(o.payment_methods, method => updateStatus(o.id,"paid",method))
+                    {asking("paid", o.id) ? paidByAsk(o.payment_methods, method => updateStatus(o.id,"paid",method))
                       : canMarkPaid(o.status) && (
-                      <button className="tap mark-paid" onClick={()=>{ setStatusErr(""); setConfirmPaid(o.id); }}>✓ Mark paid</button>
+                      <button className="tap mark-paid" onClick={()=>{ setStatusErr(""); setAsk({ kind:"paid", id:o.id }); }}>✓ Mark paid</button>
                     )}
                   </td>
                   <td data-label="Date">{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
@@ -493,7 +506,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                           style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>
                           🔗 Link
                         </button>
-                        <button className="tap" onClick={()=>resendInvoice(o)} disabled={resending[o.id]}
+                        <button className="tap" onClick={()=>setAsk({ kind:"resend", id:o.id })} disabled={resending[o.id]}
                           style={{background:"none",border:"1px solid var(--border)",cursor:resending[o.id]?"not-allowed":"pointer",padding:"3px 8px",color:"var(--muted)",opacity:resending[o.id]?0.5:1}}>
                           {resending[o.id] ? "…" : "✉ Resend"}
                         </button>
@@ -502,6 +515,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                       {/* Order details (notes) last, Open first: Andy, 2026-11-17 */}
                       {o.notes && <button className="tap" aria-label="Order details" onClick={()=>toggleExpand(o.id)} style={{background:"none",border:"1px solid var(--border)",cursor:"pointer",padding:"3px 8px",color:"var(--muted)"}}>{expanded[o.id]?"▲":"▼"}</button>}
                     </div>
+                    {asking("resend", o.id) && resendAsk(o)}
                   </td>
                 </tr>
                 {expanded[o.id] && o.notes && (

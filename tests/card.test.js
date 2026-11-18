@@ -5,7 +5,7 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { formBody, toCents, createCheckout, checkoutPaidFor, cardCheck, cardReady } from "../api/_lib/stripe.js";
 import { opCardCheckout, opCardPaid, opInvoice, STORE_OPS } from "../api/_lib/storeOps.js";
-import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices, asksPaidMethod, statusChange } from "../src/lib/orderStatus.js";
+import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices, asksPaidMethod, statusChange, resendQuestion } from "../src/lib/orderStatus.js";
 import { validateChain } from "../api/_lib/adminOps.js";
 import storeHandler from "../api/store.js";
 
@@ -229,6 +229,14 @@ test("Status menus: only Paid asks 'Paid by:' first; paid_method goes only with 
     assert.doesNotThrow(() => validateChain("Orders", [{ m: "update", a: [change] }, { m: "eq", a: ["id", 1] }]), why);
     assert.doesNotThrow(() => validateChain("Orders", [{ m: "insert", a: [[{ item_title: "A", ...change }]] }]), `new order: ${why}`);
   }
+});
+
+// Resend asks first (Andy, 2026-11-17: "this invoice was sent already ... or this invoice was
+// sent already and paid"). Once the money is in (Paid, Shipped, Delivered) it says "and paid".
+test("Resend warns before sending again, and says 'and paid' once the money is in", () => {
+  const sent = "This invoice was sent already. Send it again?";
+  const paid = "This invoice was sent already and paid. Send it again?";
+  assert.deepEqual([undefined, "pending", "confirmed", "paid", "shipped", "delivered"].map(resendQuestion), [sent, sent, sent, paid, paid, paid]);
 });
 
 test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {

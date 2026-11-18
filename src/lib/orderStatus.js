@@ -51,3 +51,10 @@ export const asksPaidMethod = (status) => status === "paid";
 export function statusChange(status, paidMethod) {
   return status === "paid" && paidMethod ? { status, paid_method: paidMethod } : { status };
 }
+
+// "Resend" asks first. Andy, 2026-11-17: "if the invoice was paid, and the admin clicks resend
+// it should warn ... this invoice was sent already ... or this invoice was sent already and paid".
+// Paid, Shipped and Delivered all count as paid.
+export const resendQuestion = (status) => isPaid(status)
+  ? "This invoice was sent already and paid. Send it again?"
+  : "This invoice was sent already. Send it again?";
