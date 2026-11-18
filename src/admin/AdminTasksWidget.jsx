@@ -6,11 +6,17 @@ export default function AdminTasksWidget({ goToTab, goToSettings }) {
     try { return JSON.parse(localStorage.getItem("fonkiart-admin-tasks") || "{}"); } catch { return {}; }
   });
   const [tooltip, setTooltip] = useState(null);
+  // Done tasks are hidden (Andy, 2026-11-17: "whatever was marked as done remove from appearing if not
+  // it's noise"). "Show done" brings them back, so a mis-tap can still be unticked.
+  const [showDone, setShowDone] = useState(false);
 
   const toggle = (id) => {
     const next = { ...done, [id]: !done[id] };
     setDone(next);
     localStorage.setItem("fonkiart-admin-tasks", JSON.stringify(next));
+    // The last done task was unticked: the "Show done" link goes away, so its mode ends with it.
+    // Otherwise the next task ticked would stay on the list.
+    if (!ADMIN_TASKS.some(t => next[t.id])) setShowDone(false);
   };
 
   const handleClick = (t) => {
@@ -23,17 +29,28 @@ export default function AdminTasksWidget({ goToTab, goToSettings }) {
   };
 
   const remaining = ADMIN_TASKS.filter(t => !done[t.id]).length;
+  const doneCount = ADMIN_TASKS.length - remaining;
+  const shown = ADMIN_TASKS.filter(t => showDone || !done[t.id]);
 
+  // Sizes: Andy's pick on 2026-11-17, 17px for the tasks and 16px for the small lines.
   return (
-    <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", marginTop:2 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+    <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", marginTop:2, fontSize:17 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:"6px 16px", marginBottom:shown.length ? 16 : 0, fontSize:16 }}>
         <p style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:0 }}>Pending Tasks</p>
-        {remaining === 0
-          ? <span style={{ color:"#2d6a4f", fontWeight:500 }}>✓ All done!</span>
-          : <span style={{ color:"var(--muted)" }}>{remaining} remaining</span>}
+        <span style={{ display:"flex", alignItems:"center", gap:14 }}>
+          {remaining === 0
+            ? <span style={{ color:"#2d6a4f", fontWeight:500 }}>✓ All done!</span>
+            : <span style={{ color:"var(--muted)" }}>{remaining} remaining</span>}
+          {doneCount > 0 && (
+            <button type="button" onClick={() => setShowDone(s => !s)}
+              style={{ background:"none", border:"none", padding:0, font:"inherit", color:"var(--muted)", textDecoration:"underline", cursor:"pointer" }}>
+              {showDone ? "Hide done" : `Show done (${doneCount})`}
+            </button>
+          )}
+        </span>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-        {ADMIN_TASKS.map(t => (
+        {shown.map(t => (
           <div key={t.id} style={{ position:"relative" }}>
             <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", background:done[t.id]?"#f5f9f5":"#fdfcf8", border:`1px solid ${done[t.id]?"#c3ddc9":"var(--border)"}`, cursor:"pointer", transition:"all .15s" }}>
               <div onClick={() => toggle(t.id)} style={{ width:18, height:18, border:`2px solid ${done[t.id]?"#2d6a4f":"var(--border)"}`, borderRadius:3, background:done[t.id]?"#2d6a4f":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s" }}>
