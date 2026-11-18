@@ -76,12 +76,14 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
   const handleConfirmZelle   = confirmPaid;
   const handleConfirmVenmo   = confirmPaid;
   const handleConfirmCashApp = confirmPaid;
+  // The card link is looked for BEFORE anything is saved: with none, no order is saved and the
+  // buyer is told here on the page (no browser pop-up), so choosing Zelle next saves just one.
   const handleCard = async () => {
+    const link = (items.length === 1 && items[0].stripeLink) || settings.stripeLink;
+    if (!link) { setCheckoutError("Card payment is being set up. Please use Zelle or contact Fonkiart directly."); return; }
     setSaving(true); const ok = await saveOrder(); setSaving(false);
     if (!ok) return;
-    const link = (items.length === 1 && items[0].stripeLink) || settings.stripeLink;
-    if (link) { window.open(link, "_blank"); finish(); }
-    else alert("Card payment is being set up. Please use Zelle or contact Fonkiart directly.");
+    window.open(link, "_blank"); finish();
   };
 
   if (done) return (
@@ -233,7 +235,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="card"    && <button className="stripe-btn"  onClick={handleCard}           disabled={saving}>{saving?"Saving…":"Pay Securely with Card →"}</button>}
-            {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+            {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}
       </div>
