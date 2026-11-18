@@ -743,7 +743,7 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
 
   /* ── ADMIN ── */
   .admin-top { height:auto;min-height:56px;flex-wrap:wrap;gap:8px;padding:10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
-  .admin-top-title { font-size:16px; }
+  .admin-top-title { font-size:17px; } /* Andy's text sizes, 2026-11-17 ("3 , 8 , 9 ! perfect"): normal text 17px */
   .admin-top-actions { flex-wrap:wrap;gap:6px !important; }
   .admin-top .btn-s { padding:8px 10px;font-size:11px;letter-spacing:.06em; }
   .crm-tabs { padding:0 8px;flex-wrap:wrap; }
@@ -844,3 +844,26 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .card-status-line.is-on { color:#2d6a4f; }
 .card-status-line.is-off { color:#c0392b; }
 .card-status-help { margin:0;color:var(--muted);line-height:1.7; }
+
+/* Admin top bar: a picture of the shop's art to the left of "Fonkiart · Admin Panel"
+   (src/admin/ArtFlipper.jsx). Andy, 2026-11-17: "at the top of the admin it says
+   Fonkiart · Admin Panel — to the left a picture of any art should be appearing every
+   20 seconds flipping". Its box has a fixed size, so the title never moves when it turns. */
+.admin-top-brand { display:flex;align-items:center;gap:14px; }
+.art-flip { flex:none;display:block;width:48px;height:48px;perspective:240px;transition:opacity .3s ease; }
+.art-flip[data-empty] { opacity:0; } /* first picture still loading: the space is kept, the box not shown */
+.art-flip-card { position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d;transform:rotateY(calc(var(--turn, 0) * 180deg));transition:transform var(--flip-ms, 700ms) ease-in-out; }
+.art-flip-side { position:absolute;inset:0;display:block;overflow:hidden;background:var(--cream);border:1.5px solid var(--gold);-webkit-backface-visibility:hidden;backface-visibility:hidden; }
+.art-flip-side[data-side="1"] { transform:rotateY(180deg); }
+.art-flip-side img { display:block;width:100%;height:100%;object-fit:cover; }
+@media(max-width:900px){
+  .admin-top-brand { gap:10px; }
+  .art-flip { width:40px;height:40px; }
+}
+/* "Reduce motion" turned on: a soft fade instead of the turn. The new picture fades in
+   on top; the old one stays under it until the fade is done. */
+@media (prefers-reduced-motion: reduce) {
+  .art-flip-card { transform:none;transition:none; }
+  .art-flip-side, .art-flip-side[data-side="1"] { transform:none;-webkit-backface-visibility:visible;backface-visibility:visible;opacity:0;z-index:0;transition:opacity 0s linear var(--flip-ms, 700ms); }
+  .art-flip-side[data-front] { opacity:1;z-index:1;transition:opacity var(--flip-ms, 700ms) ease; }
+}

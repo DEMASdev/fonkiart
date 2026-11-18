@@ -9,6 +9,7 @@ import ClientsTab from "./ClientsTab";
 import ItemForm from "./ItemForm";
 import ItemList from "./ItemList";
 import SettingsForm, { SETTINGS_SECTIONS as SETTINGS_FORM_SECTIONS } from "./SettingsForm";
+import ArtFlipper from "./ArtFlipper";
 import { mouseHover, mouseOnly } from "../utils/hover";
 
 const Badge = ({ n }) => n > 0
@@ -37,7 +38,10 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
   return (
     <div className="admin-wrap">
       <div className="admin-top">
-        <span className="admin-top-title">Fonkiart · Admin Panel</span>
+        <div className="admin-top-brand">
+          <ArtFlipper items={data.items} />
+          <span className="admin-top-title">Fonkiart · Admin Panel</span>
+        </div>
         <div className="admin-top-actions" style={{ display:"flex", gap:10 }}>
           <button className="btn-s" onClick={onViewRoom}>🔑 Collectors Room</button>
           <button className="btn-s" onClick={onBack}>← Back to Site</button>
