@@ -7,13 +7,13 @@ import PasswordRules from "./PasswordRules";
 import { pwRulesMet } from "../lib/pwRules";
 
 const ADMIN_EMAIL = "fonkiart@gmail.com";
-const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
+const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:16, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
 
 const TabBtn = ({ label, active, onClick }) => (
   <button onClick={onClick}
     style={{ flex:1, background:"none", border:"none", borderBottom:`2px solid ${active?"var(--ink)":"transparent"}`,
-      padding:"12px 0", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12,
-      letterSpacing:".12em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)",
+      padding:"12px 0", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:16,
+      letterSpacing:".08em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)",
       fontWeight:active?500:400, transition:"all .2s" }}>
     {label}
   </button>
@@ -155,7 +155,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
       <div className="checkout" style={{ maxWidth:420 }} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
 
-        <h2 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:28, fontWeight:300, marginBottom:6 }}>My Account</h2>
+        <h2 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:32, fontWeight:300, marginBottom:6 }}>My Account</h2>
         <p className="checkout-sub" style={{ marginBottom:20 }}>Fonkiart · Original Art & Fine Art Prints</p>
 
         {/* ── TABS (only show during form step) ── */}
@@ -169,7 +169,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
         {/* ══════════════ LOGIN TAB ══════════════ */}
         {tab === "login" && step === "form" && (
           <>
-            {notice && <p style={{ color:"#2d6a4f", fontSize:13, marginBottom:14 }}>✓ {notice}</p>}
+            {notice && <p style={{ color:"#2d6a4f", fontSize:16, lineHeight:1.5, marginBottom:14 }}>✓ {notice}</p>}
             <div className="fld">
               <label>Email</label>
               <input type="email" value={loginEmail} onChange={e=>{ setLoginEmail(e.target.value); setLoginErr(""); setReset(""); }}
@@ -180,7 +180,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
               <PasswordInput value={loginPw} onChange={e=>{ setLoginPw(e.target.value); setLoginErr(""); }}
                 placeholder="Password" onKeyDown={e=>e.key==="Enter"&&handleLogin()} />
             </div>
-            <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
+            <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", marginTop:-4, marginBottom:14, textAlign:"right" }}>
               {reset === "sent"
                 ? <span style={{ color:"#2d6a4f" }}>{isAdminEmail
                     ? `✓ Reset link sent to ${ADMIN_EMAIL}. It works once, for 30 minutes.`
@@ -190,14 +190,14 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
                   </button>}
               {reset && reset !== "sending" && reset !== "sent" && <span style={{ display:"block", color:"#c0392b", marginTop:6 }}>{reset}</span>}
             </p>
-            {loginErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{loginErr}</p>}
+            {loginErr && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:10 }}>{loginErr}</p>}
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:12 }}
               onClick={handleLogin} disabled={loginLoading}>
               {loginLoading ? "Signing in…" : "Sign In →"}
             </button>
-            <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
+            <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", textAlign:"center" }}>
               No account?{" "}
-              <button className="tap" onClick={() => setTab("signup")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Create one free</button>
+              <button className="tap" onClick={() => setTab("signup")} style={linkBtn}>Create one free</button>
             </p>
           </>
         )}
@@ -226,14 +226,14 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
               <PasswordInput value={signupPw2} onChange={e=>{ setSignupPw2(e.target.value); setSignupErr(""); }}
                 placeholder="Repeat password" autoComplete="new-password" onKeyDown={e=>e.key==="Enter"&&handleSignup()} />
             </div>
-            {signupErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{signupErr}</p>}
+            {signupErr && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:10 }}>{signupErr}</p>}
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:12 }}
               onClick={handleSignup} disabled={signupLoading || !!(signupPw && !pwRulesMet(signupPw))}>
               {signupLoading ? "Creating account…" : "Create Account →"}
             </button>
-            <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
+            <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", textAlign:"center" }}>
               Already have an account?{" "}
-              <button className="tap" onClick={() => setTab("login")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>Sign in</button>
+              <button className="tap" onClick={() => setTab("login")} style={linkBtn}>Sign in</button>
             </p>
           </>
         )}
@@ -243,12 +243,12 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
           <div>
             <div style={{ textAlign:"center", marginBottom:24 }}>
               <div style={{ fontSize:36, marginBottom:12 }}>📬</div>
-              <h3 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>Check your inbox</h3>
-              <p style={{ fontSize:13, color:"var(--muted)", lineHeight:1.75 }}>
+              <h3 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:28, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>Check your inbox</h3>
+              <p style={{ fontSize:17, color:"var(--muted)", lineHeight:1.6 }}>
                 We sent a verification code to<br />
                 <strong style={{ color:"var(--ink)" }}>{signupEmail}</strong>
               </p>
-              <p style={{ fontSize:12, color:"var(--muted)", marginTop:8, lineHeight:1.65 }}>
+              <p style={{ fontSize:16, color:"var(--muted)", marginTop:10, lineHeight:1.55 }}>
                 Enter the code below, or click the link in the email — either works.
               </p>
             </div>
@@ -269,17 +269,16 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
               />
             </div>
 
-            {verifyErr && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10, textAlign:"center" }}>{verifyErr}</p>}
+            {verifyErr && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:10, textAlign:"center" }}>{verifyErr}</p>}
 
             <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:14 }}
               onClick={handleVerify} disabled={verifyLoading}>
               {verifyLoading ? "Verifying…" : "Verify My Account →"}
             </button>
 
-            <p style={{ fontSize:12, color:"var(--muted)", textAlign:"center" }}>
+            <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", textAlign:"center" }}>
               Didn't get the email?{" "}
-              <button className="tap" onClick={handleResend} disabled={resending}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 }}>
+              <button className="tap" onClick={handleResend} disabled={resending} style={linkBtn}>
                 {resending ? "Sending…" : resent ? "✓ Sent!" : "Resend code"}
               </button>
             </p>
@@ -290,15 +289,15 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
         {step === "success" && (
           <div style={{ textAlign:"center", padding:"8px 0 4px" }}>
             <div style={{ fontSize:40, marginBottom:16 }}>🎉</div>
-            <h3 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:24, fontWeight:300, color:"var(--ink)", marginBottom:10 }}>Email Verified!</h3>
-            <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.8, marginBottom:8 }}>
+            <h3 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:30, fontWeight:300, color:"var(--ink)", marginBottom:10 }}>Email Verified!</h3>
+            <p style={{ fontSize:17, color:"var(--muted)", lineHeight:1.6, marginBottom:8 }}>
               Congratulations on your new account.
             </p>
-            <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:17, color:"var(--gold)", lineHeight:1.7 }}>
+            <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"var(--gold)", lineHeight:1.4 }}>
               Welcome to Fonkiart —<br />
               Original Art & Fine Art Prints
             </p>
-            <p style={{ fontSize:12, color:"var(--muted)", marginTop:16 }}>Taking you to your account…</p>
+            <p style={{ fontSize:16, color:"var(--muted)", marginTop:16 }}>Taking you to your account…</p>
           </div>
         )}
       </div>

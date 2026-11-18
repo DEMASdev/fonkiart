@@ -29,7 +29,7 @@ export default function NewPasswordModal({ title, subtitle, submitLabel, onSubmi
       <div className="checkout" style={{ maxWidth:420 }} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
 
-        <h2 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:28, fontWeight:300, marginBottom:6 }}>{title}</h2>
+        <h2 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:32, fontWeight:300, marginBottom:6 }}>{title}</h2>
         <p className="checkout-sub" style={{ marginBottom:20 }}>{subtitle}</p>
 
         <div className="fld">
@@ -42,7 +42,7 @@ export default function NewPasswordModal({ title, subtitle, submitLabel, onSubmi
           <PasswordInput value={pw2} onChange={e=>{ setPw2(e.target.value); setErr(""); }}
             placeholder="Type it again" autoComplete="new-password" onKeyDown={e=>e.key==="Enter"&&save()} />
         </div>
-        {err && <p style={{ color:"#c0392b", fontSize:12, marginBottom:10 }}>{err}</p>}
+        {err && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:10 }}>{err}</p>}
         <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)" }} onClick={save} disabled={saving || !!(pw && !pwRulesMet(pw))}>
           {saving ? "Saving…" : submitLabel}
         </button>

@@ -40,7 +40,7 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
         </div>
         <div className="welcome-form-side">
           <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 10px 0" }}>
-            <button className="auth-close" aria-label="Close" onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", background:"rgba(0,0,0,.12)", border:"none", cursor:"pointer", color:"var(--ink)", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+            <button className="auth-close" aria-label="Close" onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", background:"rgba(0,0,0,.12)", border:"none", cursor:"pointer", color:"var(--ink)", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
           </div>
           <div className="welcome-top" style={{ padding:"14px 20px 12px" }}>
             <div className="welcome-top-text" style={{ width:"100%" }}>
@@ -52,24 +52,24 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
             {user ? (
               <>
                 <div className="ok-msg" style={{ marginBottom:16 }}>✓ Signed in as {user.email}</div>
-                <p style={{ fontSize:15, color:"var(--muted)", lineHeight:1.7, marginBottom:20 }}>You have full collector access. Enjoy exclusive first looks at new works and private sales.</p>
-                <button className="btn-p" style={{ width:"100%" }} onClick={logout}>Sign Out</button>
+                <p style={{ fontSize:17, color:"var(--muted)", lineHeight:1.65, marginBottom:20 }}>You have full collector access. Enjoy exclusive first looks at new works and private sales.</p>
+                <button className="btn-p" style={{ width:"100%", fontSize:16 }} onClick={logout}>Sign Out</button>
               </>
             ) : !sent ? (
               <>
-                <p style={{ fontSize:15 }}>Enter your email and we'll send a secure sign-in link. No password needed.</p>
+                <p>Enter your email and we'll send a secure sign-in link. No password needed.</p>
                 <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} placeholder="your@email.com" onKeyDown={e => e.key === "Enter" && sendOtp()}
-                  style={{ width:"100%", border:"1px solid var(--border)", padding:"11px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:15, outline:"none", marginBottom:8 }} />
-                {err && <p style={{ color:"#c0392b", fontSize:13, marginBottom:6 }}>{err}</p>}
-                <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:10, padding:"14px", fontSize:15 }} onClick={sendOtp} disabled={loading}>
+                  style={{ width:"100%", border:"1px solid var(--border)", padding:"11px 14px", fontFamily:"'DM Sans',sans-serif", fontSize:16, outline:"none", marginBottom:8 }} />
+                {err && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:8 }}>{err}</p>}
+                <button className="btn-p" style={{ width:"100%", background:"var(--sidebar-bg)", marginBottom:10, padding:"14px", fontSize:16 }} onClick={sendOtp} disabled={loading}>
                   {loading ? "Sending…" : "Send Request →"}
                 </button>
               </>
             ) : (
               <>
                 <div className="ok-msg" style={{ marginBottom:16 }}>✓ Request sent!</div>
-                <p style={{ fontSize:15, color:"var(--muted)", lineHeight:1.7 }}>We sent a secure access link to <strong>{email}</strong>. Click the link in your email to enter the Private Collectors Showroom.</p>
-                <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:15, marginTop:12 }} onClick={onClose}>Close</button>
+                <p style={{ fontSize:17, color:"var(--muted)", lineHeight:1.65 }}>We sent a secure access link to <strong>{email}</strong>. Click the link in your email to enter the Private Collectors Showroom.</p>
+                <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:16, marginTop:12 }} onClick={onClose}>Close</button>
               </>
             )}
           </div>
