@@ -24,6 +24,8 @@ import NewPasswordModal from "./components/NewPasswordModal";
 
 import InvoicePage from "./pages/InvoicePage";
 import { readInvoiceParams } from "./lib/invoiceView";
+import CardReturnPage from "./pages/CardReturnPage";
+import { readCardReturn, dropCardOrder, withoutTitles } from "./lib/cartOrder";
 import ThreadPage from "./pages/ThreadPage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
@@ -44,14 +46,18 @@ import BuyerDashboard from "./pages/BuyerDashboard";
 
 import AdminPage from "./admin/AdminPage";
 
-// Pages that only exist while their link (?thread= / ?invoice=) is in the address bar.
-const LINK_PAGES = new Set(["conversation", "invoice"]);
+// Pages that only exist while their link (?thread= / ?invoice=) is in the address bar, and the
+// way back from a card payment on Stripe (?cart=FA-...&card=...), which is read once on arrival.
+const LINK_PAGES = new Set(["conversation", "invoice", "card-return"]);
 
 export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
   const [invoiceShopView] = useState(() => readInvoiceParams(window.location.search).shopView);
   const [threadToken]  = useState(() => new URLSearchParams(window.location.search).get("thread"));
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
+  // Back from paying a Cart order by card: { ref, session } once paid, { ref, cancelled } from
+  // Stripe's own page without paying (src/lib/cartOrder.js readCardReturn).
+  const [cardReturn]   = useState(() => readCardReturn(window.location.search));
   const [deepModal, setDeepModal] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
   // "#admin-reset=<token>" / "#reset=<token>" are the links in the admin and customer
@@ -67,12 +73,21 @@ export default function App() {
   // site not a chat site").
   // The invoice link (?invoice=<token>) does the same (Andy, 2026-11-17: "should go to
   // the site ... not to some lost page somewhere").
-  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : cardReturn ? "card-return" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => {
     if (resetLink) window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [resetLink]);
+  // The way back from Stripe is read once (above), then taken out of the address bar, so a
+  // reload or the next page never carries it.
+  useEffect(() => {
+    if (!cardReturn) return;
+    const q = new URLSearchParams(window.location.search);
+    q.delete("cart"); q.delete("card");
+    const rest = q.toString();
+    window.history.replaceState(window.history.state, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
+  }, [cardReturn]);
   const [pendingCategory, setPendingCategory] = useState(null);
   const goToCategory = (cat) => { setPendingCategory(cat); setPage("catalog"); };
   const goToPage = (p) => { if (p === "catalog") setPendingCategory(null); setPage(p); };
@@ -108,6 +123,13 @@ export default function App() {
   };
   const removeFromCart = (id) => {
     setCart(prev => prev.filter(i => i.id !== id));
+  };
+  // A Cart order paid by card (back from Stripe, or the checkout or the cart finding it paid):
+  // only its pieces leave the cart, each title once, and the order kept for paying again is
+  // done with.
+  const paidCart = (titles) => {
+    dropCardOrder();
+    setCart(prev => withoutTitles(prev, titles));
   };
 
   // Brief pulse on the cart icon whenever an item is added, so it's easier to spot.
@@ -168,7 +190,7 @@ export default function App() {
     };
     init();
     loadArtworks();
-    if (!threadToken && !invoiceToken && !sessionStorage.getItem("fonkiart-welcome-seen")) {
+    if (!threadToken && !invoiceToken && !cardReturn && !sessionStorage.getItem("fonkiart-welcome-seen")) {
       setTimeout(() => setShowWelcome(true), 1500);
     }
   }, []);
@@ -243,9 +265,10 @@ export default function App() {
       about:"About Fonkiart", children:"Children Benefit — Fonkiart",
       admin:"Admin — Fonkiart", "buyer-dashboard":"My Account — Fonkiart",
       conversation:"Your Conversation — Fonkiart", invoice:"Your Invoice — Fonkiart",
+      "card-return": cardReturn?.cancelled ? "Your Cart — Fonkiart" : "Your Order — Fonkiart",
     };
     document.title = titles[page] || "Fonkiart";
-  }, [page]);
+  }, [page, cardReturn]);
 
   const updateData = async (patch) => {
     const { items: _, ...rest } = patch;
@@ -286,7 +309,8 @@ export default function App() {
 
   if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => setPage("collectors-room")} tab={adminTab} setTab={setAdminTab} />;
 
-  const currentNav = page === "cart" ? { label: "Your Cart", Icon: ShoppingBag }
+  const currentNav = page === "cart" || (page === "card-return" && !cardReturn?.session) ? { label: "Your Cart", Icon: ShoppingBag }
+    : page === "card-return" ? { label: "Your Order", Icon: Receipt }
     : page === "conversation" ? { label: "Your Conversation", Icon: MessageCircle }
     : page === "invoice" ? { label: "Your Invoice", Icon: Receipt }
     : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
@@ -366,7 +390,8 @@ export default function App() {
         {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
         {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory="Art Prints" key="artprints" />}
         {page === "collections" && <CollectionsPage data={mergedData} setPage={goToPage} goToCategory={goToCategory} />}
-        {page === "cart"     && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} />}
+        {(page === "cart" || (page === "card-return" && !cardReturn?.session)) && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} onPaid={paidCart} cancelledRef={page === "card-return" ? cardReturn?.ref : undefined} />}
+        {page === "card-return" && cardReturn?.session && <CardReturnPage orderRef={cardReturn.ref} session={cardReturn.session} artworks={mergedData.items} onPaid={paidCart} setPage={goToPage} />}
         {page === "special"  && <SpecialOrdersPage setPage={goToPage} />}
         {page === "auctions" && <AuctionsPage />}
         {page === "partners" && <PartnersPage setPage={goToPage} />}

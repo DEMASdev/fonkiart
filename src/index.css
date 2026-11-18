@@ -186,7 +186,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .card-over { position:absolute;inset:0;background:linear-gradient(to top,rgba(10,8,6,.86) 0%,rgba(10,8,6,.62) 20%,rgba(10,8,6,.3) 34%,transparent 50%);opacity:0;transition:opacity .3s;display:flex;flex-direction:column;justify-content:flex-end;padding:22px;text-shadow:0 1px 2px rgba(10,8,6,.55),0 0 14px rgba(10,8,6,.4); }
 .card-over .card-btn { text-shadow:none; }
 .card:hover .card-over { opacity:1; }
-.card-cat { font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:4px; }
+.card-cat { font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:4px; }
 .card-title { font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;color:#fff;margin-bottom:4px;line-height:1.15; }
 .card-price { font-size:17px;color:var(--gold);font-weight:500;margin-bottom:14px; }
 .card-btn { background:var(--sidebar-bg);color:#fff;border:none;padding:12px 0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;width:100%;transition:background .2s;border-radius:4px; }
@@ -1126,6 +1126,56 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .checkout-buy .zelle-steps, .checkout-buy .confirm-btn, .checkout-buy .stripe-btn,
 .checkout-buy .fld label, .checkout-buy .fld input, .checkout-buy .btn-s, .checkout-buy .btn-p { font-size:16px; }
 .checkout-buy .zelle-amount { font-weight:600;font-variant-numeric:lining-nums; }
+/* The Cart's card payment (src/components/CardCheckout.jsx, PayArt.jsx, PaidThanks.jsx,
+   src/pages/CardReturnPage.jsx, CartPage.jsx). The last step of buying a work of art, in the
+   invoice page's look (Andy: "keep everything esthetically beautiful pretty and art driven"):
+   the pieces first, each picture whole (never cropped), the titles and the money in the Fonkiart
+   serif with lining figures, the invoice's sizes (nothing under 16px), colours and spacing. */
+.pay-art, .pay-card, .pay-return, .pay-saved, .pay-calm, .cart-notice { --inv-small:16px;--inv-text:17px;--inv-num:34px; }
+.pay-art { margin-bottom:6px; }
+.pay-art-list { list-style:none;margin:0;padding:0; }
+.pay-art-piece { display:flex;align-items:center;gap:18px;padding:14px 0;border-bottom:1px solid var(--border); }
+.pay-art-pic { flex:none;display:block;width:120px;height:120px;object-fit:contain;object-position:center;background:var(--cream); }
+.pay-art-info { flex:1;min-width:0; }
+.pay-art-title { font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:500;line-height:1.25;color:var(--ink);overflow-wrap:anywhere; }
+.pay-art-price { font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;letter-spacing:.02em;color:var(--ink);font-variant-numeric:lining-nums;margin-top:4px; }
+.pay-card-back { display:inline-block;background:none;border:none;padding:0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--gold);min-height:44px;margin-bottom:10px; }
+.pay-card-label { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:2px; }
+.pay-card-ref { font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:none;color:var(--ink);font-variant-numeric:lining-nums;white-space:nowrap; }
+.pay-card-wait { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:21px;color:var(--muted);text-align:center;margin:20px 0 6px; }
+.pay-card-form { margin-top:18px; }
+.pay-card-note { font-size:var(--inv-small);line-height:1.6;color:var(--muted);text-align:center;margin-top:14px; }
+.pay-saved { border-top:1px solid var(--border);padding-top:18px;margin-bottom:4px;text-align:center; }
+.pay-saved-title { font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:500;line-height:1.3;color:var(--ink);text-wrap:balance; }
+.pay-saved-text { font-size:var(--inv-text);line-height:1.6;color:var(--muted);margin-top:6px; }
+.pay-calm { font-size:var(--inv-text);line-height:1.6;color:var(--ink);background:var(--cream);border:1px solid var(--border);border-left:3px solid var(--gold);padding:14px 16px;margin:0 0 14px; }
+.pay-other { display:block;width:100%;background:none;border:1px solid var(--border);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.08em;padding:13px;margin-top:10px;cursor:pointer;transition:border-color .2s; }
+.pay-other:hover { border-color:var(--ink); }
+.pay-return-wait { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;color:var(--muted);text-align:center;padding:8px 0; }
+.pay-return-title { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:500;line-height:1.3;color:var(--ink);text-align:center;margin-bottom:10px;text-wrap:balance; }
+.pay-return-text { font-size:var(--inv-text);line-height:1.7;color:var(--muted);text-align:center;margin-bottom:16px; }
+.pay-return-text strong { color:var(--ink);white-space:nowrap; }
+.pay-return-ref { text-align:center;background:var(--cream);border:1px solid var(--border);padding:14px 20px;margin-top:22px; }
+.pay-return-ref-label { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px; }
+.pay-return-ref-value { font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:600;letter-spacing:.06em;color:var(--ink);font-variant-numeric:lining-nums; }
+.pay-return-ref-note { font-size:var(--inv-small);color:var(--muted);margin-top:2px; }
+.pay-return-thanks { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;line-height:1.3;color:#2d6a4f; }
+.pay-return-by { font-size:var(--inv-text);font-weight:600;color:#2d6a4f;margin-top:4px; }
+.pay-return-note { font-size:var(--inv-small);line-height:1.6;color:var(--muted);margin-top:8px; }
+.pay-return .pay-return-go { margin-top:22px; }
+.pay-return-actions { display:flex;flex-direction:column;gap:10px;margin-top:4px; }
+.pay-return .pay-return-btn { width:100%;min-height:48px;font-size:16px; }
+.inv-embed.pay-thanks-modal { width:100%;max-width:620px;max-height:92dvh;overflow-y:auto;padding:0;margin:auto;flex-shrink:0; }
+.cart-notice { max-width:760px;background:var(--cream);border:1px solid var(--border);border-left:3px solid var(--gold);padding:16px 20px;margin:-10px 0 28px; }
+.cart-notice-title { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:500;line-height:1.3;color:var(--ink); }
+.cart-notice-text { font-size:var(--inv-text);line-height:1.65;color:var(--muted);margin-top:4px; }
+.cart-notice-ref { color:var(--ink);font-weight:600;font-variant-numeric:lining-nums;white-space:nowrap; }
+@media(max-width:520px){
+  .pay-art-piece { gap:14px; }
+  .pay-art-pic { width:80px;height:80px; }
+  .pay-art-title { font-size:21px; }
+  .cart-notice { padding:14px 16px;margin-top:-14px; }
+}
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }

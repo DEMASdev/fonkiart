@@ -1,9 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useEffectEvent, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
+import { stripeJsReady } from "../lib/stripeJs";
+import { readCardOrder, saveCardOrder, dropCardOrder, matchesCart, cardOrderBody } from "../lib/cartOrder";
+import CardCheckout from "./CardCheckout";
+import PaidThanks from "./PaidThanks";
 import Pic from "./Pic";
 
-export default function CheckoutModal({ items, settings, onClose, onSuccess, fullPage }) {
+// onSuccess: an order placed to be paid by Zelle, Venmo or Cash App (the Cart page empties the
+// cart then). onPaid(titles): a card payment is in (the Cart page empties those pieces). Card
+// payments go through the server and Stripe (api/_lib/cartCheckout.js): ONE order per cart,
+// however the buyer retries.
+export default function CheckoutModal({ items, settings, onClose, onSuccess, onPaid, fullPage }) {
   const venmoHandle   = settings.venmoHandle   || "@fonkiart";
   const cashAppHandle = settings.cashAppHandle || "$fonkiart";
   const [method, setMethod] = useState(null);
@@ -16,6 +24,21 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
   const [couponStatus, setCouponStatus] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [orderRef, setOrderRef] = useState("");
+  // The card order this cart already saved and hasn't finished paying (src/lib/cartOrder.js).
+  // With one, the checkout pays THAT order, by card again or another way, and saves no other.
+  const [saved, setSaved] = useState(() => { const order = readCardOrder(); return matchesCart(order, items) ? order : null; });
+  const [savedAtOpen] = useState(() => saved && cardOrderBody(saved, items));
+  const [checked, setChecked] = useState(!savedAtOpen); // the server has said what became of it
+  const [pay, setPay] = useState(null);                // the card form, open inside the page
+  const [formFailed, setFormFailed] = useState(false); // ...which couldn't open: Stripe's own page instead
+  const [leaving, setLeaving] = useState("");          // Stripe's own page, opening in this tab
+  const [paidView, setPaidView] = useState(null);      // the card payment is in
+  const [calm, setCalm] = useState("");                // the order is safe; the card just didn't open
+  const [retry, setRetry] = useState(false);           // ...so the button says "Try Card Again"
+  // Set the moment a pay button is tapped and cleared once the server has answered, so a double
+  // tap counts once and two card calls never race (each would close the page before and open
+  // its own, leaving one open that nobody pays).
+  const busy = useRef(false);
 
   // Predict the next sequential order number (Orders.id is auto-incrementing).
   useEffect(() => {
@@ -30,12 +53,18 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
   const basePrice = items.reduce((sum,i) => sum + itemPrice(i), 0);
   const effectivePrice = couponStatus === "valid" ? Math.round(basePrice * (1 - discount / 100)) : basePrice;
   const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
-  const canNext = method && fullName && customer.email.includes("@");
+  // A saved order shows its own reference and the amounts the server gave it.
+  const savedAmount = (i) => saved?.lines.find(l => String(l.title).trim() === String(i.title).trim())?.amount;
+  const shownAmount = (i) => (saved ? savedAmount(i) : undefined) ?? itemEffective(i);
+  const amountDue = saved ? saved.total : effectivePrice;
+  const refShown = saved ? saved.ref : orderRef;
+  const canNext = method && (saved ? checked : fullName && customer.email.includes("@"));
 
   const handleContinue = () => {
+    if (saved && !checked) return; // a moment: the server is saying what became of the saved order
     if (!method) { setCheckoutError("Please select a payment method."); return; }
-    if (!fullName) { setCheckoutError("Please enter your first and last name."); return; }
-    if (!customer.email.includes("@")) { setCheckoutError("Please enter a valid email address."); return; }
+    if (!saved && !fullName) { setCheckoutError("Please enter your first and last name."); return; }
+    if (!saved && !customer.email.includes("@")) { setCheckoutError("Please enter a valid email address."); return; }
     setCheckoutError("");
     setStep(2);
   };
@@ -51,17 +80,20 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
     } catch { setCouponStatus("invalid"); }
   };
 
+  // The order as the checkout sends it. For a card payment the server prices every piece itself.
+  const orderPayload = () => ({
+    customer,
+    orderRef,
+    total: effectivePrice,
+    couponCode: couponStatus === "valid" ? couponCode.trim().toUpperCase() : "",
+    items: items.map(i => ({ title: i.title, amount: itemEffective(i) })),
+  });
+
   // The server saves the order, marks the coupon used and sends both emails.
   // Returns false (with a message the buyer can act on) if it could not be reached.
   const saveOrder = async () => {
     try {
-      await storeCall("order", {
-        customer,
-        orderRef,
-        total: effectivePrice,
-        couponCode: couponStatus === "valid" ? couponCode.trim().toUpperCase() : "",
-        items: items.map(i => ({ title: i.title, amount: itemEffective(i) })),
-      });
+      await storeCall("order", orderPayload());
       return true;
     } catch (e) {
       console.warn("Order:", e);
@@ -72,19 +104,119 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
   // markSold intentionally removed — Andy marks sold manually in Admin after verifying payment received
   const finish = () => { setDone(true); onSuccess?.(); };
-  const confirmPaid = async () => { setSaving(true); const ok = await saveOrder(); setSaving(false); if (ok) finish(); };
+  // Zelle, Venmo, Cash App. A card order this cart already saved is the order: nothing is saved
+  // or emailed again, it is simply paid another way.
+  const confirmPaid = async () => {
+    if (busy.current) return;
+    if (saved) { dropCardOrder(); finish(); return; }
+    busy.current = true;
+    setSaving(true); const ok = await saveOrder(); setSaving(false);
+    busy.current = false;
+    if (ok) finish();
+  };
   const handleConfirmZelle   = confirmPaid;
   const handleConfirmVenmo   = confirmPaid;
   const handleConfirmCashApp = confirmPaid;
-  // The card link is looked for BEFORE anything is saved: with none, no order is saved and the
-  // buyer is told here on the page (no browser pop-up), so choosing Zelle next saves just one.
-  const handleCard = async () => {
-    const link = (items.length === 1 && items[0].stripeLink) || settings.stripeLink;
-    if (!link) { setCheckoutError("Card payment is being set up. Please use Zelle or contact Fonkiart directly."); return; }
-    setSaving(true); const ok = await saveOrder(); setSaving(false);
-    if (!ok) return;
-    window.open(link, "_blank"); finish();
+
+  // The card payment is in: the saved order is done with, the thank-you shows, and the Cart page
+  // empties those pieces.
+  const paidNow = (order) => {
+    dropCardOrder();
+    setSaved(null); setPay(null); setPaidView(order); setDone(true);
+    onPaid?.(order.lines.map(l => l.title));
   };
+  // The saved order is gone from the shop (cancelled, or handled by hand): forget it and start afresh.
+  const startAfresh = () => {
+    dropCardOrder();
+    setSaved(null); setPay(null); setRetry(false); setCalm(""); setStep(1);
+  };
+
+  // "Pay Securely with Card". ONE order per cart, however often it is tapped: a new order is saved
+  // (cart-card) only while this cart has none waiting; after that every card attempt re-opens
+  // payment for that same order (cart-again), naming the last payment page Stripe made for it.
+  // Card payments off: the server says so and saves nothing. The cart is NOT emptied here, only
+  // once the payment is in. site: this address, so Stripe brings the buyer back to the cart they
+  // are paying from (fonkiart.com and www.fonkiart.com each keep their own).
+  // hosted: Stripe's own page, because the card form couldn't open inside this one.
+  const startCard = async (hosted) => {
+    if (busy.current) return; // a double tap: the first one is already on its way
+    busy.current = true;
+    setSaving(true); setCheckoutError(""); setCalm(""); setFormFailed(false);
+    try {
+      const embedded = hosted ? false : await stripeJsReady();
+      const site = window.location.origin;
+      const order = saved
+        ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded, site })
+        : await storeCall("cart-card", { ...orderPayload(), embedded, site });
+      if (order.paid) { paidNow(order); return; }
+      // Kept BEFORE the form opens or the page changes, so the next attempt names this page.
+      setSaved(saveCardOrder({
+        ref: order.ref, ids: order.ids, email: saved ? saved.email : customer.email.trim(),
+        lines: order.lines, total: order.total, session: order.session || saved?.session,
+      }));
+      setRetry(!!order.cardError);
+      if (order.cardError) setCalm(order.cardError); // saved; the card can be tried again (cart-again)
+      else if (order.clientSecret) setPay(order);
+      else if (order.url) { setLeaving(order.url); window.location.assign(order.url); }
+    } catch (e) {
+      console.warn("Card payment:", e);
+      if (saved && e.status === 404) {
+        // The shop no longer has that order as it was saved: start afresh.
+        startAfresh();
+        setCheckoutError("We couldn't find your saved order. Please enter your details again.");
+      } else if (e.status === 409) setCheckoutError(e.message);
+      else if (e.status === 502 || saved) {
+        // The order is safe; only the card page didn't open.
+        setRetry(true);
+        setCalm(e.status === 502 ? e.message : "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.");
+      } else setCheckoutError(`We couldn't save your order. Please email ${BREVO_SENDER || "us"} with your order number ${orderRef}.`);
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
+  };
+  const handleCard = () => startCard(false);
+  const cardFormFailed = () => {
+    setPay(null); setFormFailed(true);
+    setCalm("The card form couldn't open here. You can pay on Stripe's own secure page instead.");
+  };
+  const otherWay = () => { setStep(1); setCalm(""); setRetry(false); setFormFailed(false); };
+
+  // Opening with a saved card order, the server is asked once what became of it ("cart-order"):
+  // paid by now (paid, then the tab closed before coming back): the thank-you, and the cart
+  // empties; still open: paid from here, by card again or another way; closed by the shop, or
+  // unknown to it: forgotten, and the checkout starts afresh. Until it answers, Continue waits.
+  // Out of reach: the saved order stands, and paying by card asks the server again anyway.
+  const learned = useEffectEvent((order) => {
+    setChecked(true);
+    if (order === undefined) return;
+    if (order?.state === "paid") { paidNow(order); return; }
+    if (order?.state === "open") {
+      const kept = readCardOrder();
+      if (kept && kept.ref === order.ref) setSaved(saveCardOrder({ ...kept, lines: order.lines, total: order.total }));
+      return;
+    }
+    startAfresh();
+  });
+  useEffect(() => {
+    if (!savedAtOpen) return undefined;
+    let gone = false;
+    storeCall("cart-order", savedAtOpen)
+      .then((order) => { if (!gone) learned(order); })
+      .catch((e) => { console.warn("Saved order:", e); if (!gone) learned(e.status === 404 ? null : undefined); });
+    return () => { gone = true; };
+  }, [savedAtOpen]);
+
+  // Paid by card: the same thank-you as on the way back from Stripe, the pieces first.
+  if (done && paidView) {
+    const thanks = <PaidThanks view={paidView} artworks={items}
+      action={<button type="button" className="tap confirm-btn pay-return-go" onClick={onClose}>{fullPage ? "Continue Shopping →" : "Close"}</button>} />;
+    return fullPage ? <div className="inv-embed pay-return">{thanks}</div> : (
+      <div className="modal-bg" onClick={onClose}>
+        <div className="inv-embed pay-return pay-thanks-modal" onClick={e => e.stopPropagation()}>{thanks}</div>
+      </div>
+    );
+  }
 
   if (done) return (
     <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
@@ -95,10 +227,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
           Your order for <strong>{itemsLabel}</strong> has been received.<br />
           Fonkiart will confirm and reach out about shipping.
         </p>
-        {orderRef && (
+        {refShown && (
           <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"12px 20px", marginBottom:24, display:"inline-block" }}>
             <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Reference</div>
-            <div style={{ fontFamily:"monospace", fontSize:20, letterSpacing:".08em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
+            <div style={{ fontFamily:"monospace", fontSize:20, letterSpacing:".08em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
             <div style={{ fontSize:16, color:"var(--muted)", marginTop:4 }}>Also in your confirmation email</div>
           </div>
         )}
@@ -112,35 +244,43 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
       <div className={`checkout checkout-buy${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
         <h2>Purchase</h2>
-        <div className="checkout-items" style={{ marginBottom:24 }}>
-          {items.map(i => (
-            <div key={i.id} className="checkout-item-row">
-              {i.image && <Pic src={i.image} w={320} alt={i.title} className="checkout-item-thumb" />}
-              <p className="checkout-sub" style={{ margin:0 }}>
-                {i.title}{itemEffective(i) ? ` · $${Number(itemEffective(i)).toLocaleString()}` : ""}
-                {couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
+        {!pay && (
+          <div className="checkout-items" style={{ marginBottom:24 }}>
+            {items.map(i => (
+              <div key={i.id} className="checkout-item-row">
+                {i.image && <Pic src={i.image} w={320} alt={i.title} className="checkout-item-thumb" />}
+                <p className="checkout-sub" style={{ margin:0 }}>
+                  {i.title}{shownAmount(i) ? ` · $${Number(shownAmount(i)).toLocaleString()}` : ""}
+                  {!saved && couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
+                </p>
+              </div>
+            ))}
+            {items.length > 1 && (
+              <p className="checkout-sub" style={{ marginTop:6, fontWeight:600 }}>
+                Total{amountDue ? ` · $${Number(amountDue).toLocaleString()}` : ""}
+                {!saved && couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
               </p>
-            </div>
-          ))}
-          {items.length > 1 && (
-            <p className="checkout-sub" style={{ marginTop:6, fontWeight:600 }}>
-              Total{effectivePrice ? ` · $${Number(effectivePrice).toLocaleString()}` : ""}
-              {couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
-            </p>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {step === 1 && (
           <>
             <div className="pay-opts">
               {[["zelle","💚","Zelle","Instant · Free"],["venmo","🔵","Venmo","Instant · Free"],["cashapp","💵","Cash App","Instant · Free"],["card","💳","Credit Card","Stripe · Secure"]].map(([id,icon,label,sub]) => (
-                <button key={id} className={`pay-opt${method===id?" sel":""}`} onClick={() => setMethod(id)}>
+                <button key={id} className={`pay-opt${method===id?" sel":""}`} onClick={() => { setMethod(id); if (id === "card") stripeJsReady(); }}>
                   <span className="pay-opt-icon">{icon}</span>
                   <div className="pay-opt-label">{label}</div>
                   <div className="pay-opt-sub">{sub}</div>
                 </button>
               ))}
             </div>
+            {saved ? (
+              <div className="pay-saved" aria-busy={!checked}>
+                <p className="pay-saved-title">Your order <span className="pay-card-ref">{saved.ref}</span> is saved</p>
+                <p className="pay-saved-text">Your details are saved with it, so just choose how you&apos;d like to pay.</p>
+              </div>
+            ) : (
             <div style={{ borderTop:"1px solid var(--border)", paddingTop:18, marginBottom:4 }}>
               <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -176,6 +316,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
               {couponStatus==="need-email"  && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Enter your email address first, then apply the coupon.</p>}
               {couponStatus==="wrong-email" && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon is not linked to this email address.</p>}
             </div>
+            )}
             <button className="confirm-btn" style={{ background:canNext?"var(--gold)":"var(--border)", marginTop:12 }} onClick={handleContinue}>Continue →</button>
             {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
@@ -183,58 +324,66 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, ful
 
         {step === 2 && (
           <>
-            <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>
+            {!pay && <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>}
             {method === "zelle" && (
               <div className="pay-detail">
                 <h4>Send via Zelle</h4>
-                <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
                 <div style={{ fontSize:16, color:"var(--muted)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div>
                 <div className="zelle-contact">{settings.zelleContact}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
                   <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
+                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
                 </div>
-                <div className="zelle-steps">1. Open your bank app → Zelle<br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: copy <strong>{orderRef}</strong> and paste it into your Zelle transaction memo/note<br />4. Confirm below — we ship once payment clears ✓</div>
+                <div className="zelle-steps">1. Open your bank app → Zelle<br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: copy <strong>{refShown}</strong> and paste it into your Zelle transaction memo/note<br />4. Confirm below — we ship once payment clears ✓</div>
               </div>
             )}
             {method === "venmo" && (
               <div className="pay-detail">
                 <h4>Send via Venmo</h4>
-                <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
                 <div className="zelle-contact">{venmoHandle}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
                   <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
+                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
                 </div>
-                <div className="zelle-steps">1. Open Venmo → Search <strong>{venmoHandle}</strong><br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong><br />3. Note: copy <strong>{orderRef}</strong> and paste it into the Venmo note<br />4. Confirm below — we ship once payment clears ✓</div>
+                <div className="zelle-steps">1. Open Venmo → Search <strong>{venmoHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Venmo note<br />4. Confirm below — we ship once payment clears ✓</div>
               </div>
             )}
             {method === "cashapp" && (
               <div className="pay-detail">
                 <h4>Send via Cash App</h4>
-                <div className="zelle-amount">${Number(effectivePrice||0).toLocaleString()}</div>
-                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
                 <div className="zelle-contact">{cashAppHandle}</div>
                 <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
                   <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{orderRef}</div>
+                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
                 </div>
-                <div className="zelle-steps">1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(effectivePrice||0).toLocaleString()}</strong><br />3. Note: copy <strong>{orderRef}</strong> and paste it into the Cash App note<br />4. Confirm below — we ship once payment clears ✓</div>
+                <div className="zelle-steps">1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Cash App note<br />4. Confirm below — we ship once payment clears ✓</div>
               </div>
             )}
-            {method === "card" && (
+            {method === "card" && pay && (
+              <CardCheckout pay={pay} artworks={items} onBack={() => setPay(null)} onFail={cardFormFailed} />
+            )}
+            {method === "card" && !pay && (
               <div className="pay-detail">
                 <h4>Secure Credit Card via Stripe</h4>
-                {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>You'll be redirected to our secure Stripe checkout to complete your purchase of <strong>{itemsLabel}</strong>{effectivePrice ? ` for $${Number(effectivePrice).toLocaleString()}` : ""}.</p>
+                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                {leaving
+                  ? <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Taking you to Stripe&apos;s secure page… <a href={leaving} style={{ color:"var(--gold)" }}>Open it here</a></p>
+                  : <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Pay for <strong>{itemsLabel}</strong>{amountDue ? ` ($${Number(amountDue).toLocaleString()})` : ""} securely by card, through Stripe.</p>}
               </div>
             )}
             {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
-            {method==="card"    && <button className="stripe-btn"  onClick={handleCard}           disabled={saving}>{saving?"Saving…":"Pay Securely with Card →"}</button>}
+            {method==="card" && calm && <p className="pay-calm" role="status">{calm}</p>}
+            {method==="card" && !pay && !leaving && !formFailed && <button className="stripe-btn" onClick={handleCard} disabled={saving}>{saving ? (saved ? "Opening…" : "Saving…") : retry ? "Try Card Again →" : "Pay Securely with Card →"}</button>}
+            {method==="card" && !pay && !leaving && formFailed && <button className="stripe-btn" onClick={() => startCard(true)} disabled={saving}>{saving ? "Opening…" : "Pay on Stripe's Secure Page →"}</button>}
+            {method==="card" && !pay && !leaving && (retry || formFailed) && <button type="button" className="tap pay-other" onClick={otherWay} disabled={saving}>Choose Another Way to Pay</button>}
             {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}
