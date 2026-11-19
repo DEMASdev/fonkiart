@@ -151,18 +151,19 @@ export async function createCheckout({ order, invNum, site, image }) {
 // "embedded"), and never Stripe's own page (Andy, 2026-11-18: "i don't want to be making the user
 // jump to stripe then back"). One line per piece, each with its name, its picture and the price
 // the SERVER found for it. The page carries the order's rows (metadata order_ids) and its
-// reference (cart_ref), so the return and Stripe's own message find the order from Stripe's
-// answer, never from the browser. Once paid, Stripe sends the buyer to return_url, on the shop
-// address they paid from (site).
+// reference (cart_ref), so the check once paid (cart-paid) and Stripe's own message find the
+// order from Stripe's answer, never from the browser. Paid, the buyer STAYS on fonkiart.com:
+// redirect_on_completion "never", so Stripe sends nobody anywhere and needs no return address.
+// Cards only, so no payment ever needs a redirect (3-D Secure opens inside Stripe's own form).
+// The page hears it from Stripe.js (onComplete), asks cart-paid, and shows the thank-you there.
 // Returns { id, clientSecret }: id, kept by the checkout so paying again re-opens THIS order
 // (cart-again); clientSecret, for Stripe.js to open the form.
 // lines: [{ title, amount, image }]. A picture never stops a payment: if Stripe refuses the
 // page with pictures (a 400), it is asked for again without them.
-export async function createCartCheckout({ ref, ids, lines, email, site }) {
+export async function createCartCheckout({ ref, ids, lines, email }) {
   const cents = lines.map(l => toCents(l.amount));
   if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
   if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
-  const back = `${site}/?cart=${encodeURIComponent(ref)}&card=`;
   const names = lines.map(l => String(l.title || "Fonkiart artwork").slice(0, 200));
   const tags = { cart_ref: ref, order_ids: ids.join(",") };
   const page = (withPictures) => ({
@@ -178,8 +179,7 @@ export async function createCartCheckout({ ref, ids, lines, email, site }) {
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
     ui_mode: "embedded",
-    // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the buyer back.
-    return_url: `${back}{CHECKOUT_SESSION_ID}`,
+    redirect_on_completion: "never", // paid, the buyer stays: Stripe sends nobody anywhere
   });
   let session;
   try {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useEffectEvent, useRef } from "react";
+import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { stripeJsReady } from "../lib/stripeJs";
@@ -31,6 +31,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [checked, setChecked] = useState(!savedAtOpen); // the server has said what became of it
   const [pay, setPay] = useState(null);                // the card form, open inside the page
   const [paidView, setPaidView] = useState(null);      // the card payment is in
+  const [cardCheck, setCardCheck] = useState(null);    // paid in the card form: "checking" · "unpaid" · "error"
   const [calm, setCalm] = useState("");                // the card form didn't open: said calmly
   const [retry, setRetry] = useState(false);           // ...with "Try Again" and another way to pay
   // Set the moment a pay button is tapped and cleared once the server has answered, so a double
@@ -158,9 +159,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // ONE order per cart, however often it is tapped: a new order is saved (cart-card) only while
   // this cart has none waiting; after that every card attempt re-opens payment for that same order
   // (cart-again), naming the last payment page Stripe made for it. Card payments off: the server
-  // says so and saves nothing. The cart is NOT emptied here, only once the payment is in.
-  // site: this address, so Stripe brings the buyer back, once paid, to the cart they are paying
-  // from (fonkiart.com and www.fonkiart.com each keep their own).
+  // says so and saves nothing. The cart is NOT emptied here, only once the payment is in: paid
+  // in the form, the buyer stays right here (cardComplete).
   const startCard = async () => {
     if (busy.current) return; // a double tap: the first one is already on its way
     busy.current = true;
@@ -169,10 +169,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
       const ready = await stripeJsReady();
       if (closed.current) return; // closed while Stripe.js loaded: nothing saved, nothing sent
       if (!ready) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
-      const site = window.location.origin;
       const order = saved
-        ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded: true, site })
-        : await storeCall("cart-card", { ...orderPayload(), embedded: true, site });
+        ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded: true })
+        : await storeCall("cart-card", { ...orderPayload(), embedded: true });
       if (order.paid) { paidNow(order); return; }
       // Kept BEFORE the form opens, so the next attempt names this page. Kept even if the checkout
       // closed meanwhile, so opening it again pays THIS order, never a second one.
@@ -208,6 +207,27 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     }
   };
   const handleCard = () => startCard();
+  // Paid inside the card form, and the buyer never left fonkiart.com (Andy: "i don't want to be
+  // making the user jump to stripe then back , everything should and can happen in fonkiart.com
+  // seamlessly easily  and intuitively"). The server asks Stripe itself whether that page was
+  // paid (cart-paid), exactly as for an order started on Stripe's own page before; paid, the
+  // thank-you shows right here and those pieces leave the cart. Not yet, or out of reach: a calm
+  // word and Check Again, and the saved order stands (opening the checkout again asks too).
+  const cardComplete = async (page) => {
+    if (busy.current) return; // Check Again tapped twice: once
+    busy.current = true;
+    setCardCheck("checking"); setCalm(""); setCheckoutError("");
+    try {
+      const order = await storeCall("cart-paid", { ref: page.ref, session: page.session });
+      if (order.paid) { paidNow(order); return; }
+      setCardCheck("unpaid");
+    } catch (e) {
+      console.warn("Card check:", e);
+      setCardCheck("error");
+    } finally {
+      busy.current = false;
+    }
+  };
   // Stripe.js wouldn't open the form: the same calm word; Try Again re-opens this order's form.
   const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
   const otherWay = () => { setStep(1); setCalm(""); setRetry(false); };
@@ -237,7 +257,15 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     return () => { gone = true; };
   }, [savedAtOpen]);
 
-  // Paid by card: the same thank-you as on the way back from Stripe, the pieces first.
+  // Done (paid by card, or an order placed with Zelle, Venmo or Cash App): the thank-you opens at
+  // its top, as a new page does (App.jsx), not wherever the buyer had scrolled to reach the card
+  // form's Pay button, or "I've Sent the Payment" below a long payment panel. Measured before,
+  // the thank-you's top sat above the screen: paid at the bottom of the card form, 149px at 375
+  // wide and 91px at 1280; placed with Zelle at 375, 151px.
+  useLayoutEffect(() => { if (done && fullPage) window.scrollTo(0, 0); }, [done, fullPage]);
+
+  // Paid by card (in the card form, or found paid): the same thank-you as on the way back from
+  // Stripe's own page, the pieces first, right where the form was.
   if (done && paidView) {
     const thanks = <PaidThanks view={paidView} artworks={items}
       action={<button type="button" className="tap confirm-btn pay-return-go" onClick={onClose}>{fullPage ? "Continue Shopping →" : "Close"}</button>} />;
@@ -396,7 +424,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
               </div>
             )}
             {method === "card" && pay && (
-              <CardCheckout pay={pay} artworks={items} onBack={() => setPay(null)} onFail={cardFormFailed} />
+              <CardCheckout pay={pay} artworks={items} onBack={() => setPay(null)} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
             )}
             {method === "card" && !pay && (
               <div className="pay-detail">

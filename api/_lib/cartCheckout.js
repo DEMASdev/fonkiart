@@ -15,12 +15,13 @@
 //    is saved as for Zelle (opOrder: the rows, the client, the coupon), with the server's prices,
 //    but WITHOUT the two "order received" emails: a card order is confirmed once it is PAID (2.
 //    and 3.), or once it is paid another way after all (6.). Its rows' notes end with CARD_NOTE
-//    until then. Stripe makes the card form for exactly those rows. Once paid, Stripe brings the
-//    buyer back to the shop address they paid from (returnSite).
-// 2. "cart-paid": the buyer is back on fonkiart.com (?cart=FA-...&card=cs_...). The server asks
-//    Stripe about that page itself: paid, for this reference, for the rows' exact cents, in
-//    dollars. Only then do the rows turn Paid by card and the pieces SOLD, and ONE "Payment
-//    received" email goes to the buyer and ONE "Paid by card" to the shop, for the whole cart.
+//    until then. Stripe makes the card form for exactly those rows. Paid, the buyer stays right
+//    there: Stripe sends nobody anywhere (stripe.js createCartCheckout), and the form says so.
+// 2. "cart-paid": the card form says the buyer has paid (or an order started on Stripe's own page
+//    before comes back: ?cart=FA-...&card=cs_..., 5.). The server asks Stripe about that page
+//    itself: paid, for this reference, for the rows' exact cents, in dollars. Only then do the
+//    rows turn Paid by card and the pieces SOLD, and ONE "Payment received" email goes to the
+//    buyer and ONE "Paid by card" to the shop, for the whole cart.
 // 3. Stripe's own "paid" message (op "stripe-event", storeOps.js) does the same for a buyer who
 //    closes the tab. Whichever of the two gets there first sends the emails; the other, none.
 // 4. ONE order per cart, however the buyer retries (a double tap, closing the card form and
@@ -40,7 +41,6 @@
 import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, markSoldForOrder, PAID_STATUSES } from "./artworks.js";
 import { cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, publishableKey, StripeError, toCents } from "./stripe.js";
-import { siteUrl } from "./site.js";
 import { cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
@@ -76,13 +76,6 @@ const stripeLater = (op, e) => {
   console.error(`store ${op}:`, e instanceof StripeError ? e.code : "", e?.message || e);
   return new InputError("The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.", 502);
 };
-
-// Where Stripe brings the buyer back once paid: the shop address they are paying from (the
-// checkout sends it). The cart and the saved order live in that browser's own storage, and fonkiart.com and
-// www.fonkiart.com both serve the shop without sharing it, so coming back to the other one would
-// show an empty cart. Only the shop's own addresses; anything else gets the usual one (site.js).
-const SHOP_SITES = ["https://fonkiart.com", "https://www.fonkiart.com"];
-export const returnSite = (site) => (SHOP_SITES.includes(site) || site === siteUrl() ? site : siteUrl());
 
 // What the buyer sees of a Cart order: its pieces and amounts as the rows hold them, the total,
 // and the first name it was saved with.
@@ -137,7 +130,7 @@ export async function opCartCard(db, body, mail, saveOrder) {
   const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total };
   let page;
   try {
-    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: returnSite(body.site) });
+    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
     // The order is saved (its emails wait until it is paid). Not an error for the checkout: it
@@ -308,7 +301,7 @@ export async function opCartAgain(db, body, mail) {
   const lines = rows.map((r, n) => ({ title: r.item_title, amount: Number(r.amount), image: arts[n] ? cardImage(arts[n].image) : null }));
   let page;
   try {
-    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email, site: returnSite(body.site) });
+    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email });
   } catch (e) {
     throw stripeLater("cart-again", e);
   }
