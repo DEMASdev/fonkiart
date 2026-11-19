@@ -122,7 +122,7 @@ export default function ThreadPage({ token, embedded = false, artworks = [] }) {
   if (notFound) return shell(
     <div className="invoice-card" style={{ textAlign: "center" }}>
       {logo}
-      <p style={{ marginTop: embedded ? 0 : 24, color: "var(--muted)", fontSize: 15 }}>This link is invalid or has expired.</p>
+      <p style={{ marginTop: embedded ? 0 : 24, color: "var(--muted)", fontSize: 17 }}>This link is invalid or has expired.</p>
     </div>
   );
 

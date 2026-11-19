@@ -31,19 +31,19 @@ export default function TrackOrderModal({ onClose }) {
             onChange={e => { setEmail(e.target.value); setErr(""); setOrders(null); }} onKeyDown={e => e.key === "Enter" && searchOrders()} />
           <button className="btn-p" onClick={searchOrders} disabled={loading}>{loading ? "…" : "Search"}</button>
         </div>
-        {err && <p style={{ color:"#c0392b", fontSize:13, marginBottom:12 }}>{err}</p>}
+        {err && <p style={{ color:"#c0392b", fontSize:16, lineHeight:1.5, marginBottom:12 }}>{err}</p>}
         {orders !== null && (orders.length === 0
-          ? <p style={{ fontSize:14, color:"var(--muted)", padding:"16px 0" }}>No orders found for this email.</p>
+          ? <p style={{ fontSize:17, color:"var(--muted)", padding:"16px 0" }}>No orders found for this email.</p>
           : orders.map(o => (
               <div key={o.id} style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"16px 20px", marginBottom:10 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
-                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:17, fontWeight:500 }}>{o.item_title}</div>
-                  <div style={{ background:statusColor[o.status]||"var(--border)", color:["confirmed","paid","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", fontSize:10, letterSpacing:".12em", textTransform:"uppercase", padding:"3px 10px", borderRadius:12, flexShrink:0, marginLeft:10 }}>
+                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:21, fontWeight:500, lineHeight:1.25 }}>{o.item_title}</div>
+                  <div style={{ background:statusColor[o.status]||"var(--border)", color:["confirmed","paid","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", fontSize:16, letterSpacing:".08em", lineHeight:1.3, textTransform:"uppercase", padding:"3px 12px", borderRadius:14, flexShrink:0, marginLeft:10 }}>
                     {statusLabel[o.status] || o.status}
                   </div>
                 </div>
-                <div style={{ fontSize:12, color:"var(--muted)" }}>
-                  {o.amount ? `$${Number(o.amount).toLocaleString()} · ` : ""}
+                <div style={{ fontSize:16, color:"var(--muted)" }}>
+                  {o.amount ? <><span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:19, fontWeight:600, fontVariantNumeric:"lining-nums", color:"var(--ink)" }}>${Number(o.amount).toLocaleString()}</span> · </> : ""}
                   {o.created_at ? new Date(o.created_at).toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" }) : ""}
                 </div>
               </div>

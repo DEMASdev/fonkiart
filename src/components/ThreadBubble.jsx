@@ -5,7 +5,7 @@ const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "shor
 export default function ThreadBubble({ side, label, at, body }) {
   return (
     <div className={`rq-msg rq-${side}`}>
-      <div className="rq-msg-meta">{label}{at ? ` · ${when(at)}` : ""}</div>
+      <div className="rq-msg-meta">{label}{at ? <> · <span style={{ whiteSpace:"nowrap" }}>{when(at)}</span></> : ""}</div>
       <div className="rq-msg-body">{body}</div>
     </div>
   );

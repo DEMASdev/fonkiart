@@ -32,24 +32,24 @@
 .rq-status { border:1px solid var(--border);padding:8px 10px;background:#fff;font-family:'DM Sans',sans-serif;font-size:15px;color:var(--ink);cursor:pointer; }
 
 .rq-thread { display:flex;flex-direction:column;gap:12px;margin-bottom:18px; }
-.rq-msg { max-width:85%;padding:12px 14px;border:1px solid var(--border);font-size:15px;line-height:1.6; }
+.rq-msg { max-width:85%;padding:12px 14px;border:1px solid var(--border);font-size:17px;line-height:1.55; }
 .rq-theirs { align-self:flex-start;background:#fdfcf8; }
 .rq-mine { align-self:flex-end;background:#fff4fc;border-color:var(--label); }
-.rq-msg-meta { font-size:12px;letter-spacing:.04em;color:var(--muted);margin-bottom:4px; }
+.rq-msg-meta { font-size:16px;letter-spacing:.02em;color:var(--muted);margin-bottom:6px; }
 .rq-msg-body { white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink); }
 
 .rq-reply { display:flex;flex-direction:column;gap:10px; }
 .rq-input { width:100%;border:1px solid var(--border);padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.5;color:var(--ink);outline:none;resize:vertical;background:#fff; }
 .rq-input:focus { border-color:var(--accent); }
 .rq-reply-row { display:flex;justify-content:space-between;align-items:center;gap:12px; }
-.rq-reply-row .btn-p { flex-shrink:0;min-height:44px; }
+.rq-reply-row .btn-p { flex-shrink:0;min-height:44px;font-size:16px; }
 .rq-reply-row .btn-p:disabled { opacity:.45;cursor:default; }
-.rq-result { font-size:14px;color:#c0392b; }
+.rq-result { font-size:16px;line-height:1.5;color:#c0392b; }
 .rq-result.ok { color:#3d7a52; }
-.rq-muted { font-size:13px;color:var(--muted);line-height:1.6; }
+.rq-muted { font-size:16px;color:var(--muted);line-height:1.55; }
 
 .rq-page-card { max-width:640px; }
-.rq-page-intro { font-size:15px;color:var(--muted);line-height:1.7;margin-bottom:22px; }
+.rq-page-intro { font-size:17px;color:var(--muted);line-height:1.6;margin-bottom:22px; }
 .rq-page-foot { text-align:center;margin-top:24px; }
 .rq-page-foot a { color:var(--gold); }
 /* The invoice inside the full site (?invoice= link), centred under the top bar and kept close

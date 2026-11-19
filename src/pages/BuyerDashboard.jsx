@@ -6,7 +6,7 @@ const STATUS_LABEL = { pending:"Pending", confirmed:"Confirmed", shipped:"Shippe
 
 const TabBtn = ({ label, active, onClick }) => (
   <button onClick={onClick}
-    style={{ background:"none", border:"none", borderBottom:`2px solid ${active?"var(--gold)":"transparent"}`, padding:"14px 24px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:12, letterSpacing:".1em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)", transition:"all .2s", whiteSpace:"nowrap" }}>
+    style={{ background:"none", border:"none", borderBottom:`2px solid ${active?"var(--gold)":"transparent"}`, padding:"14px 20px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".08em", textTransform:"uppercase", color:active?"var(--ink)":"var(--muted)", transition:"all .2s", whiteSpace:"nowrap" }}>
     {label}
   </button>
 );
@@ -35,13 +35,13 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
       {/* Header */}
       <div style={{ background:"var(--sidebar-bg)", padding:"24px clamp(16px, 5vw, 40px)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:11, letterSpacing:".22em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", marginBottom:4 }}>My Account</div>
-          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:24, fontWeight:300, color:"#fff" }}>Welcome back, {firstName}</div>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:16, letterSpacing:".16em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", marginBottom:6 }}>My Account</div>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:30, fontWeight:300, color:"#fff", lineHeight:1.2 }}>Welcome back, {firstName}</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"4px 12px", flexWrap:"wrap", minWidth:0 }}>
-          <span style={{ fontSize:12, color:"rgba(255,255,255,.55)", overflowWrap:"anywhere" }}>{user?.email}</span>
-          <button className="tap" onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,.7)", fontSize:12, letterSpacing:".08em", fontFamily:"'DM Sans',sans-serif" }}>← Back to site</button>
-          <button className="tap" onClick={onLogout} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.25)", padding:"7px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:11, letterSpacing:".1em", textTransform:"uppercase", color:"#fff" }}>Sign Out</button>
+          <span style={{ fontSize:16, color:"rgba(255,255,255,.55)", overflowWrap:"anywhere" }}>{user?.email}</span>
+          <button className="tap" onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,.7)", fontSize:16, letterSpacing:".04em", fontFamily:"'DM Sans',sans-serif" }}>← Back to site</button>
+          <button className="tap" onClick={onLogout} style={{ background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.25)", padding:"8px 18px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".08em", textTransform:"uppercase", color:"#fff" }}>Sign Out</button>
         </div>
       </div>
 
@@ -59,17 +59,17 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
           <>
             <div style={{ marginBottom:28 }}>
               <h1 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:32, fontWeight:300, color:"var(--ink)", marginBottom:6 }}>Order History</h1>
-              <p style={{ fontSize:13, color:"var(--muted)" }}>Track the status of your purchases from Fonkiart.</p>
+              <p style={{ fontSize:17, color:"var(--muted)" }}>Track the status of your purchases from Fonkiart.</p>
             </div>
 
             {loading ? (
-              <p style={{ color:"var(--muted)", fontSize:14 }}>Loading…</p>
+              <p style={{ color:"var(--muted)", fontSize:17 }}>Loading…</p>
             ) : orders.length === 0 ? (
               <div style={{ textAlign:"center", padding:"64px 0", background:"#fff", border:"1px solid var(--border)" }}>
                 <div style={{ fontSize:40, marginBottom:16 }}>🎨</div>
-                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>No orders yet</p>
-                <p style={{ fontSize:13, color:"var(--muted)", marginBottom:24 }}>When you purchase a piece, it will appear here.</p>
-                <button className="btn-p" style={{ background:"var(--gold)" }} onClick={onBack}>Browse the Collection</button>
+                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:28, fontWeight:300, color:"var(--ink)", marginBottom:8 }}>No orders yet</p>
+                <p style={{ fontSize:17, color:"var(--muted)", marginBottom:24 }}>When you purchase a piece, it will appear here.</p>
+                <button className="btn-p" style={{ background:"var(--gold)", fontSize:16 }} onClick={onBack}>Browse the Collection</button>
               </div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
@@ -77,19 +77,19 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
                   <div key={o.id} style={{ background:"#fff", border:"1px solid var(--border)", padding:"20px clamp(14px, 4vw, 24px)" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
                       <div style={{ flex:"1 1 180px", minWidth:0, overflowWrap:"anywhere" }}>
-                        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:"var(--ink)", marginBottom:4 }}>{o.item_title}</div>
-                        <div style={{ fontSize:12, color:"var(--muted)" }}>
+                        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:24, color:"var(--ink)", lineHeight:1.2, marginBottom:6 }}>{o.item_title}</div>
+                        <div style={{ fontSize:16, color:"var(--muted)" }}>
                           Placed {o.created_at ? new Date(o.created_at).toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" }) : "—"}
                           {o.id && <span style={{ fontFamily:"monospace", marginLeft:12, opacity:.6 }}>#{String(o.id).slice(0,8).toUpperCase()}</span>}
                         </div>
                       </div>
                       <div style={{ display:"flex", alignItems:"center", gap:16, flexShrink:0 }}>
                         {o.amount && (
-                          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:"var(--gold)" }}>
+                          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:600, fontVariantNumeric:"lining-nums", color:"var(--gold)" }}>
                             ${Number(o.amount).toLocaleString()}
                           </div>
                         )}
-                        <div style={{ fontSize:11, letterSpacing:".12em", textTransform:"uppercase", color:["confirmed","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", background:STATUS_COLOR[o.status]||"var(--border)", padding:"4px 12px", borderRadius:20 }}>
+                        <div style={{ fontSize:16, letterSpacing:".08em", lineHeight:1.3, textTransform:"uppercase", color:["confirmed","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", background:STATUS_COLOR[o.status]||"var(--border)", padding:"4px 14px", borderRadius:20 }}>
                           {STATUS_LABEL[o.status] || o.status}
                         </div>
                       </div>
@@ -108,9 +108,9 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
                         );
                       })}
                     </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:8, marginTop:6 }}>
                       {["Pending","Confirmed","Shipped","Delivered"].map(l => (
-                        <div key={l} style={{ fontSize:9, letterSpacing:".06em", textTransform:"uppercase", color:"var(--muted)", flex:1, textAlign: l==="Pending"?"left":l==="Delivered"?"right":"center" }}>{l}</div>
+                        <div key={l} style={{ fontSize:16, color:"var(--muted)", whiteSpace:"nowrap" }}>{l}</div>
                       ))}
                     </div>
                   </div>
@@ -125,7 +125,7 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
           <>
             <div style={{ marginBottom:28 }}>
               <h1 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:32, fontWeight:300, color:"var(--ink)", marginBottom:6 }}>My Profile</h1>
-              <p style={{ fontSize:13, color:"var(--muted)" }}>Your account information at Fonkiart.</p>
+              <p style={{ fontSize:17, color:"var(--muted)" }}>Your account information at Fonkiart.</p>
             </div>
 
             <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"clamp(16px, 5vw, 28px) clamp(16px, 5vw, 32px)" }}>
@@ -136,19 +136,19 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
                 ["Address", [client?.address, client?.city, client?.state, client?.zip, client?.country].filter(Boolean).join(", ") || "—"],
               ].map(([label, value]) => (
                 <div key={label} style={{ display:"flex", alignItems:"baseline", flexWrap:"wrap", gap:"4px 0", padding:"14px 0", borderBottom:"1px solid var(--border)" }}>
-                  <div style={{ fontSize:11, letterSpacing:".12em", textTransform:"uppercase", color:"var(--muted)", width:100, flexShrink:0 }}>{label}</div>
-                  <div style={{ fontSize:14, color:"var(--ink)", flex:"1 1 160px", minWidth:0, overflowWrap:"anywhere" }}>{value}</div>
+                  <div style={{ fontSize:16, letterSpacing:".08em", textTransform:"uppercase", color:"var(--muted)", width:104, flexShrink:0 }}>{label}</div>
+                  <div style={{ fontSize:17, color:"var(--ink)", flex:"1 1 160px", minWidth:0, overflowWrap:"anywhere" }}>{value}</div>
                 </div>
               ))}
-              <p style={{ fontSize:12, color:"var(--muted)", marginTop:20, lineHeight:1.7 }}>
+              <p style={{ fontSize:16, color:"var(--muted)", marginTop:20, lineHeight:1.6 }}>
                 To update your shipping address or phone number, contact us at{" "}
                 <a href="mailto:support@fonkiart.com" style={{ color:"var(--gold)" }}>support@fonkiart.com</a> and we'll update it for you.
               </p>
             </div>
 
             <div style={{ marginTop:32, display:"flex", flexWrap:"wrap", justifyContent:"center", gap:12 }}>
-              <button className="btn-p" style={{ background:"var(--gold)" }} onClick={onBack}>Browse the Collection</button>
-              <button className="btn-s" onClick={onLogout}>Sign Out</button>
+              <button className="btn-p" style={{ background:"var(--gold)", fontSize:16 }} onClick={onBack}>Browse the Collection</button>
+              <button className="btn-s" style={{ fontSize:16 }} onClick={onLogout}>Sign Out</button>
             </div>
           </>
         )}
