@@ -35,7 +35,7 @@ export default function ContactPage({ data }) {
         <div className="contact-form-box">
           <h3>Send a Message</h3>
           {sent
-            ? <div className="ok-msg" style={{ fontSize:15 }}>✓ Message sent! We'll be in touch soon.</div>
+            ? <div className="ok-msg" style={{ fontSize:17 }}>✓ Message sent! We'll be in touch soon.</div>
             : <>
                 <div className="fld"><label>Name</label><input autoComplete="name" value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Your name" /></div>
                 <div className="fld"><label>Email</label><input type="email" autoComplete="email" autoCapitalize="none" value={form.email} onChange={e=>f("email",e.target.value)} placeholder="your@email.com" /></div>

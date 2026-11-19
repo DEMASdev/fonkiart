@@ -149,7 +149,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .page-hero-sub { font-size:17px;color:var(--muted);margin-top:14px;max-width:520px;line-height:1.6; }
 
 .placeholder-body { padding:52px 48px;max-width:720px; }
-.placeholder-body p { font-size:15px;color:var(--muted);line-height:1.8;margin-bottom:20px; }
+.placeholder-body p { font-size:17px;color:var(--muted);line-height:1.8;margin-bottom:20px; }
 .placeholder-body h2 { font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;margin-bottom:16px;color:var(--ink); }
 
 /* ── CATALOG ── */
@@ -369,11 +369,15 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 /* ── CONTACT FORM ── */
 .contact-grid { display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:48px; }
 .contact-info h2 { font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;margin-bottom:16px; }
-.contact-info p { font-size:14px;color:var(--muted);line-height:1.8;margin-bottom:24px; }
-.contact-detail { display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted);margin-bottom:10px; }
+.contact-info p { font-size:17px;color:var(--muted);line-height:1.8;margin-bottom:24px; }
+.contact-detail { display:flex;align-items:center;gap:10px;font-size:17px;color:var(--muted);margin-bottom:10px; }
 .contact-detail svg { color:var(--gold); }
 .contact-form-box { background:#fff;padding:36px;border:1px solid var(--border); }
 .contact-form-box h3 { font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:300;margin-bottom:22px; }
+/* Contact's form and the story pages' buttons: nothing under 16px (Andy, 11-17). Kept to these pages:
+   .fld / .btn-p are shared with the checkout, which has its own group. */
+.contact-form-box .fld label, .contact-form-box .fld input, .contact-form-box .fld textarea, .contact-form-box .warn-msg,
+.contact-form-box .btn-p, .placeholder-body .btn-p { font-size:16px; }
 
 /* ── WELCOME POPUP ── */
 .welcome-modal { background:#fff;max-width:660px;width:100%;overflow:hidden;animation:su .3s cubic-bezier(.25,.46,.45,.94);position:relative;display:grid;grid-template-columns:230px 1fr; }

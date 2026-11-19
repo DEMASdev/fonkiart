@@ -32,3 +32,29 @@ test("the admin (not Orders): no inline font size under 16px", () => {
     assert.deepEqual(smallSizes(read(`src/admin/${f}.jsx`)), [], `src/admin/${f}.jsx: font sizes under 16px`);
   }
 });
+
+// Group 5: the pages no earlier group reached.
+test("the collectors' rooms, Contact and the error page: no inline font size under 16px", () => {
+  for (const f of ["pages/CollectorsRoomPage", "pages/ExclusiveCollectorsPage", "pages/ContactPage", "components/ErrorBoundary"]) {
+    assert.deepEqual(smallSizes(read(`src/${f}.jsx`)), [], `src/${f}.jsx: font sizes under 16px`);
+  }
+});
+
+test("About, Children, Partners, Auctions, Special Orders and Contact: their text rules are 16px or more", () => {
+  for (const sel of [".placeholder-body p", ".contact-info p", ".contact-detail"]) {
+    const r = rule(sel);
+    assert.ok(r, `${sel} is in src/index.css`);
+    const px = Number((r.match(/font-size:(\d+(?:\.\d+)?)px/) || [])[1]);
+    assert.ok(px >= 16, `${sel}: ${px}px`);
+  }
+  assert.match(css, /\.contact-form-box \.fld label,[^{]*\.placeholder-body \.btn-p \{ font-size:16px; \}/, "Contact's form and the story pages' buttons at 16px");
+});
+
+test("the collectors' rooms show money in Cormorant Garamond 600 with lining figures", () => {
+  for (const f of ["CollectorsRoomPage", "ExclusiveCollectorsPage"]) {
+    const code = read(`src/pages/${f}.jsx`);
+    const prices = code.split("\n").filter(l => /toLocaleString\(\)/.test(l) && /\$\$?\{|\$\{Number/.test(l));
+    assert.ok(prices.length > 0, `${f}: its prices are found`);
+    for (const l of prices) assert.match(l, /fontFamily:"'Cormorant Garamond',serif", fontSize:\d+, fontWeight:600, fontVariantNumeric:"lining-nums"/, `${f}: ${l.trim().slice(0, 90)}`);
+  }
+});
