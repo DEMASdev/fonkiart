@@ -8,6 +8,12 @@
 // exactly as long as the cart does. Dropped once the order is paid (by card or another way), or
 // once the server no longer knows it.
 const KEY = "fonkiart-card-order";
+
+// The checkout's words when the card form can't open inside fonkiart.com (Stripe.js didn't load,
+// the server can't offer the form, or Stripe.js refused it): nothing saved, nothing charged. The
+// server's copy is api/_lib/cartCheckout.js CARD_FORM_DOWN, which it answers (409) BEFORE saving
+// anything; tests/checkout-flow.test.js checks the two agree.
+export const CARD_FORM_DOWN = "The secure card form couldn't open right now. Nothing was charged. Please try again, or choose another way to pay.";
 const REF = /^FA-\d{1,9}$/;
 const SESSION = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 const clean = (title) => String(title ?? "").trim();
@@ -59,7 +65,8 @@ export const cardOrderBody = (order, items) => ({
 });
 
 // The way back from Stripe (App.jsx): ?cart=FA-1752&card=cs_... once paid, or &card=cancelled
-// from Stripe's own page. Anything else is not a way back from Stripe: null.
+// from Stripe's own page (only pages made there before the card form opened inside fonkiart.com:
+// no new one is ever made). Anything else is not a way back from Stripe: null.
 export function readCardReturn(search) {
   const q = new URLSearchParams(search || "");
   const ref = q.get("cart") || "", card = q.get("card") || "";

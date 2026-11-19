@@ -31,12 +31,13 @@ export const cardReady = () => /^(sk|rk)_(live|test)_\S+$/.test(key());
 // fonkiart.com (cartCheckout.js). Vercel variable STRIPE_PUBLISHABLE_KEY (pk_live_...).
 // Public by design: Stripe.js hands it to every browser. It still lives in Vercel, not in git.
 // It must be the same mode as the secret key (both live or both test), or Stripe.js can't
-// open the page. With none, or a mismatch, the Cart sends the buyer to Stripe's own page.
+// open the page. With none, a bad one or a mismatch, the Cart's card payment doesn't start and
+// nothing is saved (cartCheckout.js): the buyer is never sent to Stripe's own page instead.
 export function publishableKey() {
   const { pk, mode, why } = pkCheck();
   if (!mode || !cardReady()) return null;
   if (!why) return pk;
-  console.warn(`stripe: STRIPE_PUBLISHABLE_KEY is a ${mode} key and STRIPE_SECRET_KEY is not; the Cart uses Stripe's own page`);
+  console.warn(`stripe: STRIPE_PUBLISHABLE_KEY is a ${mode} key and STRIPE_SECRET_KEY is not; the Cart's card form can't open`);
   return null;
 }
 
@@ -146,17 +147,18 @@ export async function createCheckout({ order, invNum, site, image }) {
   return session.url;
 }
 
-// The payment page for a Cart order (cartCheckout.js): one line per piece, each with its name,
-// its picture and the price the SERVER found for it. The page carries the order's rows
-// (metadata order_ids) and its reference (cart_ref), so the return and Stripe's own message
-// find the order from Stripe's answer, never from the browser.
-//  - embedded: the card form opens inside fonkiart.com (Stripe.js; ui_mode "embedded"), and
-//    Stripe sends the buyer to return_url once paid. Returns { id, clientSecret }.
-//  - otherwise Stripe's own page, reached by a same-tab redirect. Returns { id, url }.
-// id: the page's own id, kept by the checkout so paying again re-opens THIS order (cart-again).
+// The card form for a Cart order (cartCheckout.js), INSIDE fonkiart.com (Stripe.js; ui_mode
+// "embedded"), and never Stripe's own page (Andy, 2026-11-18: "i don't want to be making the user
+// jump to stripe then back"). One line per piece, each with its name, its picture and the price
+// the SERVER found for it. The page carries the order's rows (metadata order_ids) and its
+// reference (cart_ref), so the return and Stripe's own message find the order from Stripe's
+// answer, never from the browser. Once paid, Stripe sends the buyer to return_url, on the shop
+// address they paid from (site).
+// Returns { id, clientSecret }: id, kept by the checkout so paying again re-opens THIS order
+// (cart-again); clientSecret, for Stripe.js to open the form.
 // lines: [{ title, amount, image }]. A picture never stops a payment: if Stripe refuses the
 // page with pictures (a 400), it is asked for again without them.
-export async function createCartCheckout({ ref, ids, lines, email, site, embedded }) {
+export async function createCartCheckout({ ref, ids, lines, email, site }) {
   const cents = lines.map(l => toCents(l.amount));
   if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
   if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
@@ -175,10 +177,9 @@ export async function createCartCheckout({ ref, ids, lines, email, site, embedde
     metadata: tags,
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
+    ui_mode: "embedded",
     // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the buyer back.
-    ...(embedded
-      ? { ui_mode: "embedded", return_url: `${back}{CHECKOUT_SESSION_ID}` }
-      : { success_url: `${back}{CHECKOUT_SESSION_ID}`, cancel_url: `${back}cancelled` }),
+    return_url: `${back}{CHECKOUT_SESSION_ID}`,
   });
   let session;
   try {
@@ -189,12 +190,8 @@ export async function createCartCheckout({ ref, ids, lines, email, site, embedde
     session = await stripe("/checkout/sessions", page(false));
   }
   if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
-  if (embedded) {
-    if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
-    return { id: session.id, clientSecret: session.client_secret };
-  }
-  if (!session.url) throw new StripeError("Stripe sent no payment page", "no-url");
-  return { id: session.id, url: session.url };
+  if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
+  return { id: session.id, clientSecret: session.client_secret };
 }
 
 // Closes a payment page nobody has paid, so it can never take money (Stripe's "expire"). The

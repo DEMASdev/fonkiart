@@ -8,10 +8,14 @@
 //  2. Card payments OFF: the card button saves NOTHING and says so on the page. A Payment Link
 //     in Settings or on a print is not used any more. Andy's standing rule: no browser pop-ups
 //     (alert/confirm/prompt).
-//  3. Card payments ON (the server and Stripe, api/_lib/cartCheckout.js): ONE order per cart
-//     however the buyer retries (a double tap, closing the card form or the whole checkout,
-//     coming back from Stripe's page without paying, a card page that couldn't open). The cart
-//     empties only once the server says paid, and the thank-you shows the pieces first.
+//  3. Card payments ON (the server and Stripe, api/_lib/cartCheckout.js): the card form opens
+//     INSIDE fonkiart.com or not at all, and this tab never leaves (Andy, 2026-11-18: "i don't
+//     want to be making the user jump to stripe then back"): Stripe.js first, and if it can't
+//     load, or the server can't offer the form, nothing is saved or emailed and a calm word says
+//     so. ONE order per cart however the buyer retries (a double tap, closing the card form or
+//     the whole checkout, coming back from Stripe's page without paying, a card form that
+//     couldn't open). The cart empties only once the server says paid, and the thank-you shows
+//     the pieces first.
 // Nothing is saved, emailed or charged: the server (storeCall), Stripe.js and the browser
 // (storage, the address bar, window.open) are stand-ins that only record what they were asked.
 //
@@ -26,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { transformWithOxc } from "vite";
 import * as cartOrder from "../src/lib/cartOrder.js";
 import * as invoiceView from "../src/lib/invoiceView.js";
+import { CARD_FORM_DOWN } from "../api/_lib/cartCheckout.js";
 
 // ── a small stand-in for React ──────────────────────────────
 const FRAGMENT = Symbol("Fragment");
@@ -162,22 +167,27 @@ globalThis.localStorage = {
 const kept = () => cartOrder.readCardOrder();
 
 // The shop's server, as api/_lib/cartCheckout.js answers: the card ops save, re-open and report on
-// ONE order, priced by the shop. world: what the test can turn on or off.
+// ONE order, priced by the shop, and only ever as the card form inside the page: with no public
+// key (pk) or no Stripe.js in the browser, they refuse BEFORE saving anything. world: what the
+// test can turn on or off. stripeJs: Stripe.js loads (true), doesn't (false), or a promise still
+// loading.
 let server, popups, opened, assigned;
-function freshWorld({ orderFails = false, cardOn = true, pk = false } = {}) {
+const everLeft = []; // every time ANY test's checkout tried to send this tab away: never
+function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
   popups = []; opened = []; assigned = [];
   storage.clear();
   delete window.Stripe;
   const calls = [];
-  const world = { cardOn, pk, stripeJs: true, stripeDown: false, orders: [], pages: new Map(), emails: 0, hold: null, again: null, orderState: null, paidAnswers: [] };
+  const world = { cardOn, pk, stripeJs: true, stripeDown: false, orders: [], pages: new Map(), emails: 0, hold: null, again: null, cardAnswer: null, orderState: null, paidAnswers: [] };
   let made = 0;
   const failed = (status, message) => Object.assign(new Error(message), { status });
   const view = (o) => ({ ref: o.ref, ids: o.ids, lines: o.lines, total: o.total });
-  const newPage = (o, embedded) => {
+  const newPage = (o) => {
     const id = page(++made);
     world.pages.set(id, { id, status: "open", ref: o.ref });
-    return { session: id, ...(embedded === true && world.pk ? { clientSecret: `${id}_secret_FAKE`, publishableKey: "pk_test_FAKE" } : { url: `https://checkout.stripe.example/c/pay/${id}` }) };
+    return { session: id, clientSecret: `${id}_secret_FAKE`, publishableKey: "pk_test_FAKE" };
   };
+  const noForm = (p) => p.embedded !== true || !world.pk;
   // The saved order the browser names: its reference, rows and email, and the cart's own titles.
   const named = (p) => {
     const o = world.orders.find(x => x.ref === p.ref && JSON.stringify(x.ids) === JSON.stringify(p.ids) && x.email === p.email
@@ -196,22 +206,25 @@ function freshWorld({ orderFails = false, cardOn = true, pk = false } = {}) {
       if (op === "order") { if (orderFails) throw new Error("Store 500"); world.emails += 2; return { ok: true }; }
       if (op === "cart-card") {
         if (!world.cardOn) throw failed(409, CARD_SOON);
+        if (noForm(payload)) throw failed(409, CARD_FORM_DOWN);
         if (orderFails) throw new Error("Store 500");
         const lines = payload.items.map(i => ({ title: i.title, amount: PRICES[i.title] }));
         const o = { ref: "FA-1739", ids: lines.map((_, n) => 5001 + n), email: payload.customer.email.trim(), lines, total: lines.reduce((sum, l) => sum + l.amount, 0), status: "pending" };
         world.orders.push(o); world.emails += 2;
+        if (world.cardAnswer) return world.cardAnswer(o);
         if (world.stripeDown) return { ...view(o), cardError: SAVED_BUT };
-        return { ...view(o), ...newPage(o, payload.embedded) };
+        return { ...view(o), ...newPage(o) };
       }
       if (op === "cart-again") {
         if (!world.cardOn) throw failed(409, CARD_SOON);
         const o = named(payload);
         if (world.again) return world.again(o);
         if (o.status === "paid") return { paid: true, ...view(o), name: "Jane" };
+        if (noForm(payload)) throw failed(409, CARD_FORM_DOWN);
         const last = world.pages.get(payload.session);
         if (last?.status === "open") last.status = "expired";
         if (world.stripeDown) throw failed(502, NOT_NOW);
-        return { ...view(o), ...newPage(o, payload.embedded) };
+        return { ...view(o), ...newPage(o) };
       }
       if (op === "cart-order") {
         if (world.orderState === "down") throw failed(502, NOT_NOW);
@@ -241,9 +254,9 @@ function savedEarlier(cart) {
 const savedBody = (o, session = page(0)) => ({ ref: o.ref, ids: o.ids, email: o.email, titles: TITLES, session });
 
 globalThis.window = {
-  open: (url, target) => { opened.push({ url, target }); return null; },
-  // This tab going to Stripe's own page, and what the browser had kept at that moment.
-  location: { origin: "https://www.fonkiart.com", assign: (url) => { assigned.push({ url, session: kept()?.session }); } },
+  open: (url, target) => { opened.push({ url, target }); everLeft.push(url); return null; },
+  // This tab going anywhere (to Stripe's own page, say), and what the browser had kept then.
+  location: { origin: "https://www.fonkiart.com", assign: (url) => { assigned.push({ url, session: kept()?.session }); everLeft.push(url); } },
 };
 for (const name of ["alert", "confirm", "prompt"]) globalThis[name] = (message) => { popups.push({ name, message }); };
 
@@ -506,28 +519,82 @@ for (const [what, cart, settings] of [
   });
 }
 
-test("card, Stripe's own page (until the publishable key is set): ONE order, its page kept BEFORE leaving, then Stripe's page in this tab; the cart stays full", async () => {
-  freshWorld({ pk: false });
-  const { root, log } = openShop([PRINT, PRINT2]);
-  click(button(root, "Checkout →")); await settle();
-  await fillIn(root, "Credit Card");
-  assert.match(screen(root), /Pay for 2 items \(\$1,231\) securely by card, through Stripe\./);
-  click(button(root, "Pay Securely with Card →")); await settle();
+// Andy's own test, 2026-11-18: the shop's public key was malformed, and the Cart sent him to
+// Stripe's page. Now he stays, nothing is saved, and every other way to pay is still there.
+test("NO JUMP: the server can't offer the card form (its public key missing or malformed): nothing saved or emailed, a calm word in place, Try Again and another way to pay", async () => {
+  await quiet(async () => {
+    freshWorld({ pk: false });
+    const stripe = fakeStripeJs();
+    const { root, log } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    await fillIn(root, "Credit Card");
+    assert.match(screen(root), /Pay for 2 items \(\$1,231\) securely by card, through Stripe\./);
+    click(button(root, "Pay Securely with Card →")); await settle();
 
-  const [asked] = server.asked("cart-card");
-  assert.deepEqual([asked.embedded, asked.site, asked.orderRef], [true, "https://www.fonkiart.com", "FA-1739"], "Stripe.js was ready; the server says no form yet; this address to come back to");
-  assert.deepEqual(assigned, [{ url: `https://checkout.stripe.example/c/pay/${page(1)}`, session: page(1) }], "the new page was kept before the tab left");
-  assert.deepEqual(kept(), { ref: "FA-1739", ids: [5001, 5002], email: "jane@example.com", lines: [{ title: "Test Print Z", amount: 1000 }, { title: "Test Print Y", amount: 120 }], total: 1120, session: page(1) });
-  assert.match(screen(root), /Taking you to Stripe's secure page… Open it here/);
-  const link = only(root, "link to Stripe's page", n => n.type === "a");
-  assert.equal(link.props.href, assigned[0].url);
-  assert.equal(log.cart.length, 2, "the cart empties only once the payment is in");
-  assert.doesNotMatch(screen(root), /Thank you/);
-  assert.deepEqual([server.world.orders.length, server.world.emails, popups, opened], [1, 2, [], []]);
+    const [asked] = server.asked("cart-card");
+    assert.deepEqual([asked.embedded, asked.site, asked.orderRef], [true, "https://www.fonkiart.com", "FA-1739"], "Stripe.js was ready, so the server was asked");
+    assert.deepEqual([server.world.orders, server.world.emails], [[], 0], "no order saved, no email");
+    assert.equal(kept(), null, "nothing kept");
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN], "said calmly, in place");
+    assert.deepEqual(alerts(root), [], "not an alarm");
+    assert.deepEqual(buttons(root), ["✕", "← Back", "Try Again", "Choose Another Way to Pay"]);
+    assert.deepEqual([assigned, opened, stripe], [[], [], []], "this tab never left, and no form was made");
+    assert.equal(log.cart.length, 2, "the cart is untouched");
+    assert.doesNotMatch(screen(root), /Thank you|Stripe's secure page|Stripe's own/);
+
+    // Another way to pay: the details are still there, and Zelle saves ONE order, as always.
+    click(button(root, "Choose Another Way to Pay")); await settle();
+    assert.deepEqual(statuses(root), [], "the word goes with it");
+    assert.equal(field(root, "email").props.value, "jane@example.com", "nothing to type again");
+    await choose(root, "Zelle");
+    click(button(root, "✓ I've Sent the Payment")); await settle();
+    assert.deepEqual([server.orders().length, server.world.emails], [1, 2]);
+    assert.match(screen(root), /Thank you!/);
+    assert.deepEqual([assigned, opened, popups], [[], [], []]);
+  });
 });
 
-test("card: a double tap makes ONE call, and the button waits (disabled) until the server answers", async () => {
+test("NO JUMP: even an answer naming Stripe's own page (an older server) is never followed: the order kept, a calm word, Try Again", async () => {
+  await quiet(async () => {
+    freshWorld();
+    server.world.cardAnswer = (o) => ({ ...server.view(o), session: page(9), url: `https://checkout.stripe.example/c/pay/${page(9)}` });
+    const { root, log } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    await fillIn(root, "Credit Card");
+    click(button(root, "Pay Securely with Card →")); await settle();
+    assert.deepEqual([assigned, opened], [[], []], "this tab stays on fonkiart.com");
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN]);
+    assert.equal(kept().session, page(9), "the saved order, kept to pay again in the form");
+    assert.deepEqual(buttons(root), ["✕", "← Back", "Try Again", "Choose Another Way to Pay"]);
+    assert.equal(log.cart.length, 2);
+  });
+});
+
+test("NO JUMP: the server can't offer the form, then can (the key fixed): Try Again saves the order and opens the form in place", async () => {
+  await quiet(async () => {
+    freshWorld({ pk: false });
+    const stripe = fakeStripeJs();
+    const { root } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    await fillIn(root, "Credit Card");
+    click(button(root, "Pay Securely with Card →")); await settle();
+    click(button(root, "Try Again")); await settle();
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN], "still not: still nothing saved");
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length], [2, 0]);
+
+    server.world.pk = true;
+    click(button(root, "Try Again")); await settle();
+    assert.deepEqual(stripe, [{ init: `${page(1)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(1) }, { mount: "string" }], "kept, then made, then put in its box");
+    assert.match(screen(root), /Your order FA-1739/);
+    assert.deepEqual(statuses(root), [], "the calm word is gone, and the form is in");
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails], [3, 1, 2]);
+    assert.deepEqual(assigned, []);
+  });
+});
+
+test("card: a double tap makes ONE call; until the form is there the buyer sees 'Opening the secure card form…', with nothing to tap twice", async () => {
   freshWorld();
+  const stripe = fakeStripeJs();
   const { root } = openShop([PRINT, PRINT2]);
   click(button(root, "Checkout →")); await settle();
   await fillIn(root, "Credit Card");
@@ -537,15 +604,33 @@ test("card: a double tap makes ONE call, and the button waits (disabled) until t
   click(pay); click(pay); // the same button twice, before the page can draw again
   await settle();
   assert.equal(server.asked("cart-card").length, 1);
-  assert.equal(button(root, "Saving…").props.disabled, true);
+  assert.deepEqual(statuses(root), ["Opening the secure card form…"]);
+  assert.deepEqual(buttons(root), ["✕"], "no pay button to tap again, and no Back half-way");
   answer(); server.world.hold = null; await settle();
-  assert.equal(assigned.length, 1);
-  assert.deepEqual([server.world.orders.length, server.world.emails], [1, 2]);
+  assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"], "the form, in place");
+  assert.deepEqual([server.world.orders.length, server.world.emails, assigned], [1, 2, []]);
+});
+
+test("card: Stripe.js comes FIRST: while it loads nothing is asked of the server (nothing saved), and the buyer sees 'Opening the secure card form…'", async () => {
+  freshWorld();
+  const stripe = fakeStripeJs();
+  let loaded;
+  const { root } = openShop([PRINT, PRINT2]);
+  click(button(root, "Checkout →")); await settle();
+  await fillIn(root, "Credit Card");
+  server.world.stripeJs = new Promise(r => { loaded = r; });
+  click(button(root, "Pay Securely with Card →")); await settle();
+  assert.deepEqual(statuses(root), ["Opening the secure card form…"]);
+  assert.deepEqual(server.asked("cart-card"), [], "nothing saved while Stripe.js loads");
+  loaded(true); await settle();
+  assert.equal(server.asked("cart-card").length, 1);
+  assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"]);
+  assert.deepEqual(assigned, []);
 });
 
 test("card form INSIDE the page: the pieces first, then Stripe's form; leaving it or the checkout destroys it, and paying again re-opens the SAME order, naming its last page", async () => {
   await quiet(async () => {
-    freshWorld({ pk: true });
+    freshWorld();
     const stripe = fakeStripeJs();
     const { root, log } = openShop([PRINT, PRINT2]);
     click(button(root, "Checkout →")); await settle();
@@ -588,7 +673,7 @@ test("card form INSIDE the page: the pieces first, then Stripe's form; leaving i
   });
 });
 
-test("card page couldn't open after the order was saved: kept, a calm word (no alarm), 'Try Card Again' re-opens THAT order, never a second one", async () => {
+test("card form couldn't be made after the order was saved: kept, a calm word (no alarm), 'Try Again' re-opens THAT order, never a second one", async () => {
   await quiet(async () => {
     freshWorld();
     server.world.stripeDown = true;
@@ -600,18 +685,20 @@ test("card page couldn't open after the order was saved: kept, a calm word (no a
     assert.deepEqual(statuses(root), [SAVED_BUT]);
     assert.deepEqual(alerts(root), [], "not said as an error");
     assert.equal(kept().session, null, "kept, with no page to name yet");
-    assert.ok(button(root, "Try Card Again →"));
+    assert.ok(button(root, "Try Again"));
     assert.ok(button(root, "Choose Another Way to Pay"));
 
-    click(button(root, "Try Card Again →")); await settle(); // Stripe still away
+    click(button(root, "Try Again")); await settle(); // Stripe still away
     assert.equal("session" in server.asked("cart-again").at(-1), false);
     assert.deepEqual(statuses(root), [NOT_NOW]);
-    assert.ok(button(root, "Try Card Again →"));
+    assert.ok(button(root, "Try Again"));
 
     server.world.stripeDown = false;
-    click(button(root, "Try Card Again →")); await settle();
-    assert.deepEqual(assigned, [{ url: `https://checkout.stripe.example/c/pay/${page(1)}`, session: page(1) }]);
+    const stripe = fakeStripeJs();
+    click(button(root, "Try Again")); await settle();
+    assert.deepEqual(stripe, [{ init: `${page(1)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(1) }, { mount: "string" }], "the form, in place");
     assert.deepEqual([server.asked("cart-card").length, server.asked("cart-again").length, server.world.orders.length, server.world.emails], [1, 2, 1, 2]);
+    assert.deepEqual(assigned, []);
     assert.equal(log.cart.length, 2);
   });
 });
@@ -639,6 +726,7 @@ test("card page couldn't open: 'Choose Another Way to Pay' pays THAT order by Ze
 
 test("checkout opened again with a saved order: the server is asked once (cart-order), and Continue waits for its answer", async () => {
   freshWorld();
+  const stripe = fakeStripeJs();
   const o = savedEarlier([PRINT, PRINT2]);
   let answer;
   server.world.hold = new Promise(r => { answer = r; });
@@ -654,6 +742,7 @@ test("checkout opened again with a saved order: the server is asked once (cart-o
   assert.equal(server.asked("cart-again")[0].session, page(0), "the last page, named");
   assert.equal(server.world.pages.get(page(0)).status, "expired");
   assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails], [0, 1, 2]);
+  assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"]);
 });
 
 test("checkout opened again: the saved order is paid by now: the thank-you, pieces first, and the cart empties", async () => {
@@ -693,13 +782,15 @@ test("checkout opened again: the server out of reach: the saved order stands, an
     freshWorld();
     savedEarlier([PRINT, PRINT2]);
     server.world.orderState = "down";
+    const stripe = fakeStripeJs();
     const { root } = openShop([PRINT, PRINT2]);
     click(button(root, "Checkout →")); await settle();
     assert.match(screen(root), /Your order FA-1739 is saved/);
     server.world.orderState = null;
     await choose(root, "Credit Card");
     click(button(root, "Pay Securely with Card →")); await settle();
-    assert.deepEqual([server.asked("cart-again").length, server.asked("cart-card").length, assigned.length], [1, 0, 1]);
+    assert.deepEqual([server.asked("cart-again").length, server.asked("cart-card").length, assigned.length], [1, 0, 0]);
+    assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"]);
   });
 });
 
@@ -740,36 +831,56 @@ test("paying again: paid in the meantime: the thank-you and the cart empties; go
   });
 });
 
-test("the card form couldn't open inside the page: a calm word, then Stripe's own page for the SAME order", async () => {
+test("the card form couldn't open inside the page (Stripe.js refused it): a calm word in place; Try Again re-opens the SAME order's form, never Stripe's page", async () => {
   await quiet(async () => {
-    freshWorld({ pk: true });
+    freshWorld();
     fakeStripeJs({ refuse: true });
     const { root } = openShop([PRINT, PRINT2]);
     click(button(root, "Checkout →")); await settle();
     await fillIn(root, "Credit Card");
     click(button(root, "Pay Securely with Card →")); await settle();
-    assert.deepEqual(statuses(root), ["The card form couldn't open here. You can pay on Stripe's own secure page instead."]);
-    assert.ok(button(root, "Choose Another Way to Pay"));
-    click(button(root, "Pay on Stripe's Secure Page →")); await settle();
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN]);
+    assert.deepEqual(alerts(root), []);
+    assert.deepEqual(buttons(root), ["✕", "← Back", "Try Again", "Choose Another Way to Pay"]);
+    assert.equal(kept().session, page(1), "the order the server saved, kept to pay again");
+
+    const stripe = fakeStripeJs(); // Stripe.js works again
+    click(button(root, "Try Again")); await settle();
     const again = server.asked("cart-again").at(-1);
-    assert.deepEqual([again.embedded, again.session], [false, page(1)]);
-    assert.deepEqual(assigned, [{ url: `https://checkout.stripe.example/c/pay/${page(2)}`, session: page(2) }]);
-    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length], [1, 1]);
+    assert.deepEqual([again.embedded, again.session], [true, page(1)]);
+    assert.deepEqual(stripe, [{ init: `${page(2)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(2) }, { mount: "string" }]);
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, assigned], [1, 1, []]);
   });
 });
 
-test("Stripe.js didn't load (a blocker, no network): the order goes to Stripe's own page", async () => {
-  freshWorld({ pk: true });
-  server.world.stripeJs = false;
-  const { root } = openShop([PRINT, PRINT2]);
-  click(button(root, "Checkout →")); await settle();
-  await fillIn(root, "Credit Card");
-  click(button(root, "Pay Securely with Card →")); await settle();
-  assert.equal(server.asked("cart-card")[0].embedded, false);
-  assert.equal(assigned.length, 1);
+test("NO JUMP: Stripe.js didn't load (a blocker, no network, too slow): the server is never asked, so NOTHING is saved or emailed; a calm word in place; Try Again loads it again", async () => {
+  await quiet(async () => {
+    freshWorld();
+    server.world.stripeJs = false;
+    const { root, log } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    await fillIn(root, "Credit Card");
+    click(button(root, "Pay Securely with Card →")); await settle();
+    assert.deepEqual(server.calls.map(c => c.op).filter(op => op !== "next-ref"), [], "the server was never asked: nothing saved, nothing emailed");
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN]);
+    assert.deepEqual(alerts(root), []);
+    assert.deepEqual(buttons(root), ["✕", "← Back", "Try Again", "Choose Another Way to Pay"]);
+    assert.deepEqual([assigned, opened, kept()], [[], [], null]);
+
+    click(button(root, "Try Again")); await settle(); // still blocked
+    assert.deepEqual(statuses(root), [CARD_FORM_DOWN]);
+    assert.deepEqual(server.asked("cart-card"), []);
+
+    server.world.stripeJs = true; // it loads this time
+    const stripe = fakeStripeJs();
+    click(button(root, "Try Again")); await settle();
+    assert.equal(server.asked("cart-card").length, 1);
+    assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"]);
+    assert.deepEqual([server.world.orders.length, server.world.emails, assigned, log.cart.length], [1, 2, [], 2]);
+  });
 });
 
-test("back from Stripe's page without paying: the SAME saved order (asked with cart-order), a calm word, the cart all there; Checkout re-opens that order", async () => {
+test("back from Stripe's own page without paying (an order started there before): the SAME saved order (asked with cart-order), a calm word, the cart all there; Checkout re-opens that order in the form", async () => {
   freshWorld();
   const o = savedEarlier([PRINT, PRINT2]);
   const { root, log } = openShop([PRINT, PRINT2], { cancelledRef: "FA-1739" });
@@ -778,11 +889,13 @@ test("back from Stripe's page without paying: the SAME saved order (asked with c
   assert.deepEqual(statuses(root), ["No payment was takenYour order FA-1739 is saved, and your cart is just as you left it. Tap Checkout to pay by card again, or with Zelle, Venmo or Cash App."]);
   assert.match(screen(root), /Your Cart \(2\)/);
   assert.deepEqual(alerts(root), []);
+  const stripe = fakeStripeJs();
   click(button(root, "Checkout →")); await settle();
   await choose(root, "Credit Card");
   click(button(root, "Pay Securely with Card →")); await settle();
   assert.equal(server.asked("cart-again").at(-1).session, page(0));
-  assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails, assigned.length], [0, 1, 2, 1]);
+  assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails, assigned.length], [0, 1, 2, 0]);
+  assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"], "paid by card again: the form, in place");
   assert.equal(log.cart.length, 2);
   assert.deepEqual(popups, []);
 });
@@ -905,4 +1018,23 @@ test("no browser pop-ups in the checkout, the Cart page or the card payment", ()
     assert.doesNotMatch(readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8"), POPUP, file);
   }
   assert.match(`else alert("${CARD_SOON}");`, POPUP, "control: the check sees a pop-up when there is one");
+});
+
+test("NO JUMP: nothing in the checkout, the Cart page or the card form can send this tab anywhere", () => {
+  const LEAVES = /location\.(assign|replace)\s*\(|location\.href\s*=(?!=)|\blocation\s*=(?!=)|window\.open\s*\(/;
+  for (const file of ["components/CheckoutModal.jsx", "pages/CartPage.jsx", "components/CardCheckout.jsx", "components/PayArt.jsx",
+    "components/PaidThanks.jsx", "lib/cartOrder.js", "lib/stripeJs.js"]) {
+    assert.doesNotMatch(readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8"), LEAVES, file);
+  }
+  for (const jump of ["else if (order.url) { setLeaving(order.url); window.location.assign(order.url); }", "window.location.href = url;", "location.replace(url)", "window.open(url, \"_self\")"]) {
+    assert.match(jump, LEAVES, `control: the check sees a jump when there is one: ${jump}`);
+  }
+  assert.doesNotMatch("const site = window.location.origin;", LEAVES, "control: reading the address is not leaving it");
+  assert.equal(CARD_FORM_DOWN, cartOrder.CARD_FORM_DOWN, "the browser and the server say the same calm words");
+});
+
+// Defined last, so it runs last: across every test above, the checkout never once tried to send
+// this tab (or a new one) anywhere.
+test("NO JUMP: across every flow above, the tab never left fonkiart.com", () => {
+  assert.deepEqual(everLeft, []);
 });

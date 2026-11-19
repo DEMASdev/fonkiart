@@ -2,7 +2,7 @@ import { useState, useEffect, useEffectEvent, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { stripeJsReady } from "../lib/stripeJs";
-import { readCardOrder, saveCardOrder, dropCardOrder, matchesCart, cardOrderBody } from "../lib/cartOrder";
+import { readCardOrder, saveCardOrder, dropCardOrder, matchesCart, cardOrderBody, CARD_FORM_DOWN } from "../lib/cartOrder";
 import CardCheckout from "./CardCheckout";
 import PaidThanks from "./PaidThanks";
 import Pic from "./Pic";
@@ -10,7 +10,7 @@ import Pic from "./Pic";
 // onSuccess: an order placed to be paid by Zelle, Venmo or Cash App (the Cart page empties the
 // cart then). onPaid(titles): a card payment is in (the Cart page empties those pieces). Card
 // payments go through the server and Stripe (api/_lib/cartCheckout.js): ONE order per cart,
-// however the buyer retries.
+// however the buyer retries, and the card form opens inside fonkiart.com or not at all.
 export default function CheckoutModal({ items, settings, onClose, onSuccess, onPaid, fullPage }) {
   const venmoHandle   = settings.venmoHandle   || "@fonkiart";
   const cashAppHandle = settings.cashAppHandle || "$fonkiart";
@@ -30,11 +30,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [savedAtOpen] = useState(() => saved && cardOrderBody(saved, items));
   const [checked, setChecked] = useState(!savedAtOpen); // the server has said what became of it
   const [pay, setPay] = useState(null);                // the card form, open inside the page
-  const [formFailed, setFormFailed] = useState(false); // ...which couldn't open: Stripe's own page instead
-  const [leaving, setLeaving] = useState("");          // Stripe's own page, opening in this tab
   const [paidView, setPaidView] = useState(null);      // the card payment is in
-  const [calm, setCalm] = useState("");                // the order is safe; the card just didn't open
-  const [retry, setRetry] = useState(false);           // ...so the button says "Try Card Again"
+  const [calm, setCalm] = useState("");                // the card form didn't open: said calmly
+  const [retry, setRetry] = useState(false);           // ...with "Try Again" and another way to pay
   // Set the moment a pay button is tapped and cleared once the server has answered, so a double
   // tap counts once and two card calls never race (each would close the page before and open
   // its own, leaving one open that nobody pays).
@@ -131,39 +129,49 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     setSaved(null); setPay(null); setRetry(false); setCalm(""); setStep(1);
   };
 
-  // "Pay Securely with Card". ONE order per cart, however often it is tapped: a new order is saved
-  // (cart-card) only while this cart has none waiting; after that every card attempt re-opens
-  // payment for that same order (cart-again), naming the last payment page Stripe made for it.
-  // Card payments off: the server says so and saves nothing. The cart is NOT emptied here, only
-  // once the payment is in. site: this address, so Stripe brings the buyer back to the cart they
-  // are paying from (fonkiart.com and www.fonkiart.com each keep their own).
-  // hosted: Stripe's own page, because the card form couldn't open inside this one.
-  const startCard = async (hosted) => {
+  // "Pay Securely with Card". The card form opens INSIDE fonkiart.com, or not at all: the buyer is
+  // never sent to Stripe's own page (Andy, 2026-11-18: "i don't want to be making the user jump to
+  // stripe then back , everything should and can happen in fonkiart.com seamlessly easily  and
+  // intuitively"). So Stripe.js comes FIRST, before anything is saved: if it can't load (a
+  // blocker, no network, 15 s gone: src/lib/stripeJs.js), nothing is saved or emailed, and a calm
+  // word says so, with Try Again and another way to pay. The server refuses the same way, before
+  // saving, whenever it can't offer the form (CARD_FORM_DOWN: no key, or a bad one).
+  // ONE order per cart, however often it is tapped: a new order is saved (cart-card) only while
+  // this cart has none waiting; after that every card attempt re-opens payment for that same order
+  // (cart-again), naming the last payment page Stripe made for it. Card payments off: the server
+  // says so and saves nothing. The cart is NOT emptied here, only once the payment is in.
+  // site: this address, so Stripe brings the buyer back, once paid, to the cart they are paying
+  // from (fonkiart.com and www.fonkiart.com each keep their own).
+  const startCard = async () => {
     if (busy.current) return; // a double tap: the first one is already on its way
     busy.current = true;
-    setSaving(true); setCheckoutError(""); setCalm(""); setFormFailed(false);
+    setSaving(true); setCheckoutError(""); setCalm(""); setRetry(false);
     try {
-      const embedded = hosted ? false : await stripeJsReady();
+      if (!(await stripeJsReady())) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
       const site = window.location.origin;
       const order = saved
-        ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded, site })
-        : await storeCall("cart-card", { ...orderPayload(), embedded, site });
+        ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded: true, site })
+        : await storeCall("cart-card", { ...orderPayload(), embedded: true, site });
       if (order.paid) { paidNow(order); return; }
-      // Kept BEFORE the form opens or the page changes, so the next attempt names this page.
+      // Kept BEFORE the form opens, so the next attempt names this page.
       setSaved(saveCardOrder({
         ref: order.ref, ids: order.ids, email: saved ? saved.email : customer.email.trim(),
         lines: order.lines, total: order.total, session: order.session || saved?.session,
       }));
-      setRetry(!!order.cardError);
-      if (order.cardError) setCalm(order.cardError); // saved; the card can be tried again (cart-again)
-      else if (order.clientSecret) setPay(order);
-      else if (order.url) { setLeaving(order.url); window.location.assign(order.url); }
+      if (order.clientSecret) { setPay(order); return; }
+      // Saved, but no card form to open (Stripe failed as the order was saved): the calm word, and
+      // Try Again re-opens THAT order (cart-again). Whatever the answer, this tab never leaves.
+      setRetry(true);
+      setCalm(order.cardError || CARD_FORM_DOWN);
     } catch (e) {
       console.warn("Card payment:", e);
       if (saved && e.status === 404) {
         // The shop no longer has that order as it was saved: start afresh.
         startAfresh();
         setCheckoutError("We couldn't find your saved order. Please enter your details again.");
+      } else if (e.status === 409 && e.message === CARD_FORM_DOWN) {
+        // The server can't offer the card form here: nothing was saved or sent.
+        setRetry(true); setCalm(e.message);
       } else if (e.status === 409) setCheckoutError(e.message);
       else if (e.status === 502 || saved) {
         // The order is safe; only the card page didn't open.
@@ -175,12 +183,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
       setSaving(false);
     }
   };
-  const handleCard = () => startCard(false);
-  const cardFormFailed = () => {
-    setPay(null); setFormFailed(true);
-    setCalm("The card form couldn't open here. You can pay on Stripe's own secure page instead.");
-  };
-  const otherWay = () => { setStep(1); setCalm(""); setRetry(false); setFormFailed(false); };
+  const handleCard = () => startCard();
+  // Stripe.js wouldn't open the form: the same calm word; Try Again re-opens this order's form.
+  const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
+  const otherWay = () => { setStep(1); setCalm(""); setRetry(false); };
 
   // Opening with a saved card order, the server is asked once what became of it ("cart-order"):
   // paid by now (paid, then the tab closed before coming back): the thank-you, and the cart
@@ -324,7 +330,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
 
         {step === 2 && (
           <>
-            {!pay && <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>}
+            {!pay && !(method === "card" && saving) && <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>}
             {method === "zelle" && (
               <div className="pay-detail">
                 <h4>Send via Zelle</h4>
@@ -372,18 +378,17 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
               <div className="pay-detail">
                 <h4>Secure Credit Card via Stripe</h4>
                 {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                {leaving
-                  ? <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Taking you to Stripe&apos;s secure page… <a href={leaving} style={{ color:"var(--gold)" }}>Open it here</a></p>
-                  : <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Pay for <strong>{itemsLabel}</strong>{amountDue ? ` ($${Number(amountDue).toLocaleString()})` : ""} securely by card, through Stripe.</p>}
+                <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Pay for <strong>{itemsLabel}</strong>{amountDue ? ` ($${Number(amountDue).toLocaleString()})` : ""} securely by card, through Stripe.</p>
               </div>
             )}
             {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="card" && calm && <p className="pay-calm" role="status">{calm}</p>}
-            {method==="card" && !pay && !leaving && !formFailed && <button className="stripe-btn" onClick={handleCard} disabled={saving}>{saving ? (saved ? "Opening…" : "Saving…") : retry ? "Try Card Again →" : "Pay Securely with Card →"}</button>}
-            {method==="card" && !pay && !leaving && formFailed && <button className="stripe-btn" onClick={() => startCard(true)} disabled={saving}>{saving ? "Opening…" : "Pay on Stripe's Secure Page →"}</button>}
-            {method==="card" && !pay && !leaving && (retry || formFailed) && <button type="button" className="tap pay-other" onClick={otherWay} disabled={saving}>Choose Another Way to Pay</button>}
+            {method==="card" && !pay && (saving
+              ? <p className="pay-card-wait" role="status">Opening the secure card form…</p>
+              : <button className="stripe-btn" onClick={handleCard}>{retry ? "Try Again" : "Pay Securely with Card →"}</button>)}
+            {method==="card" && !pay && retry && !saving && <button type="button" className="tap pay-other" onClick={otherWay}>Choose Another Way to Pay</button>}
             {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>
         )}

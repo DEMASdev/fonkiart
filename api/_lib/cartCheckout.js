@@ -3,16 +3,19 @@
 // asked: "can it be imbedded inside fonkiart instead of sending the customer away ?").
 //
 // 1. "cart-card": the buyer taps "Pay Securely with Card". Card payments must be ON (cardReady),
-//    or nothing is saved and the checkout says so. Every piece is priced from the Artworks table,
-//    and the coupon counts only as the server checks it: the amount charged comes from the
-//    shop's own records, NEVER from the browser. A piece that can't be found or priced, or is
-//    already sold, refuses the card payment with a message the buyer can act on, and nothing is
-//    saved. Then the order is saved exactly as for Zelle (opOrder: the rows, the client, the
-//    coupon, both "order received" emails), with the server's prices, and Stripe makes a payment
-//    page for exactly those rows. The card form opens INSIDE fonkiart.com when the account's
-//    publishable key is set (stripe.js publishableKey) and the browser has Stripe.js ready;
-//    otherwise the buyer goes to Stripe's own page in the same tab. Either way Stripe brings the
-//    buyer back to the shop address they paid from (returnSite).
+//    or nothing is saved and the checkout says so. The card form opens INSIDE fonkiart.com or
+//    the card payment doesn't start: the buyer is NEVER sent to Stripe's own page (Andy,
+//    2026-11-18: "i don't want to be making the user jump to stripe then back"). So the browser
+//    must have Stripe.js ready (embedded: true) and the shop's publishable key must be set and
+//    right (stripe.js publishableKey); if not, nothing is saved or emailed, and the checkout says
+//    so calmly (CARD_FORM_DOWN). Every piece is priced from the Artworks table, and the coupon
+//    counts only as the server checks it: the amount charged comes from the shop's own records,
+//    NEVER from the browser. A piece that can't be found or priced, or is already sold, refuses
+//    the card payment with a message the buyer can act on, and nothing is saved. Then the order
+//    is saved exactly as for Zelle (opOrder: the rows, the client, the coupon, both "order
+//    received" emails), with the server's prices, and Stripe makes the card form for exactly
+//    those rows. Once paid, Stripe brings the buyer back to the shop address they paid from
+//    (returnSite).
 // 2. "cart-paid": the buyer is back on fonkiart.com (?cart=FA-...&card=cs_...). The server asks
 //    Stripe about that page itself: paid, for this reference, for the rows' exact cents, in
 //    dollars. Only then do the rows turn Paid by card and the pieces SOLD, and ONE "Payment
@@ -22,18 +25,25 @@
 // 4. ONE order per cart, however the buyer retries (a double tap, closing the card form and
 //    opening it again, coming back from Stripe's page without paying, a card form that couldn't
 //    open). The checkout keeps the saved order (its reference, rows, email and last payment page)
-//    and asks again with it: "cart-again" opens a new payment page for the SAME rows, and
+//    and asks again with it: "cart-again" opens a new card form for the SAME rows, and
 //    "cart-order" says whether that order is paid by now, still open, or closed. Neither saves
 //    an order or sends an "order received" email.
+// 5. Orders started on Stripe's own page before the card form opened inside fonkiart.com come
+//    back the same way (?cart=FA-...&card=cs_... or &card=cancelled) and are paid exactly as
+//    above, by the card form if paid by card again. No new one is ever made.
 
 import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, markSoldForOrder, PAID_STATUSES } from "./artworks.js";
-import { cardReady, createCartCheckout, expireCheckout, getCheckout, isSessionId, publishableKey, StripeError, toCents } from "./stripe.js";
+import { cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, publishableKey, StripeError, toCents } from "./stripe.js";
 import { siteUrl } from "./site.js";
 import { cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
 export const CARD_SOON = "Card payment is being set up. Please use Zelle or contact Fonkiart directly.";
+// ...and when the card form can't open inside fonkiart.com: nothing saved, nothing charged. The
+// browser's copy (src/lib/cartOrder.js) lets the checkout say it calmly, with Try Again and
+// another way to pay; tests/checkout-flow.test.js checks the two agree.
+export const CARD_FORM_DOWN = "The secure card form couldn't open right now. Nothing was charged. Please try again, or choose another way to pay.";
 
 const NOT_PAID = ["pending", "confirmed"]; // as storeOps.js NOT_PAID_STATUSES
 const REF_RE = /^FA-\d{1,9}$/;
@@ -54,8 +64,8 @@ const stripeLater = (op, e) => {
   return new InputError("The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.", 502);
 };
 
-// Where Stripe brings the buyer back: the shop address they are paying from (the checkout sends
-// it). The cart and the saved order live in that browser's own storage, and fonkiart.com and
+// Where Stripe brings the buyer back once paid: the shop address they are paying from (the
+// checkout sends it). The cart and the saved order live in that browser's own storage, and fonkiart.com and
 // www.fonkiart.com both serve the shop without sharing it, so coming back to the other one would
 // show an empty cart. Only the shop's own addresses; anything else gets the usual one (site.js).
 const SHOP_SITES = ["https://fonkiart.com", "https://www.fonkiart.com"];
@@ -89,26 +99,39 @@ export async function priceCart(db, items, discount) {
   return { items: lines, total: lines.reduce((sum, l) => sum + cents(l.amount), 0) / 100 };
 }
 
+// The card form opens INSIDE fonkiart.com, or the card payment doesn't start (Andy: "i don't want
+// to be making the user jump to stripe then back"). Asked BEFORE anything is saved, emailed,
+// closed or made: the browser must have Stripe.js ready (embedded: true), and the shop's
+// publishable key must be set and right. Returns that key. Why not goes in the log, never the key
+// (op "card-setup" tells it too).
+function formKey(op, body) {
+  const key = publishableKey();
+  if (body.embedded === true && key) return key;
+  const why = body.embedded !== true ? "the browser has no Stripe.js ready" : `publishable key: ${cardSetup().why}`;
+  console.warn(`store ${op}: the card form can't open inside fonkiart.com (${why}); nothing saved, nothing sent`);
+  throw new InputError(CARD_FORM_DOWN, 409);
+}
+
 // "Pay Securely with Card". body: the checkout's order, exactly as for Zelle (opOrder), plus
-// embedded: true when the browser has Stripe.js ready to show the form inside the page.
+// embedded: true (the browser has Stripe.js ready to show the form inside the page).
 // saveOrder: opOrder, handed in by the router (storeOps.js) so this file needs nothing from it.
 export async function opCartCard(db, body, mail, saveOrder) {
   if (!cardReady()) throw new InputError(CARD_SOON, 409);
+  const key = formKey("cart-card", body);
   const order = await saveOrder(db, body, mail, { price: (items, discount) => priceCart(db, items, discount) });
   if (!order.saved) throw new InputError("We couldn't save your order.", 500);
-  const key = body.embedded === true ? publishableKey() : null;
   // ids: the saved rows, which the checkout keeps to pay this same order again (cart-again).
   const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total };
   let page;
   try {
-    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: returnSite(body.site), embedded: !!key });
+    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: returnSite(body.site) });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
     // The order is saved and both "order received" emails are out. Not an error for the
     // checkout: it keeps the order, says so, and offers card again (cart-again) or another way.
     return { ...saved, cardError: `Your order ${order.orderRef} is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.` };
   }
-  return { ...saved, session: page.id, ...(key ? { clientSecret: page.clientSecret, publishableKey: key } : { url: page.url }) };
+  return { ...saved, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
 
 // Does Stripe's record say paid, in dollars, for exactly the cents these rows hold?
@@ -221,7 +244,8 @@ async function lastPage(op, sessionId, ref, ids) {
 }
 
 // "Pay by card" again for a Cart order the checkout already saved. It never saves a second order
-// or sends a second "order received" email: it opens a new payment page for the SAME rows.
+// or sends a second "order received" email: it opens a new card form for the SAME rows, inside
+// fonkiart.com, or nothing changes (formKey).
 //  - All Paid already, or the last page was paid after all: the answer is { paid: true, ... },
 //    recorded exactly as on the way back (settleCart: the emails go once).
 //  - Every row must still be Pending, and no piece sold since.
@@ -252,6 +276,7 @@ export async function opCartAgain(db, body, mail) {
   const pageVouches = !!last && last.amount_total === sumCents(rows) && String(last.currency).toLowerCase() === "usd";
   const pricesVouch = rows.every((r, n) => arts[n] && cents(artPrice(arts[n])) === cents(r.amount));
   if (!pageVouches && !pricesVouch) throw new InputError("This order can't be paid by card here. You can still pay it with Zelle, Venmo or Cash App, or contact Fonkiart.", 409);
+  const key = formKey("cart-again", body); // before the page before is closed: no form, no change
 
   if (last?.status === "open") {
     try {
@@ -263,16 +288,15 @@ export async function opCartAgain(db, body, mail) {
       if (last?.status !== "expired") throw stripeLater("cart-again", e);
     }
   }
-  const key = body.embedded === true ? publishableKey() : null;
   const lines = rows.map((r, n) => ({ title: r.item_title, amount: Number(r.amount), image: arts[n] ? cardImage(arts[n].image) : null }));
   let page;
   try {
-    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email, site: returnSite(body.site), embedded: !!key });
+    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email, site: returnSite(body.site) });
   } catch (e) {
     throw stripeLater("cart-again", e);
   }
   const { name: _name, ...view } = cartView(ref, rows);
-  return { ...view, ids, session: page.id, ...(key ? { clientSecret: page.clientSecret, publishableKey: key } : { url: page.url }) };
+  return { ...view, ids, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
 
 // The checkout opening again with a Cart order it saved earlier: paid by now, still open to pay,

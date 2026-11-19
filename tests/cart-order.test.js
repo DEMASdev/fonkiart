@@ -116,3 +116,30 @@ test("Stripe.js: one script tag from js.stripe.com/v3; true once it loads; false
   } finally { delete globalThis.window; delete globalThis.document; }
   assert.equal(await stripeJsReady(), false, "no browser at all: false, nothing tried");
 });
+
+// The checkout loads Stripe.js BEFORE anything is saved, and says calmly that the card form
+// couldn't open only once it has given up. A slow phone network gets 15 s (it was 6 s).
+test("Stripe.js gets 15 s before the checkout gives up on it", async (t) => {
+  const fresh = await import("../src/lib/stripeJs.js?fifteen"); // its own copy: nothing loading yet
+  assert.equal(fresh.STRIPE_JS_WAIT, 15000);
+  const tags = [];
+  globalThis.window = {};
+  globalThis.document = { createElement: () => ({ remove() {} }), head: { appendChild: (tag) => { tags.push(tag); } } };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const turn = () => new Promise(r => setImmediate(r));
+  try {
+    let answer = "still waiting";
+    fresh.stripeJsReady().then(v => { answer = v; });
+    t.mock.timers.tick(14999); await turn();
+    assert.equal(answer, "still waiting", "at 14.999 s it is still waiting");
+    t.mock.timers.tick(1); await turn();
+    assert.equal(answer, false, "at 15 s: not ready");
+    assert.equal(tags.length, 1, "one script tag, still loading");
+
+    // Control: the same clock, the script in at 14 s: ready.
+    let late = "still waiting";
+    fresh.stripeJsReady().then(v => { late = v; });
+    t.mock.timers.tick(14000); window.Stripe = function Stripe() {}; tags[0].onload(); await turn();
+    assert.equal(late, true);
+  } finally { t.mock.timers.reset(); delete globalThis.window; delete globalThis.document; }
+});

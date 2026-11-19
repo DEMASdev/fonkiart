@@ -12,7 +12,8 @@ const forms = { turn: Promise.resolve() };
 // where the server checks the payment (src/pages/CardReturnPage.jsx).
 // pay: the server's answer (cart-card / cart-again): { ref, lines, total, clientSecret, publishableKey }.
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
-// onFail: the form couldn't open here; the checkout then offers Stripe's own page instead.
+// onFail: the form couldn't open here; the checkout says so calmly, with Try Again and another
+// way to pay (never Stripe's own page).
 export default function CardCheckout({ pay, artworks, onBack, onFail }) {
   const [box, setBox] = useState(null); // the element the form goes into, once it is on the page
   const [ready, setReady] = useState(false);
