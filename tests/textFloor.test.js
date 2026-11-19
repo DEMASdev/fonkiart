@@ -58,3 +58,13 @@ test("the collectors' rooms show money in Cormorant Garamond 600 with lining fig
     for (const l of prices) assert.match(l, /fontFamily:"'Cormorant Garamond',serif", fontSize:\d+, fontWeight:600, fontVariantNumeric:"lining-nums"/, `${f}: ${l.trim().slice(0, 90)}`);
   }
 });
+
+// Andy, 2026-11-18: "the ticker text at the top is 30% too big". Shown 16 / 14 / 11px side by side, he
+// picked "ticker 2ao" = 11px: his own exception to the 16px floor. Pinned so a later floor sweep
+// doesn't raise it again.
+test("the ticker at the top stays at 11px (Andy's pick, 11-18)", () => {
+  const r = rule(".marquee-item");
+  assert.ok(r, ".marquee-item is in src/index.css");
+  assert.match(r, /font-size:11px;/, ".marquee-item: 11px");
+  assert.match(r, /letter-spacing:\.14em;/, ".marquee-item: the spacing he saw in the picture");
+});

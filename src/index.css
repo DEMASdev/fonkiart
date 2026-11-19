@@ -422,7 +422,8 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .marquee-wrap { position:fixed;top:0;left:var(--sidebar);right:0;height:var(--marquee);background:var(--sidebar-bg);z-index:201;overflow:hidden;display:flex;align-items:center; }
 @keyframes marqueeScroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
 .marquee-track { display:flex;white-space:nowrap;animation:marqueeScroll 50s linear infinite;will-change:transform; }
-.marquee-item { font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.9);padding:0 34px; }
+/* The ticker: 11px by Andy's own pick, 11-18 ("ticker 2ao", after seeing 16 / 14 / 11 side by side): the one exception to the 16px floor. Don't raise it. */
+.marquee-item { font-family:'DM Sans',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.9);padding:0 34px; }
 .marquee-sep { color:rgba(255,255,255,.35);margin:0 4px; }
 
 /* Social icons inside the marquee strip — mobile only (desktop shows them in the top bar).
