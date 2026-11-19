@@ -42,20 +42,57 @@ export function publishableKey() {
 }
 
 // The publishable key as Vercel has it, and what is wrong with it: "no-key" (not set), "bad-key"
-// (not a pk_live_ / pk_test_ key: a stray quote or space, or another key pasted in by mistake) or
-// "mode-mismatch" (live with a test secret key, or the other way round). null: nothing wrong.
+// (not a pk_live_ / pk_test_ key of plain letters and digits: a stray quote, a space, a character
+// nobody can see, or another key pasted in by mistake) or "mode-mismatch" (live with a test
+// secret key, or the other way round). null: nothing wrong.
 function pkCheck() {
   const pk = String(process.env.STRIPE_PUBLISHABLE_KEY || "").trim();
-  const mode = /^pk_(live|test)_\S+$/.exec(pk)?.[1];
+  const mode = /^pk_(live|test)_[A-Za-z0-9]+$/.exec(pk)?.[1];
   const why = !pk ? "no-key" : !mode ? "bad-key" : cardReady() && !key().includes(`_${mode}_`) ? "mode-mismatch" : null;
   return { pk, mode, why };
 }
 
+// What a BAD publishable key looks like (op "card-setup", only while why is "bad-key"), so the
+// shop can be told exactly what to fix. Vercel keeps the value sensitive: nobody can read it
+// back. So this says it in WORDS, NEVER with any character of the value:
+//   length: how long it is once trimmed.
+//   kind: what it starts like: "publishable" (pk_), "secret" (sk_), "restricted" (rk_),
+//     "webhook" (whsec_), or null.
+//   slips: every one that fits: "secret" (a secret, restricted or webhook key anywhere in it,
+//     which must never go here), "quoted" (a quote at either end), "named" (=, STRIPE or
+//     PUBLISHABLE in it, as when a whole KEY=value line is pasted), "spaced" (a space or line
+//     break inside), "hidden-start" / "hidden-inside" / "hidden-end" (a character outside plain
+//     letters, digits and signs, such as a zero-width space nobody can see), "typo" (pk_, but not
+//     pk_live_ or pk_test_). None of them: "other".
+// Why: 2026-11-18, Andy pasted the key twice (saved 13:42 and 19:49, redeployed 19:53) and it
+// still read bad-key; neither he nor Claude could see why.
+export function keyShape(raw) {
+  const pk = String(raw ?? "").trim();
+  const kind = /^pk_/.test(pk) ? "publishable" : /^sk_/.test(pk) ? "secret" : /^rk_/.test(pk) ? "restricted" : /^whsec_/.test(pk) ? "webhook" : null;
+  const slips = [];
+  if (/(sk|rk)_(live|test)_|whsec_/.test(pk)) slips.push("secret");
+  if (/^["'`]|["'`]$/.test(pk)) slips.push("quoted");
+  if (/=|stripe|publishable/i.test(pk)) slips.push("named");
+  if (/\s/.test(pk)) slips.push("spaced");
+  const chars = [...pk];
+  const hidden = new Set();
+  chars.forEach((ch, i) => {
+    const c = ch.codePointAt(0);
+    if ((c < 0x21 || c > 0x7e) && !/\s/.test(ch)) hidden.add(i === 0 ? "hidden-start" : i === chars.length - 1 ? "hidden-end" : "hidden-inside");
+  });
+  for (const h of ["hidden-start", "hidden-inside", "hidden-end"]) if (hidden.has(h)) slips.push(h);
+  if (/^pk_/i.test(pk) && !/^pk_(live|test)_/.test(pk)) slips.push("typo");
+  return { length: pk.length, kind, slips: slips.length ? slips : ["other"] };
+}
+
 // The shop's own look at the card setup (op "card-setup"), without making a Stripe page: card
-// payments on, the Cart's card form able to open inside fonkiart.com, and if not, why. Only
-// these three answers: NEVER any part of a key (the answer goes to whoever asks).
+// payments on, the Cart's card form able to open inside fonkiart.com, and if not, why; with a
+// bad key, its shape in words (keyShape). NEVER any part of a key (the answer goes to whoever asks).
 export function cardSetup() {
-  return { card: cardReady(), form: !!publishableKey(), why: pkCheck().why };
+  const { why } = pkCheck();
+  const answer = { card: cardReady(), form: !!publishableKey(), why };
+  if (why === "bad-key") answer.shape = keyShape(process.env.STRIPE_PUBLISHABLE_KEY);
+  return answer;
 }
 
 export function toCents(amount) {

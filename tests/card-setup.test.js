@@ -58,9 +58,9 @@ test("card-setup: card on, the form able to open inside fonkiart.com, and if not
     ["spaces around the key are fine", SK_LIVE, ` ${PK_LIVE}\n`, { card: true, form: true, why: null }],
     ["no publishable key", SK_LIVE, undefined, { card: true, form: false, why: "no-key" }],
     ["an empty one", SK_LIVE, "  ", { card: true, form: false, why: "no-key" }],
-    ["wrapped in quotes", SK_LIVE, `"${PK_LIVE}"`, { card: true, form: false, why: "bad-key" }],
-    ["a space inside", SK_LIVE, PK_LIVE.replace("Wd73", "Wd 73"), { card: true, form: false, why: "bad-key" }],
-    ["the SECRET key pasted in by mistake", SK_LIVE, SK_LIVE, { card: true, form: false, why: "bad-key" }],
+    ["wrapped in quotes", SK_LIVE, `"${PK_LIVE}"`, { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 2, kind: null, slips: ["quoted"] } }],
+    ["a space inside", SK_LIVE, PK_LIVE.replace("Wd73", "Wd 73"), { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 1, kind: "publishable", slips: ["spaced"] } }],
+    ["the SECRET key pasted in by mistake", SK_LIVE, SK_LIVE, { card: true, form: false, why: "bad-key", shape: { length: SK_LIVE.length, kind: "secret", slips: ["secret"] } }],
     ["live public key, test secret key", SK_TEST, PK_LIVE, { card: true, form: false, why: "mode-mismatch" }],
     ["test public key, live secret key", SK_LIVE, PK_TEST, { card: true, form: false, why: "mode-mismatch" }],
     ["card payments off (no secret key)", undefined, PK_LIVE, { card: false, form: false, why: null }],
@@ -69,8 +69,46 @@ test("card-setup: card on, the form able to open inside fonkiart.com, and if not
     const got = await ask({ sk, pk });
     assert.equal(got.code, 200, label);
     assert.deepEqual(got.body, want, label);
-    assert.deepEqual(Object.keys(got.body), ["card", "form", "why"], `${label}: only the three answers`);
+    const keys = want.why === "bad-key" ? ["card", "form", "why", "shape"] : ["card", "form", "why"];
+    assert.deepEqual(Object.keys(got.body), keys, `${label}: only these answers`);
     assert.equal(leak(got.text), null, `${label}: no part of a key in ${got.text}`);
+  }
+  assert.ok(warned.every(w => leak(w) === null), "the server's own warnings name no key either");
+});
+
+// Every 6-character run of a value: if any one of them is in an answer, a piece of the value got out.
+const runs = (v) => Array.from({ length: Math.max(0, v.length - 5) }, (_, i) => v.slice(i, i + 6));
+const echoed = (text, v) => runs(v).find(r => text.includes(r)) ?? null;
+
+test("control: the 6-character check catches a value or a piece of one in an answer, and passes a clean one", () => {
+  assert.notEqual(echoed(JSON.stringify({ x: PK_LIVE }), PK_LIVE), null);
+  assert.notEqual(echoed(JSON.stringify({ x: PK_LIVE.slice(9, 16) }), PK_LIVE), null);
+  assert.equal(echoed(JSON.stringify({ card: true, form: false, why: "bad-key", shape: { length: 9, kind: "publishable", slips: ["spaced"] } }), PK_LIVE), null);
+});
+
+test("card-setup: a bad key's shape names every slip in words, and never any character of the key", async () => {
+  const ZW = "​"; // a zero-width space: there, but nobody can see it
+  // Built from pieces ON PURPOSE, as above: GitHub refuses key-shaped text.
+  const WEBHOOK = ["whsec", "WHHEADr4Tq81nZc6vM2xB9kWHTAIL"].join("_");
+  const TYPO = ["pk", "lve", "PKHEADk2Wd73fGh8jN4pY6sPKTAIL"].join("_");
+  for (const [label, pk, kind, slips] of [
+    ["a whole KEY=value line", `STRIPE_PUBLISHABLE_KEY=${PK_LIVE}`, null, ["named"]],
+    ["an unseen character before it", ZW + PK_LIVE, null, ["hidden-start"]],
+    ["an unseen character inside it", PK_LIVE.replace("Wd73", `Wd${ZW}73`), "publishable", ["hidden-inside"]],
+    ["an unseen character after it", PK_LIVE + ZW, "publishable", ["hidden-end"]],
+    ["a typo in its start", TYPO, "publishable", ["typo"]],
+    ["all in capitals", PK_LIVE.toUpperCase(), null, ["typo"]],
+    ["a restricted key", SK_TEST, "restricted", ["secret"]],
+    ["the webhook secret", WEBHOOK, "webhook", ["secret"]],
+    ["quoted, with a space inside", `'${PK_LIVE.replace("Wd73", "Wd 73")}'`, null, ["quoted", "spaced"]],
+    ["both keys, on two lines", `${PK_LIVE}\n${SK_LIVE}`, "publishable", ["secret", "spaced"]],
+    ["something else entirely", "XQZHEADab12cd34XQZTAIL", null, ["other"]],
+  ]) {
+    const got = await ask({ sk: SK_LIVE, pk });
+    assert.equal(got.code, 200, label);
+    assert.deepEqual(got.body, { card: true, form: false, why: "bad-key", shape: { length: pk.trim().length, kind, slips } }, label);
+    assert.equal(leak(got.text), null, `${label}: no part of a key in ${got.text}`);
+    assert.equal(echoed(got.text, pk), null, `${label}: no 6 characters of it in ${got.text}`);
   }
   assert.ok(warned.every(w => leak(w) === null), "the server's own warnings name no key either");
 });
