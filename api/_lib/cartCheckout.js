@@ -109,8 +109,8 @@ export async function priceCart(db, items, discount) {
 // to be making the user jump to stripe then back"). Asked BEFORE anything is saved, emailed,
 // closed or made: the browser must have Stripe.js ready (embedded: true), and the shop's
 // publishable key must be set and right. Returns that key. Why not goes in the log, never the key
-// (op "card-setup" tells it too).
-function formKey(op, body) {
+// (op "card-setup" tells it too). The invoice page's card form asks the same (storeOps.js).
+export function formKey(op, body) {
   const key = publishableKey();
   if (body.embedded === true && key) return key;
   const why = body.embedded !== true ? "the browser has no Stripe.js ready" : `publishable key: ${cardSetup().why}`;

@@ -5,12 +5,15 @@ import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { formBody, toCents, createCheckout, checkoutPaidFor, cardCheck, cardReady } from "../api/_lib/stripe.js";
 import { opCardCheckout, opCardPaid, opInvoice, STORE_OPS } from "../api/_lib/storeOps.js";
+import { CARD_FORM_DOWN } from "../api/_lib/cartCheckout.js";
+import { readSlot } from "../api/_lib/emails.js";
 import { isPaid, canMarkPaid, ORDER_STATUSES, markPaidChoices, asksPaidMethod, statusChange, resendQuestion } from "../src/lib/orderStatus.js";
 import { validateChain } from "../api/_lib/adminOps.js";
 import storeHandler from "../api/store.js";
 
 const TOKEN = "85d82763-0000-4000-8000-0000000000aa";
 const SESSION = "cs_test_a1B2c3D4e5F6g7H8";
+const PK = ["pk", "test", "FAKEPUBLISHABLE"].join("_"); // in pieces: no key-shaped text in the repo
 const realFetch = globalThis.fetch;
 let calls;
 
@@ -25,7 +28,7 @@ function fakeStripe(answer) {
 }
 
 beforeEach(() => { process.env.STRIPE_SECRET_KEY = "rk_test_FAKEKEYFORTESTS"; calls = []; });
-afterEach(() => { globalThis.fetch = realFetch; delete process.env.STRIPE_SECRET_KEY; });
+afterEach(() => { globalThis.fetch = realFetch; delete process.env.STRIPE_SECRET_KEY; delete process.env.STRIPE_PUBLISHABLE_KEY; });
 
 const order = (over = {}) => ({
   id: 21, invoice_token: TOKEN, invoice_approved: true, status: "confirmed", item_title: "Frida the manatee",
@@ -73,10 +76,10 @@ test("Stripe gets form fields with [brackets], and money in cents", () => {
   assert.equal(toCents("abc"), 0);
 });
 
-test("the payment page asks for the invoice's EXACT amount, with its number, and sends the client back to the invoice", async () => {
-  fakeStripe(() => ({ json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } }));
-  const url = await createCheckout({ order: order(), invNum: "FA-261117161956080", site: "https://fonkiart.com" });
-  assert.equal(url, "https://checkout.stripe.com/c/pay/x");
+test("the payment page asks for the invoice's EXACT amount, with its number, as a card form for INSIDE the invoice page: paid, nobody is sent anywhere", async () => {
+  fakeStripe(() => ({ json: { id: SESSION, client_secret: `${SESSION}_secret_FAKE` } }));
+  const made = await createCheckout({ order: order(), invNum: "FA-261117161956080" });
+  assert.deepEqual(made, { id: SESSION, clientSecret: `${SESSION}_secret_FAKE` });
   assert.equal(calls.length, 1);
   const { url: to, method, headers, body } = calls[0];
   assert.equal(to, "https://api.stripe.com/v1/checkout/sessions");
@@ -90,16 +93,23 @@ test("the payment page asks for the invoice's EXACT amount, with its number, and
   assert.equal(body.get("metadata[invoice_token]"), TOKEN);
   assert.equal(body.get("client_reference_id"), "FA-261117161956080");
   assert.equal(body.get("customer_email"), "ana@example.com");
-  assert.equal(body.get("success_url"), `https://fonkiart.com/?invoice=${TOKEN}&card={CHECKOUT_SESSION_ID}`);
-  assert.equal(body.get("cancel_url"), `https://fonkiart.com/?invoice=${TOKEN}`);
+  assert.equal(body.get("ui_mode"), "embedded");
+  assert.equal(body.get("redirect_on_completion"), "never");
+  for (const k of ["success_url", "cancel_url", "return_url"]) assert.equal(body.has(k), false, k);
+  assert.deepEqual([...body.values()].filter(v => /^https?:/.test(v)), [], "no address for Stripe to send anyone to");
+  // Stripe answering without the form's secret, or without a page id, is a failure, not a form.
+  for (const json of [{ id: SESSION }, { client_secret: "x" }, { id: "nope", client_secret: "x" }]) {
+    fakeStripe(() => ({ json }));
+    await assert.rejects(createCheckout({ order: order(), invNum: "FA-1" }), /Stripe sent no/, JSON.stringify(json));
+  }
 });
 
 test("no Stripe key, or an amount under 50 cents: nothing is sent to Stripe", async () => {
   fakeStripe(() => ({ json: { url: "https://checkout.stripe.com/x" } }));
-  await assert.rejects(createCheckout({ order: order({ amount: 0.4 }), invNum: "FA-1", site: "https://fonkiart.com" }), /too small/);
+  await assert.rejects(createCheckout({ order: order({ amount: 0.4 }), invNum: "FA-1" }), /too small/);
   delete process.env.STRIPE_SECRET_KEY;
   assert.equal(cardReady(), false);
-  await assert.rejects(createCheckout({ order: order(), invNum: "FA-1", site: "https://fonkiart.com" }), /not set up/);
+  await assert.rejects(createCheckout({ order: order(), invNum: "FA-1" }), /not set up/);
   process.env.STRIPE_SECRET_KEY = "pk_live_PUBLISHABLEKEY";
   assert.equal(cardReady(), false, "a publishable key can't take payments");
   assert.equal(calls.length, 0);
@@ -124,15 +134,20 @@ test("Paid only when Stripe itself says paid, for THIS invoice and THIS amount",
 });
 
 test("Pay by card: only after the client confirmed, only if card was ticked, never twice", async () => {
-  fakeStripe(() => ({ json: { url: "https://checkout.stripe.com/c/pay/x" } }));
-  assert.deepEqual(await opCardCheckout(fakeDb([order()]), { token: TOKEN }), { url: "https://checkout.stripe.com/c/pay/x" });
-  await assert.rejects(opCardCheckout(fakeDb([order({ invoice_approved: false, status: "pending" })]), { token: TOKEN }), /confirm the invoice first/);
-  await assert.rejects(opCardCheckout(fakeDb([order({ payment_methods: "zelle" })]), { token: TOKEN }), /not offered/);
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  const form = { token: TOKEN, embedded: true };
+  fakeStripe(() => ({ json: { id: SESSION, client_secret: `${SESSION}_secret_FAKE` } }));
+  assert.equal((await opCardCheckout(fakeDb([order()]), form, mailbox())).session, SESSION);
+  await assert.rejects(opCardCheckout(fakeDb([order({ invoice_approved: false, status: "pending" })]), form, mailbox()), /confirm the invoice first/);
+  await assert.rejects(opCardCheckout(fakeDb([order({ payment_methods: "zelle" })]), form, mailbox()), /not offered/);
   calls = [];
-  assert.deepEqual(await opCardCheckout(fakeDb([order({ status: "paid" })]), { token: TOKEN }), { paid: true }, "already paid: no new payment page");
+  assert.deepEqual(await opCardCheckout(fakeDb([order({ status: "paid" })]), form, mailbox()), { paid: true }, "already paid: no new payment page");
   assert.equal(calls.length, 0);
   fakeStripe(() => ({ status: 401, json: { error: { message: "Invalid API Key provided", code: "invalid_key" } } }));
-  await assert.rejects(opCardCheckout(fakeDb([order()]), { token: TOKEN }), /isn't working right now/, "Stripe's own error never reaches the client");
+  const { error } = console; console.error = () => {};
+  try {
+    await assert.rejects(opCardCheckout(fakeDb([order()]), form, mailbox()), /isn't working right now/, "Stripe's own error never reaches the client");
+  } finally { console.error = error; }
 });
 
 test("back from Stripe, paid: the order turns Paid ONCE, the shop and the client each get one email", async () => {
@@ -240,11 +255,168 @@ test("Resend warns before sending again, and says 'and paid' once the money is i
 });
 
 test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {
-  fakeStripe(() => ({ json: { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" } }));
-  await createCheckout({ order: order(), invNum: "FA-261117161956080", site: "https://fonkiart.com" });
+  fakeStripe(() => ({ json: { id: SESSION, client_secret: `${SESSION}_secret_FAKE` } }));
+  await createCheckout({ order: order(), invNum: "FA-261117161956080" });
   const { body } = calls[0];
   assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]"]);
   assert.equal(body.get("payment_method_types[0]"), "card");
+});
+
+// ── the invoice's card form INSIDE the invoice page (Andy, 2026-11-18: "i don't want to be making
+// the user jump to stripe then back") ──────────────────────────────────────────────────────────
+const FORM = { token: TOKEN, embedded: true };
+const SECRET = `${SESSION}_secret_FAKE`;
+const OLD = "cs_test_beforeBEFORE01";
+const quiet = async (fn) => { const { warn, error } = console; console.warn = () => {}; console.error = () => {}; try { return await fn(); } finally { Object.assign(console, { warn, error }); } };
+// Stripe keeping its pages: GET answers a page's record, /expire closes an OPEN page (any other is
+// refused, as Stripe does), and a POST makes a new open page. paidWhenClosed: that page is paid at
+// the very moment the shop tries to close it, so Stripe refuses to close it.
+function stripePages(pages, { paidWhenClosed = null } = {}) {
+  let made = 0;
+  fakeStripe((url, init) => {
+    const path = url.replace("https://api.stripe.com/v1/checkout/sessions", "");
+    if (init.method === "POST" && path === "") {
+      const id = `cs_test_newpage${String(++made).padStart(8, "0")}`;
+      pages[id] = { id, status: "open", payment_status: "unpaid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN } };
+      return { json: { id, client_secret: `${id}_secret_FAKE` } };
+    }
+    const [, id, act] = path.split("/");
+    const p = pages[id];
+    if (!p) return { status: 404, json: { error: { code: "resource_missing", message: `No such checkout.session: '${id}'` } } };
+    if (act === "expire") {
+      if (id === paidWhenClosed) Object.assign(p, { status: "complete", payment_status: "paid" });
+      if (p.status !== "open") return { status: 400, json: { error: { message: "Only Checkout Sessions with a status of open can be expired." } } };
+      p.status = "expired";
+    }
+    return { json: { ...p } };
+  });
+  return pages;
+}
+const openPage = (over = {}) => ({ id: OLD, status: "open", payment_status: "unpaid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN }, ...over });
+const asked = () => calls.map(c => [c.method, c.url.replace("https://api.stripe.com/v1/checkout/sessions", "") || "(new page)"]);
+
+test("Pay by card: the card form, INSIDE the invoice page: the invoice's exact amount and number, the piece first, and once paid nobody is sent anywhere", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  fakeStripe(() => ({ json: { id: SESSION, client_secret: SECRET } }));
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  assert.deepEqual(await STORE_OPS["card-checkout"](db, { body: FORM }, mail), {
+    ref: "FA-261117161956080", lines: [{ title: "Frida the manatee", amount: 450 }], total: 450,
+    session: SESSION, clientSecret: SECRET, publishableKey: PK,
+  });
+  assert.deepEqual(asked(), [["POST", "(new page)"]]);
+  const { body } = calls[0];
+  assert.equal(body.get("ui_mode"), "embedded");
+  assert.equal(body.get("redirect_on_completion"), "never");
+  assert.equal(body.get("line_items[0][price_data][unit_amount]"), "45000");
+  assert.equal(body.get("metadata[invoice_token]"), TOKEN);
+  assert.equal(body.get("client_reference_id"), "FA-261117161956080");
+  for (const k of ["success_url", "cancel_url", "return_url"]) assert.equal(body.has(k), false, `no ${k}: there is nowhere to send anyone`);
+  assert.deepEqual([db.updates, mail.sent], [[], []], "a card form changes nothing and emails nobody");
+});
+
+test("NO JUMP for invoices: no Stripe.js in the browser, or no right publishable key: no page is made at all (never Stripe's own page), and the page hears the calm word", async () => {
+  for (const [label, body, pk] of [
+    ["a page from before this change (it asks without Stripe.js)", { token: TOKEN }, PK],
+    ["embedded is not exactly true", { token: TOKEN, embedded: "true" }, PK],
+    ["no publishable key in Vercel", FORM, undefined],
+    ["a malformed one (a stray quote)", FORM, `"${PK}"`],
+    ["a live key beside a test secret key", FORM, ["pk", "live", "FAKEPUBLISHABLE"].join("_")],
+  ]) {
+    if (pk === undefined) delete process.env.STRIPE_PUBLISHABLE_KEY; else process.env.STRIPE_PUBLISHABLE_KEY = pk;
+    fakeStripe(() => ({ json: { id: SESSION, client_secret: SECRET, url: "https://checkout.stripe.com/c/pay/x" } }));
+    await quiet(() => assert.rejects(opCardCheckout(fakeDb([order()]), body, mailbox()), (e) => e.status === 409 && e.message === CARD_FORM_DOWN, label));
+    assert.equal(calls.length, 0, `${label}: Stripe was asked nothing`);
+  }
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  delete process.env.STRIPE_SECRET_KEY;
+  fakeStripe(() => ({ json: { id: SESSION, client_secret: SECRET } }));
+  await quiet(() => assert.rejects(opCardCheckout(fakeDb([order()]), FORM, mailbox()), (e) => e.status === 502 && /isn't working right now/.test(e.message), "card payments off since the page loaded"));
+  assert.equal(calls.length, 0);
+});
+
+test("card again: the page this tab opened before is closed first, so only ONE page can ever take the money; then the new form", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  const pages = stripePages({ [OLD]: openPage() });
+  const db = fakeDb([order()]);
+  const out = await opCardCheckout(db, { ...FORM, last: OLD }, mailbox());
+  assert.deepEqual(asked(), [["GET", `/${OLD}`], ["POST", `/${OLD}/expire`], ["POST", "(new page)"]]);
+  assert.equal(pages[OLD].status, "expired");
+  assert.deepEqual([out.session, out.clientSecret], ["cs_test_newpage00000001", "cs_test_newpage00000001_secret_FAKE"]);
+  assert.deepEqual(db.updates, []);
+  // A page closed already is just left as it is.
+  pages[OLD].status = "expired";
+  calls = [];
+  await opCardCheckout(db, { ...FORM, last: OLD }, mailbox());
+  assert.deepEqual(asked(), [["GET", `/${OLD}`], ["POST", "(new page)"]]);
+});
+
+test("card again, the page before was paid after all: recorded Paid by card ONCE (the paid pair, each showing exactly this piece), and no new form", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  stripePages({ [OLD]: openPage({ status: "complete", payment_status: "paid" }) });
+  const row = order();
+  const db = fakeDb([row]);
+  const mail = mailbox();
+  assert.deepEqual(await STORE_OPS["card-checkout"](db, { body: { ...FORM, last: OLD } }, mail), { paid: true });
+  assert.deepEqual(asked(), [["GET", `/${OLD}`]], "nothing closed, nothing made");
+  assert.deepEqual(db.updates, [{ status: "paid", invoice_approved: true, paid_method: "card" }]);
+  assert.deepEqual(mail.sent.map(m => m.subject).sort(), ["Paid by card ✓ — Frida the manatee · $450", "Payment received — Frida the manatee · Fonkiart"]);
+  for (const m of mail.sent) assert.deepEqual(readSlot(m.htmlContent).titles, ["Frida the manatee"], `${m.to}: the picture is this invoice's piece`);
+  // Asked again (a second tab, a double tap): Paid already, so Stripe is not asked and nobody is emailed.
+  assert.deepEqual(await STORE_OPS["card-checkout"](db, { body: { ...FORM, last: OLD } }, mail), { paid: true });
+  assert.deepEqual([asked().length, db.updates.length, mail.sent.length], [1, 1, 2]);
+  // With no form to offer (no publishable key), a page paid after all is still recorded.
+  delete process.env.STRIPE_PUBLISHABLE_KEY;
+  stripePages({ [OLD]: openPage({ status: "complete", payment_status: "paid" }) });
+  const db2 = fakeDb([order()]);
+  assert.deepEqual(await opCardCheckout(db2, { ...FORM, last: OLD }, mailbox()), { paid: true });
+  assert.equal(db2.updates.length, 1);
+});
+
+test("card again, Stripe won't close the page before because it was paid that very moment: that payment is recorded instead, and no new form", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  stripePages({ [OLD]: openPage() }, { paidWhenClosed: OLD });
+  const db = fakeDb([order()]);
+  const mail = mailbox();
+  assert.deepEqual(await opCardCheckout(db, { ...FORM, last: OLD }, mail), { paid: true });
+  assert.deepEqual(asked(), [["GET", `/${OLD}`], ["POST", `/${OLD}/expire`], ["GET", `/${OLD}`]]);
+  assert.deepEqual([db.updates.length, mail.sent.length], [1, 2]);
+});
+
+test("card again, the page before can't be the money (another amount: the invoice changed since), can't be closed, or Stripe is out of reach: said, and nothing is made or marked", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  stripePages({ [OLD]: openPage({ status: "complete", payment_status: "paid", amount_total: 30000 }) });
+  let db = fakeDb([order()]);
+  await quiet(() => assert.rejects(opCardCheckout(db, { ...FORM, last: OLD }, mailbox()), (e) => e.status === 409 && /already has a card payment/.test(e.message), "another amount"));
+  assert.deepEqual([asked(), db.updates], [[["GET", `/${OLD}`]], []]);
+  // Stripe refuses to close a page that is still open (it never should): no second page beside it.
+  fakeStripe((url) => url.endsWith("/expire") ? { status: 500, json: { error: { message: "Something went wrong" } } } : { json: openPage() });
+  await quiet(() => assert.rejects(opCardCheckout(fakeDb([order()]), { ...FORM, last: OLD }, mailbox()), (e) => e.status === 502));
+  assert.deepEqual(asked(), [["GET", `/${OLD}`], ["POST", `/${OLD}/expire`], ["GET", `/${OLD}`]], "no new page");
+  // Stripe out of reach when asked about the page before.
+  globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+  db = fakeDb([order()]);
+  await quiet(() => assert.rejects(opCardCheckout(db, { ...FORM, last: OLD }, mailbox()), (e) => e.status === 502 && /isn't working right now/.test(e.message)));
+  assert.deepEqual(db.updates, []);
+});
+
+test("card again, the page named isn't one to touch (another invoice's, not a page id, one Stripe doesn't have): left alone, and the new form is made", async () => {
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  const pages = stripePages({ [OLD]: openPage({ metadata: { invoice_token: "someone-elses-invoice" } }) });
+  await opCardCheckout(fakeDb([order()]), { ...FORM, last: OLD }, mailbox());
+  assert.deepEqual(asked(), [["GET", `/${OLD}`], ["POST", "(new page)"]], "another invoice's page: asked about, never closed");
+  assert.equal(pages[OLD].status, "open");
+  stripePages({});
+  await opCardCheckout(fakeDb([order()]), { ...FORM, last: "cs_live_x/../../v1/charges" }, mailbox());
+  assert.deepEqual(asked(), [["POST", "(new page)"]], "not a page id: never sent to Stripe");
+  stripePages({});
+  await opCardCheckout(fakeDb([order()]), { ...FORM, last: "cs_test_nosuchpage0001" }, mailbox());
+  assert.deepEqual(asked(), [["GET", "/cs_test_nosuchpage0001"], ["POST", "(new page)"]], "a page Stripe doesn't have");
+  // No publishable key: the open page before stays exactly as it was (nothing closed, nothing made).
+  delete process.env.STRIPE_PUBLISHABLE_KEY;
+  const kept = stripePages({ [OLD]: openPage() });
+  await quiet(() => assert.rejects(opCardCheckout(fakeDb([order()]), { ...FORM, last: OLD }, mailbox()), (e) => e.status === 409 && e.message === CARD_FORM_DOWN));
+  assert.deepEqual([asked(), kept[OLD].status], [[["GET", `/${OLD}`]], "open"]);
 });
 
 // Stripe's own "paid" message (op stripe-event). Stripe is asked about the page every time;
@@ -481,4 +653,16 @@ test("Admin's full card check ('Check again'): makes a $0.50 payment page and ca
   fakeStripe(() => ({ json: { data: [] } }));
   assert.deepEqual(await cardCheck(), { ready: true, live: false });
   assert.deepEqual(calls.map(c => c.method), ["GET"]);
+});
+
+// The invoice page itself: its card form opens in the page, and it never sends anyone to Stripe.
+test("the invoice page: Pay by card asks for the form INSIDE the page (Stripe.js first) and never sends the client to Stripe", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/pages/InvoicePage.jsx", import.meta.url), "utf8");
+  const code = src.split("\n").filter(l => !/^\s*\/\//.test(l)).join("\n");
+  assert.doesNotMatch(code, /location\.(assign|replace)\s*\(|location\.href\s*=|window\.open\s*\(/, "no jump to another page");
+  assert.match(code, /storeCall\("card-checkout", \{ token, embedded: true/, "asks for the in-page form");
+  assert.match(code, /await stripeJsReady\(\)/, "Stripe.js first");
+  assert.match(code, /<CardCheckout pay=\{pay\}/, "the Cart's card panel, art first");
+  assert.match(code, /storeCall\("card-paid", \{ token, session: page\.session \}\)/, "paid in the form: the server asks Stripe");
 });

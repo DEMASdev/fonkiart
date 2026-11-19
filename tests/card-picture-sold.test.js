@@ -14,6 +14,8 @@ import adminHandler from "../api/admin.js";
 
 const TOKEN = "85d82763-0000-4000-8000-0000000000aa";
 const SESSION = "cs_test_a1B2c3D4e5F6g7H8";
+const PK = ["pk", "test", "FAKEPUBLISHABLE"].join("_"); // in pieces: no key-shaped text in the repo
+const FORM = { token: TOKEN, embedded: true }; // the invoice page's card form, inside the page
 const PHOTO = "https://aynesillxtejdvxucxdr.supabase.co/storage/v1/object/public/artworks/ocean-life/frida-1780000000000.jpg";
 const PICTURE = `https://fonkiart.com/_vercel/image?url=${encodeURIComponent(PHOTO)}&w=640&q=75`;
 const IMAGE0 = "line_items[0][price_data][product_data][images][0]";
@@ -24,12 +26,14 @@ let calls, logs;
 
 beforeEach(() => {
   process.env.STRIPE_SECRET_KEY = "rk_test_FAKEKEYFORTESTS";
+  process.env.STRIPE_PUBLISHABLE_KEY = PK;
   calls = []; logs = [];
   for (const k of Object.keys(realConsole)) console[k] = (...a) => logs.push(a.map(String).join(" "));
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
   delete process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_PUBLISHABLE_KEY;
   Object.assign(console, realConsole);
 });
 
@@ -42,7 +46,9 @@ function fakeStripe(answer) {
     return { ok: status < 400, status, json: async () => json };
   };
 }
-const page = { id: SESSION, url: "https://checkout.stripe.com/c/pay/x" };
+const page = { id: SESSION, client_secret: `${SESSION}_secret_FAKE` };
+const formOf = (out) => [out.session, out.clientSecret]; // the card form the invoice page opens
+const FORM_MADE = [SESSION, `${SESSION}_secret_FAKE`];
 const paidPage = (over = {}) => ({ id: SESSION, payment_status: "paid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN }, ...over });
 const webhook = (db, mail) => STORE_OPS["stripe-event"](db, { body: { type: "checkout.session.completed", data: { object: { id: SESSION } } } }, mail);
 const back = { token: TOKEN, session: SESSION };
@@ -98,10 +104,10 @@ const soldWrites = (db) => db.writes.filter(w => w.table === "Artworks");
 
 // ── the picture ─────────────────────────────────────────────────
 
-test("Pay by card: the artwork's picture sits beside the item on Stripe's page, one 640px copy from fonkiart.com", async () => {
+test("Pay by card: the artwork's picture sits beside the item in Stripe's card form, one 640px copy from fonkiart.com", async () => {
   fakeStripe(() => ({ json: page }));
   const db = fakeDb({ Orders: [order()], Artworks: [art(), art({ id: "2", title: "Madame Mango" })] });
-  assert.deepEqual(await opCardCheckout(db, { token: TOKEN }), { url: page.url });
+  assert.deepEqual(formOf(await opCardCheckout(db, FORM, mailbox())), FORM_MADE);
   assert.equal(calls[0].body.get(IMAGE0), PICTURE);
   assert.deepEqual(pictures(calls[0].body), [IMAGE0], "one picture");
   assert.deepEqual(db.reads.find(r => r.table === "Artworks").steps,
@@ -119,25 +125,25 @@ test("no picture field at all unless exactly one artwork has exactly that title,
     ["its picture is somewhere else", [art({ image: "https://example.com/frida.jpg" })]],
   ]) {
     fakeStripe(() => ({ json: page }));
-    assert.deepEqual(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: artworks }), { token: TOKEN }), { url: page.url }, label);
+    assert.deepEqual(formOf(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: artworks }), FORM, mailbox())), FORM_MADE, label);
     assert.deepEqual(pictures(calls[0].body), [], label);
   }
   // createCheckout itself only takes an https address.
   for (const image of [undefined, null, "", "http://fonkiart.com/a.jpg", "javascript:alert(1)"]) {
     fakeStripe(() => ({ json: page }));
-    await createCheckout({ order: order(), invNum: "FA-1", site: "https://fonkiart.com", image });
+    await createCheckout({ order: order(), invNum: "FA-1", image });
     assert.deepEqual(pictures(calls[0].body), [], String(image));
   }
 });
 
 test("a picture lookup that fails, throws or hangs still makes the page, without a picture", async () => {
   fakeStripe(() => ({ json: page }));
-  assert.deepEqual(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }, { fail: { "Artworks.select": "connection reset" } }), { token: TOKEN }), { url: page.url });
+  assert.deepEqual(formOf(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }, { fail: { "Artworks.select": "connection reset" } }), FORM, mailbox())), FORM_MADE);
   assert.deepEqual(pictures(calls[0].body), []);
   const base = fakeDb({ Orders: [order()] });
   const throwing = { from: (t) => { if (t === "Artworks") throw new Error("boom"); return base.from(t); } };
   fakeStripe(() => ({ json: page }));
-  assert.deepEqual(await opCardCheckout(throwing, { token: TOKEN }), { url: page.url });
+  assert.deepEqual(formOf(await opCardCheckout(throwing, FORM, mailbox())), FORM_MADE);
   assert.deepEqual(pictures(calls[0].body), []);
   // A database that never answers is given up on, not waited for.
   const started = Date.now();
@@ -151,7 +157,7 @@ test("Stripe refuses the page with the picture: it's made again without it, so t
   fakeStripe((url, init) => new URLSearchParams(init.body).has(IMAGE0)
     ? { status: 400, json: { error: { type: "invalid_request_error", code: "url_invalid", param: IMAGE0, message: "Not a valid URL" } } }
     : { json: page });
-  assert.deepEqual(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }), { token: TOKEN }), { url: page.url });
+  assert.deepEqual(formOf(await opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }), FORM, mailbox())), FORM_MADE);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].body.get(IMAGE0), PICTURE);
   assert.deepEqual(pictures(calls[1].body), []);
@@ -159,11 +165,11 @@ test("Stripe refuses the page with the picture: it's made again without it, so t
   assert.deepEqual(rest(calls[1].body), rest(calls[0].body), "everything else the same");
   // Not about the picture (a bad key): asked once, and the client hears card isn't working.
   fakeStripe(() => ({ status: 401, json: { error: { code: "invalid_key", message: "Invalid API Key provided" } } }));
-  await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }), { token: TOKEN }), /isn't working right now/);
+  await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }), FORM, mailbox()), /isn't working right now/);
   assert.equal(calls.length, 1);
   // Refused with no picture on it: nothing to leave out, so not asked twice.
   fakeStripe(() => ({ status: 400, json: { error: { code: "email_invalid", message: "Invalid email address" } } }));
-  await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()] }), { token: TOKEN }), /isn't working right now/);
+  await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()] }), FORM, mailbox()), /isn't working right now/);
   assert.equal(calls.length, 1);
 });
 

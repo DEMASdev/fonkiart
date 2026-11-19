@@ -9,9 +9,9 @@ import { cardPicture, markSoldForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, cardSetup, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
+import { cardReady, cardSetup, createCheckout, checkoutPaidFor, expireCheckout, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
-import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, CARD_NOTE } from "./cartCheckout.js";
+import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -254,21 +254,83 @@ const PAID_STATUSES = ["paid", "shipped", "delivered"];
 const NOT_PAID_STATUSES = ["pending", "confirmed"];
 const cardTicked = (order) => !order.payment_methods || String(order.payment_methods).split(",").includes("stripe");
 
-// "Pay by card": ask Stripe for a payment page with this invoice's exact amount.
-export async function opCardCheckout(db, body) {
+// Stripe refused or is out of reach: the client hears card payment isn't working right now, never
+// Stripe's own words (the log keeps them). Anything else is not Stripe's, and stays as it is.
+const cardLater = (op, e) => {
+  if (!(e instanceof StripeError)) return e;
+  console.error(`store ${op}:`, e.code, e.message);
+  return new InputError("Card payment isn't working right now", 502);
+};
+
+// "Pay by card" on the invoice page: Stripe's card form with this invoice's exact amount, INSIDE
+// the invoice page, or none (Andy, 2026-11-18: "i don't want to be making the user jump to stripe
+// then back"). As the Cart's (cartCheckout.js formKey): the browser must have Stripe.js ready
+// (embedded: true) and the shop's publishable key must be set and right, or no page is made and
+// the page says so calmly (CARD_FORM_DOWN, 409). Stripe's own page is never made any more; pages
+// made before still bring the client back (&card=..., opCardPaid).
+// last: the card page this tab opened before for this invoice, asked about first so only ONE page
+// can take the money. Paid after all: recorded (markCardPaid: Paid, the emails once) and no new
+// form. Still open: closed (Stripe "expire") before the new one. Another invoice's: left alone.
+// Answers the form: { ref (the invoice number), lines, total, session, clientSecret, publishableKey }.
+export async function opCardCheckout(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
   if (PAID_STATUSES.includes(order.status)) return { paid: true };
   if (!order.invoice_approved) throw new InputError("Please confirm the invoice first", 409);
   if (!cardTicked(order)) throw new InputError("Card payment is not offered on this invoice", 409);
-  // The artwork's picture beside the item on Stripe's page; none if it can't be had (artworks.js).
-  const image = await cardPicture(db, order.item_title);
-  try {
-    return { url: await createCheckout({ order, invNum: invoiceNumber(order), site: siteUrl(), image }) };
-  } catch (e) {
-    if (!(e instanceof StripeError)) throw e;
-    console.error("store card-checkout:", e.code, e.message);
-    throw new InputError("Card payment isn't working right now", 502);
+  if (!cardReady()) throw cardLater("card-checkout", new StripeError("Card payments are not set up yet", "no-key"));
+  let before = await pageBefore(body.last, order);
+  if (before?.status === "complete") return paidBefore(db, before, order, mail);
+  const key = formKey("card-checkout", body); // before the page before is closed: no form, no change
+  if (before?.status === "open") {
+    try {
+      await expireCheckout(before.id);
+    } catch (e) {
+      if (!(e instanceof StripeError)) throw e;
+      // Stripe won't close it: just paid, or closed already? Its own record says.
+      try { before = await getCheckout(before.id); } catch (again) { throw cardLater("card-checkout", again); }
+      if (before?.status === "complete") return paidBefore(db, before, order, mail);
+      if (before?.status !== "expired") throw cardLater("card-checkout", e);
+    }
   }
+  // The artwork's picture beside the item in the form; none if it can't be had (artworks.js).
+  const image = await cardPicture(db, order.item_title);
+  const invNum = invoiceNumber(order);
+  let page;
+  try {
+    page = await createCheckout({ order, invNum, image });
+  } catch (e) {
+    throw cardLater("card-checkout", e);
+  }
+  // What the page shows above the form, the piece first (src/components/CardCheckout.jsx).
+  const amount = Number(order.amount);
+  return { ref: invNum, lines: [{ title: order.item_title, amount }], total: amount, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
+}
+
+// The card page named as the one this tab opened before (card-checkout's last), as Stripe tells
+// it, or null: none named, not a page id, a page Stripe doesn't have, or another invoice's.
+async function pageBefore(sessionId, order) {
+  if (!isSessionId(sessionId)) return null;
+  let page;
+  try {
+    page = await getCheckout(sessionId);
+  } catch (e) {
+    if (e instanceof StripeError && e.code === "resource_missing") return null;
+    throw cardLater("card-checkout", e);
+  }
+  return page?.metadata?.invoice_token === order.invoice_token ? page : null;
+}
+
+// The page before was paid after all (the tab moved on before it heard, or Stripe's message hasn't
+// come yet): recorded exactly as on the way back (markCardPaid: Paid, the emails once, the piece
+// SOLD). A finished page for another amount (the invoice was changed since) is never taken as paid.
+async function paidBefore(db, page, order, mail) {
+  if (!paidFor(page, order)) {
+    console.warn("store card-checkout: a finished card page that isn't this invoice's exact amount", page.id);
+    throw new InputError("This invoice already has a card payment. Please contact Fonkiart.", 409);
+  }
+  await markCardPaid(db, order, mail, "redirect");
+  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
+  return { paid: true };
 }
 
 // Stripe says this invoice is paid: mark the order Paid, by card (the paid invoice says "Paid by
@@ -293,7 +355,8 @@ async function markCardPaid(db, order, mail, via) {
   ]);
 }
 
-// The client is back from Stripe. Ask Stripe if that page was really paid, for this invoice
+// Paid in the card form on the invoice page (or back from Stripe's own page, for a page made
+// before the form opened inside it). Ask Stripe if that page was really paid, for this invoice
 // and amount; only then mark the order Paid and email the shop and the client, once.
 export async function opCardPaid(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
@@ -431,7 +494,7 @@ export const STORE_OPS = {
   "order": (db, req, mail) => opOrder(db, req.body || {}, mail),
   "invoice": (db, req) => opInvoice(db, req.body || {}),
   "invoice-approve": (db, req, mail) => opInvoiceApprove(db, req.body || {}, mail),
-  "card-checkout": (db, req) => opCardCheckout(db, req.body || {}),
+  "card-checkout": (db, req, mail) => opCardCheckout(db, req.body || {}, mail),
   "card-paid": (db, req, mail) => opCardPaid(db, req.body || {}, mail),
   "stripe-event": (db, req, mail) => opStripeEvent(db, req.body || {}, mail),
   // The Cart's card payment (cartCheckout.js). It saves the order with opOrder, handed in here

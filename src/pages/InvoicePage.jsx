@@ -7,10 +7,25 @@ import { orderTracking, orderTrackingLink, carrierLabel, isPickup, PICKUP_LABEL 
 import { SHIP_FIELDS, SHIP_AUTOFILL, hasShipAddress, shipLines, shipForm, shipFields } from "../lib/shipAddress";
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
+import CardCheckout from "../components/CardCheckout";
 import { invoiceNumber } from "../lib/invoiceNumber";
+import { stripeJsReady } from "../lib/stripeJs";
+import { CARD_FORM_DOWN } from "../lib/cartOrder";
 
 // The shipping address fields that take a whole line of the form.
 const SHIP_WIDE = new Set(["ship_name", "ship_address", "ship_phone"]);
+
+// The card page this tab opened last for this invoice (card-checkout's `last`), kept for THIS tab
+// (sessionStorage), so a reload still names it: the server then closes it before it makes a new
+// one, or records it if it was paid after all. Storage blocked: this visit only.
+const lastKey = (token) => `fonkiart-invoice-card:${token}`;
+const readLast = (token) => { try { return sessionStorage.getItem(lastKey(token)) || null; } catch { return null; } };
+const keepLast = (token, id) => {
+  try { if (id) sessionStorage.setItem(lastKey(token), id); else sessionStorage.removeItem(lastKey(token)); } catch { /* blocked */ }
+};
+// Card payment answered, but not with the form: what the page says (the server's 409 words are
+// the client's to read; anything else, this).
+const CARD_LATER = "Card payment isn't working right now. Please try again in a moment, or choose another way to pay.";
 
 // shopView: opened from the admin's "Open" button (?view=shop). The customer's page,
 // read-only: no Approve button, so the shop can look without approving anything.
@@ -25,8 +40,21 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const [approveFailed, setApproveFailed] = useState(false);
   const [cardReady, setCardReady] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [cardError, setCardError] = useState(false);
   const [cardCheckFailed, setCardCheckFailed] = useState(false);
+  // Pay by card, INSIDE this page (Andy, 2026-11-18: "i don't want to be making the user jump to
+  // stripe then back"): pay, the card form's page while it is open (card-checkout's answer);
+  // cardCheck, what was heard after paying in it ("checking", "unpaid", "error"); calm, the calm
+  // word when the form can't open, with Try Again (retry); cardMsg, the server's own word (409).
+  const [pay, setPay] = useState(null);
+  const [cardCheck, setCardCheck] = useState(null);
+  const [calm, setCalm] = useState("");
+  const [retry, setRetry] = useState(false);
+  const [cardMsg, setCardMsg] = useState("");
+  // Set the moment a card button is tapped, so a double tap (or Check Again, twice) asks once.
+  const cardBusy = useRef(false);
+  const lastPage = useRef(null);
+  const cardTop = useRef(null);
+  const waysTop = useRef(null);
   // The shipping address form (null while closed), whether it is saving, and what the last save said.
   const [shipDraft, setShipDraft] = useState(null);
   const [shipSaving, setShipSaving] = useState(false);
@@ -60,18 +88,66 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     load();
   }, [token, shopView]);
 
-  // "Pay by card": the server asks Stripe for a payment page with this invoice's exact amount.
-  const handleCard = async () => {
-    if (shopView || paying) return;
-    setPaying(true);
-    setCardError(false);
-    try {
-      const r = await storeCall("card-checkout", { token });
-      if (r?.url) { window.location.assign(r.url); return; }
-      if (r?.paid) setOrder(o => ({ ...o, status: "paid" }));
-    } catch (e) { console.warn("Card payment:", e); setCardError(true); }
-    setPaying(false);
+  // Paid: the paid invoice is its own thank-you, shown from its TOP. The server's own copy of the
+  // order when it answers (it knows how it was paid); if not, Paid as the server just said.
+  // method: "card" when it was paid in the card form.
+  const paidNow = async (method) => {
+    lastPage.current = null;
+    keepLast(token, null);
+    let fresh = null;
+    try { fresh = (await storeCall("invoice", { token }))?.order || null; } catch { /* Paid all the same */ }
+    setOrder(o => (fresh && isPaid(fresh.status) ? fresh : { ...o, status: "paid", paid_method: method || o.paid_method }));
+    setPay(null); setCardCheck(null); setCalm(""); setRetry(false); setCardMsg("");
+    requestAnimationFrame(() => cardTop.current?.scrollIntoView({ block: "start" }));
   };
+
+  // "Pay by card": Stripe's card form, with this invoice's exact amount, opens RIGHT HERE in place
+  // of the ways to pay, or not at all: the client is never sent to Stripe's own page. Stripe.js
+  // comes first (src/lib/stripeJs.js); if it can't load, or the server can't offer the form
+  // (409 CARD_FORM_DOWN), the calm word, with Try Again and the other ways to pay above. The card
+  // page this tab opened before goes with it (last), so only one page can ever take the money.
+  const handleCard = async () => {
+    if (shopView || cardBusy.current) return;
+    cardBusy.current = true;
+    setPaying(true); setCalm(""); setRetry(false); setCardMsg("");
+    try {
+      if (!(await stripeJsReady())) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+      const last = lastPage.current || readLast(token);
+      const r = await storeCall("card-checkout", { token, embedded: true, ...(last ? { last } : {}) });
+      if (r?.paid) { await paidNow(null); return; }
+      if (!r?.clientSecret) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+      lastPage.current = r.session;
+      keepLast(token, r.session);
+      setCardCheck(null);
+      setPay(r);
+    } catch (e) {
+      console.warn("Card payment:", e);
+      if (e.status === 409 && e.message !== CARD_FORM_DOWN) setCardMsg(e.message);
+      else { setRetry(true); setCalm(e.status === 409 ? CARD_FORM_DOWN : CARD_LATER); }
+    } finally {
+      cardBusy.current = false;
+      setPaying(false);
+    }
+  };
+  // Paid in the form, and the client never left: the server asks Stripe itself (card-paid). Paid:
+  // the paid invoice. Not yet, or out of reach: a calm word and Check Again, asked once a tap.
+  const cardComplete = async (page) => {
+    if (cardBusy.current) return;
+    cardBusy.current = true;
+    setCardCheck("checking");
+    try {
+      const r = await storeCall("card-paid", { token, session: page.session });
+      if (r?.paid) { await paidNow("card"); return; }
+      setCardCheck("unpaid");
+    } catch (e) {
+      console.warn("Card check:", e);
+      setCardCheck("error");
+    } finally {
+      cardBusy.current = false;
+    }
+  };
+  // Stripe.js wouldn't open the form: the calm word; Try Again asks for a new one.
+  const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
 
   const handleApprove = async () => {
     if (!order || !canApprove({ approved, shopView })) return;
@@ -165,7 +241,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
   return shell(
-    <div className="invoice-card">
+    <div className="invoice-card" ref={cardTop}>
       {shopView && (
         <p style={{fontSize:"var(--inv-small)",lineHeight:1.5,color:"#7a5b14",background:"#fff8ec",border:"1px solid #e8d5a0",padding:"7px 14px",marginBottom:18,textAlign:"center"}}>
           Shop view, read-only. This is the page the customer sees; the Confirm order button is hidden here.
@@ -236,11 +312,12 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           )}
           {pickup && <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginTop:14}}>{PICKUP_LABEL}</p>}
         </div>
-      ) : approved ? (
+      ) : approved ? (<>
         <div className="invoice-approved-banner">
           <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:8,textWrap:"balance"}}>Order Confirmed ✓</p>
-          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6,marginBottom:hasAnyPayment?20:0}}>
-            {hasAnyPayment
+          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6,marginBottom:hasAnyPayment&&!pay?20:0}}>
+            {pay ? `Your order is confirmed. Pay ${amountText} by card, right here.`
+              : hasAnyPayment
               ? `Your order is confirmed. It is not paid yet. Please send ${amountText} using one of these:`
               : "Your order is confirmed. It is not paid yet. Fonkiart will email you how to pay."}
           </p>
@@ -249,8 +326,9 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
               We couldn't confirm your card payment just now. If you paid, Stripe emails you a receipt and Fonkiart will mark it paid.
             </p>
           )}
-          {hasAnyPayment && (
-            <div style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
+          {/* The card form, while open, takes the place of this list (below the banner). */}
+          {hasAnyPayment && !pay && (
+            <div ref={waysTop} style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
               <p style={{fontSize:"var(--inv-small)",letterSpacing:".12em",textTransform:"uppercase",color:"#4a8c6a",marginBottom:14}}>Send Payment To</p>
 
               {/* Zelle */}
@@ -292,25 +370,33 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                 </div>
               )}
 
-              {/* Card: Stripe's payment page with this invoice's exact amount already in it. */}
+              {/* Card: Stripe's card form, with this invoice's exact amount, opens right here. */}
               {payCard && (
                 <div style={{textAlign:"center",marginTop:4}}>
+                  {calm && <p className="pay-calm" role="status" style={{textAlign:"left"}}>{calm}</p>}
                   <button type="button" className="tap" onClick={handleCard} disabled={paying || shopView}
                     style={{display:"inline-block",background:"#635bff",color:"#fff",border:"none",padding:"13px 32px",fontSize:"var(--inv-text)",letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",cursor:paying||shopView?"default":"pointer",opacity:paying?0.7:1}}>
-                    {paying ? "Opening the secure card page…" : `💳 Pay ${amountText} by card →`}
+                    {paying ? "Opening the secure card form…" : retry ? "Try Again" : `💳 Pay ${amountText} by card →`}
                   </button>
-                  <p style={{fontSize:"var(--inv-small)",color:"var(--muted)",marginTop:8,lineHeight:1.5}}>Secure payment by Stripe. The amount is already filled in.</p>
-                  {cardError && (
-                    <p role="alert" style={{fontSize:"var(--inv-text)",color:"#c0392b",lineHeight:1.6,marginTop:8}}>
-                      Card payment isn't working right now. Please use another way above, or try again later.
-                    </p>
+                  <p style={{fontSize:"var(--inv-small)",color:"var(--muted)",marginTop:8,lineHeight:1.5}}>Secure card form by Stripe, right here on this page. The amount is already filled in.</p>
+                  {retry && !paying && (payZelle || payVenmo || payCashApp) && (
+                    <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay ↑</button>
                   )}
+                  {cardMsg && <p role="alert" style={{fontSize:"var(--inv-text)",color:"#c0392b",lineHeight:1.6,marginTop:10}}>{cardMsg}</p>}
                 </div>
               )}
             </div>
           )}
         </div>
-      ) : shopView ? (
+        {/* Pay by card: the piece first, then Stripe's form, in place of the ways to pay
+            (src/components/CardCheckout.jsx). "← Choose another way to pay" brings them back. */}
+        {pay && (
+          <div className="inv-card-panel">
+            <CardCheckout pay={pay} artworks={artworks} noun="invoice" totalLabel="Total Due"
+              onBack={() => { setPay(null); setCardCheck(null); }} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
+          </div>
+        )}
+      </>) : shopView ? (
         <div className="invoice-pay-section">
           <p style={{fontSize:"var(--inv-text)",color:"var(--muted)",lineHeight:1.6,textAlign:"center"}}>Not approved by the customer yet.</p>
         </div>

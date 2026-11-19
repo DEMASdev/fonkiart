@@ -4,13 +4,14 @@
 // carry a reference, a language and tracking tags, so one link charged one fixed price on
 // every invoice, or made the client type the amount. Instead, when the client taps
 // "Pay by card", the website asks Stripe for a payment page with that invoice's EXACT
-// amount and invoice number, and sends the client there.
+// amount and invoice number, and shows its card form right there on the invoice page
+// (Stripe.js), never on Stripe's own page (Andy, 2026-11-18: "i don't want to be making the
+// user jump to stripe then back").
 //
-// When the client comes back from paying, the website asks Stripe AGAIN whether that page
-// was really paid, for this invoice and this amount, before it marks the order Paid. Nothing
-// the browser sends is trusted on its own. Stripe's own "paid" message (the webhook, op
-// "stripe-event" in storeOps.js) is checked the same way, for the client who closes the tab
-// before coming back.
+// Once paid, the website asks Stripe AGAIN whether that page was really paid, for this
+// invoice and this amount, before it marks the order Paid. Nothing the browser sends is
+// trusted on its own. Stripe's own "paid" message (the webhook, op "stripe-event" in
+// storeOps.js) is checked the same way, for the client who closes the tab too soon.
 //
 // Needs STRIPE_SECRET_KEY in Vercel (a restricted key with "Checkout Sessions: Write" is
 // enough). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
@@ -27,12 +28,14 @@ export class StripeError extends Error {
 const key = () => String(process.env.STRIPE_SECRET_KEY || "").trim();
 export const cardReady = () => /^(sk|rk)_(live|test)_\S+$/.test(key());
 
-// The account's PUBLIC key, which Stripe.js needs to open the Cart's card form inside
-// fonkiart.com (cartCheckout.js). Vercel variable STRIPE_PUBLISHABLE_KEY (pk_live_...).
+// The account's PUBLIC key, which Stripe.js needs to open the card form inside fonkiart.com
+// (the Cart's, cartCheckout.js, and the invoice page's, storeOps.js opCardCheckout). Vercel
+// variable STRIPE_PUBLISHABLE_KEY (pk_live_...).
 // Public by design: Stripe.js hands it to every browser. It still lives in Vercel, not in git.
 // It must be the same mode as the secret key (both live or both test), or Stripe.js can't
-// open the page. With none, a bad one or a mismatch, the Cart's card payment doesn't start and
-// nothing is saved (cartCheckout.js): the buyer is never sent to Stripe's own page instead.
+// open the page. With none, a bad one or a mismatch, no card form opens (the Cart saves nothing,
+// cartCheckout.js; an invoice keeps its other ways to pay): nobody is ever sent to Stripe's own
+// page instead.
 export function publishableKey() {
   const { pk, mode, why } = pkCheck();
   if (!mode || !cardReady()) return null;
@@ -152,13 +155,21 @@ function paymentPage({ cents, name, description, image, ...rest }) {
   };
 }
 
-// The payment page for one invoice. Returns the address to send the client to.
+// The card form for one invoice, INSIDE the invoice page (Stripe.js; ui_mode "embedded"), as the
+// Cart's (createCartCheckout below), and never Stripe's own page any more. The page carries the
+// invoice's token (metadata invoice_token), so the check once paid (op card-paid) and Stripe's
+// own message find the order from Stripe's answer, never from the browser. Paid, the client STAYS
+// on the invoice page: redirect_on_completion "never", so Stripe sends nobody anywhere and needs
+// no return address (cards only: 3-D Secure opens inside Stripe's own form). Pages made before
+// this change are Stripe's own: they still bring the client back to ?invoice=...&card=<page id>,
+// which is checked the same way (storeOps.js opCardPaid).
 // image: the artwork's picture (artworks.js cardPicture), or nothing. A picture never stops a
 // payment: if Stripe refuses the page with it (a 400), the page is asked for again without it.
-export async function createCheckout({ order, invNum, site, image }) {
+// Returns { id, clientSecret }: id, which the invoice page names once paid (card-paid) or when it
+// asks for a form again (card-checkout's last); clientSecret, for Stripe.js to open the form.
+export async function createCheckout({ order, invNum, image }) {
   const cents = toCents(order.amount);
   if (cents < MIN_CENTS) throw new StripeError("This invoice is too small for a card payment", "too-small");
-  const back = `${site}/?invoice=${encodeURIComponent(order.invoice_token)}`;
   const title = String(order.item_title || "Fonkiart artwork").slice(0, 200);
   const picture = typeof image === "string" && image.startsWith("https://") ? image : undefined;
   const page = (img) => paymentPage({
@@ -168,9 +179,8 @@ export async function createCheckout({ order, invNum, site, image }) {
     metadata: { invoice: invNum, invoice_token: order.invoice_token, order_id: order.id },
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart invoice ${invNum}: ${title}`, metadata: { invoice: invNum, order_id: order.id } },
-    // Stripe swaps {CHECKOUT_SESSION_ID} for the real one when it sends the client back.
-    success_url: `${back}&card={CHECKOUT_SESSION_ID}`,
-    cancel_url: back,
+    ui_mode: "embedded",
+    redirect_on_completion: "never", // paid, the client stays on the invoice page
   });
   let session;
   try {
@@ -180,8 +190,9 @@ export async function createCheckout({ order, invNum, site, image }) {
     console.warn("stripe: Stripe refused the payment page with the picture; making it without:", e.code, e.message);
     session = await stripe("/checkout/sessions", page(undefined));
   }
-  if (!session?.url) throw new StripeError("Stripe sent no payment page", "no-url");
-  return session.url;
+  if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
+  if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
+  return { id: session.id, clientSecret: session.client_secret };
 }
 
 // The card form for a Cart order (cartCheckout.js), INSIDE fonkiart.com (Stripe.js; ui_mode

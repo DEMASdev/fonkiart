@@ -5,20 +5,23 @@ import PayArt from "./PayArt";
 // it has gone (the panel closed and opened again, or React's development double start).
 const forms = { turn: Promise.resolve() };
 
-// The Cart's card payment INSIDE fonkiart.com (Andy: "can it be imbedded inside fonkiart instead
-// of sending the customer away ?"), as the last step of buying a work of art: the pieces first
+// The card payment INSIDE fonkiart.com, for the Cart (CheckoutModal) and for an invoice
+// (InvoicePage) (Andy: "can it be imbedded inside fonkiart instead of sending the customer
+// away ?"), as the last step of buying a work of art: the pieces first
 // (PayArt), then Stripe's own card form (Embedded Checkout, mounted with Stripe.js from
 // js.stripe.com, src/lib/stripeJs.js). Paid, the buyer STAYS here (Andy: "i don't want to be
 // making the user jump to stripe then back"): Stripe.js says so (onComplete), the form goes, and
 // the checkout asks the server whether the payment is in, then shows the thank-you right here.
 // 3-D Secure, when a bank asks for it, opens inside Stripe's own form, not on another page.
-// pay: the server's answer (cart-card / cart-again): { ref, session, lines, total, clientSecret, publishableKey }.
+// pay: the server's answer (cart-card / cart-again, or an invoice's card-checkout):
+// { ref, session, lines, total, clientSecret, publishableKey }. noun: what pay.ref names, "order"
+// (the Cart: its order is saved) or "invoice"; totalLabel: the line above the total.
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
 // onFail: the form couldn't open here; the checkout says so calmly, with Try Again and another
 // way to pay (never Stripe's own page).
 // onComplete(pay): paid in the form. check: what the checkout has heard since: "checking",
 // "unpaid" or "error" (each of the last two with Check Again, which asks again).
-export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete, check }) {
+export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete, check, noun = "order", totalLabel = "Total" }) {
   const [box, setBox] = useState(null); // the element the form goes into, once it is on the page
   const [ready, setReady] = useState(false);
   const failed = useEffectEvent((error) => onFail?.(error));
@@ -51,8 +54,8 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
   return (
     <div className="pay-card">
       {!paid && <button type="button" className="tap pay-card-back" onClick={onBack}>← Choose another way to pay</button>}
-      <p className="pay-card-label">Your order <span className="pay-card-ref">{pay.ref}</span></p>
-      <PayArt lines={pay.lines} total={pay.total} artworks={artworks} />
+      <p className="pay-card-label">Your {noun} <span className="pay-card-ref">{pay.ref}</span></p>
+      <PayArt lines={pay.lines} total={pay.total} artworks={artworks} totalLabel={totalLabel} />
       {!paid && (
         <>
           {!ready && <p className="pay-card-wait" role="status">Opening the secure card form…</p>}
@@ -67,7 +70,7 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
             {check === "unpaid"
               ? "We haven't received this payment yet. Please give it a moment, then check again."
               : "We couldn't check your payment right now. Please check again in a moment."}
-            {" "}Your order <strong>{pay.ref}</strong> is saved.
+            {noun === "order" && <>{" "}Your order <strong>{pay.ref}</strong> is saved.</>}
           </p>
           <button type="button" className="tap confirm-btn" onClick={() => onComplete?.(pay)}>Check Again</button>
         </>

@@ -662,6 +662,9 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .invoice-pay-title { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
 .invoice-pay-value { font-size:calc(var(--inv-text) + 3px);color:var(--ink);font-weight:500; }
 .invoice-approved-banner { background:#f0f9f4;border:1px solid #a3d4b3;padding:20px 24px;text-align:center;margin-top:20px; }
+/* Pay by card on the invoice: the piece, then Stripe's form, right under the banner (InvoicePage). */
+.inv-card-panel { --inv-small:16px;--inv-text:17px;margin-top:16px;padding-top:4px;text-align:left; }
+.invoice-card { scroll-margin-top:84px; }
 /* The invoice number and its dates: side by side; on a phone the dates go under the number,
    each line whole, instead of breaking "November 14, | 2026". */
 .inv-num-row { display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px 16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border); }
