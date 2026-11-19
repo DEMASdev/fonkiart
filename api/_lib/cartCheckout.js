@@ -12,10 +12,11 @@
 //    counts only as the server checks it: the amount charged comes from the shop's own records,
 //    NEVER from the browser. A piece that can't be found or priced, or is already sold, refuses
 //    the card payment with a message the buyer can act on, and nothing is saved. Then the order
-//    is saved exactly as for Zelle (opOrder: the rows, the client, the coupon, both "order
-//    received" emails), with the server's prices, and Stripe makes the card form for exactly
-//    those rows. Once paid, Stripe brings the buyer back to the shop address they paid from
-//    (returnSite).
+//    is saved as for Zelle (opOrder: the rows, the client, the coupon), with the server's prices,
+//    but WITHOUT the two "order received" emails: a card order is confirmed once it is PAID (2.
+//    and 3.), or once it is paid another way after all (6.). Its rows' notes end with CARD_NOTE
+//    until then. Stripe makes the card form for exactly those rows. Once paid, Stripe brings the
+//    buyer back to the shop address they paid from (returnSite).
 // 2. "cart-paid": the buyer is back on fonkiart.com (?cart=FA-...&card=cs_...). The server asks
 //    Stripe about that page itself: paid, for this reference, for the rows' exact cents, in
 //    dollars. Only then do the rows turn Paid by card and the pieces SOLD, and ONE "Payment
@@ -31,6 +32,10 @@
 // 5. Orders started on Stripe's own page before the card form opened inside fonkiart.com come
 //    back the same way (?cart=FA-...&card=cs_... or &card=cancelled) and are paid exactly as
 //    above, by the card form if paid by card again. No new one is ever made.
+// 6. "cart-other": the buyer pays a saved card order with Zelle, Venmo or Cash App instead. Its
+//    card page is closed first, then, ONCE, the normal "order received" pair goes out for its
+//    rows, exactly as for a Zelle order (Andy's rule, 2026-11-18: a card order's emails only
+//    once it is paid).
 
 import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, markSoldForOrder, PAID_STATUSES } from "./artworks.js";
@@ -44,6 +49,14 @@ export const CARD_SOON = "Card payment is being set up. Please use Zelle or cont
 // browser's copy (src/lib/cartOrder.js) lets the checkout say it calmly, with Try Again and
 // another way to pay; tests/checkout-flow.test.js checks the two agree.
 export const CARD_FORM_DOWN = "The secure card form couldn't open right now. Nothing was charged. Please try again, or choose another way to pay.";
+// The end of a Cart card order's notes while its "order received" emails wait (opOrder, card
+// path). Paid by card, the paid pair confirms it (settleCart); paid another way instead,
+// opCartOther changes these words and sends the pair, once. Orders saved before this rule carry
+// none: their emails went out as they were saved, so nothing is sent for them again.
+export const CARD_NOTE = " · Paying by card";
+// A Map, so only these three count (an object would also answer "toString" or "__proto__").
+const OTHER_WAYS = new Map([["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"]]);
+const COUPON_RE = / · (\d{1,2})% coupon applied\b/;
 
 const NOT_PAID = ["pending", "confirmed"]; // as storeOps.js NOT_PAID_STATUSES
 const REF_RE = /^FA-\d{1,9}$/;
@@ -127,8 +140,8 @@ export async function opCartCard(db, body, mail, saveOrder) {
     page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, site: returnSite(body.site) });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
-    // The order is saved and both "order received" emails are out. Not an error for the
-    // checkout: it keeps the order, says so, and offers card again (cart-again) or another way.
+    // The order is saved (its emails wait until it is paid). Not an error for the checkout: it
+    // keeps the order, says so, and offers card again (cart-again) or another way (cart-other).
     return { ...saved, cardError: `Your order ${order.orderRef} is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.` };
   }
   return { ...saved, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
@@ -226,6 +239,16 @@ async function savedCart(db, body) {
   return { ref, ids, rows };
 }
 
+// The last page was paid after all (another tab, or Stripe's message hasn't come yet): recorded
+// exactly as on the way back (settleCart: the emails go once). A finished page for another amount
+// is never taken as paid: said, and nothing else happens.
+async function paidAlready(op, db, page, mail, ref) {
+  const { paid, why, ...view } = await settleCart(db, page, mail, "redirect");
+  if (paid) return { paid: true, ...view };
+  console.warn(`store ${op}: ${ref} has a finished payment page that isn't its exact amount: ${why}`, page.id);
+  throw new InputError("This order already has a card payment. Please contact Fonkiart.", 409);
+}
+
 // The payment page the checkout opened last for this order, as Stripe tells it, or null when it
 // names none. A page that isn't this order's (another reference, other rows) is "not found".
 async function lastPage(op, sessionId, ref, ids) {
@@ -261,13 +284,7 @@ export async function opCartAgain(db, body, mail) {
   const { ref, ids, rows } = await savedCart(db, body);
   if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...cartView(ref, rows) };
   let last = await lastPage("cart-again", body.session, ref, ids);
-  const paidAlready = async (page) => {
-    const { paid, why, ...view } = await settleCart(db, page, mail, "redirect");
-    if (paid) return { paid: true, ...view };
-    console.warn(`store cart-again: ${ref} has a finished payment page that isn't its exact amount: ${why}`, page.id);
-    throw new InputError("This order already has a card payment. Please contact Fonkiart.", 409);
-  };
-  if (last?.status === "complete") return paidAlready(last);
+  if (last?.status === "complete") return paidAlready("cart-again", db, last, mail, ref);
   if (rows.some(r => r.status !== "pending")) throw new InputError("This order can't be paid here any more. Please contact Fonkiart.", 409);
 
   const arts = await Promise.all(rows.map(r => findPricedArtwork(db, r.item_title)));
@@ -284,7 +301,7 @@ export async function opCartAgain(db, body, mail) {
     } catch (e) {
       if (!(e instanceof StripeError)) throw e;
       try { last = await getCheckout(last.id); } catch (again) { throw stripeLater("cart-again", again); }
-      if (last?.status === "complete") return paidAlready(last);
+      if (last?.status === "complete") return paidAlready("cart-again", db, last, mail, ref);
       if (last?.status !== "expired") throw stripeLater("cart-again", e);
     }
   }
@@ -297,6 +314,58 @@ export async function opCartAgain(db, body, mail) {
   }
   const { name: _name, ...view } = cartView(ref, rows);
   return { ...view, ids, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
+}
+
+// "I've Sent the Payment" by Zelle, Venmo or Cash App for a Cart order the checkout saved for a
+// card payment. Nothing is saved again, and the checks are cart-again's: the reference, the
+// rows, the email, the cart's own pieces, every row still Pending. Its card page, if still open,
+// is closed first, so only one way can take the money. If Stripe is out of reach the switch
+// still goes through (the buyer may have sent the money already); that page then closes by
+// itself within a day, and the log says so. Then, ONCE, the normal "order received" pair goes
+// out, exactly as for a Zelle order: only the call whose guarded write changes the rows' notes
+// from CARD_NOTE sends it, so a retry, a second tab or an order saved before this rule sends
+// nothing. orderReceived: the pair (storeOps.js), handed in by the router like opOrder above.
+export async function opCartOther(db, body, mail, orderReceived) {
+  const way = OTHER_WAYS.get(body.method);
+  if (!way) throw new InputError("Bad payment method");
+  const { ref, ids, rows } = await savedCart(db, body);
+  if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...cartView(ref, rows) };
+  let page = null;
+  try {
+    page = await lastPage("cart-other", body.session, ref, ids);
+  } catch (e) {
+    if (!(e instanceof InputError) || e.status !== 502) throw e;
+    console.error(`store cart-other: couldn't ask Stripe about ${ref}'s card page; it closes by itself within a day`, body.session);
+  }
+  if (page?.status === "complete") return paidAlready("cart-other", db, page, mail, ref);
+  if (rows.some(r => r.status !== "pending")) throw new InputError("This order can't be paid here any more. Please contact Fonkiart.", 409);
+  if (page?.status === "open") {
+    try {
+      await expireCheckout(page.id);
+    } catch (e) {
+      if (!(e instanceof StripeError)) throw e;
+      let now = null;
+      try { now = await getCheckout(page.id); } catch { /* still out of reach */ }
+      if (now?.status === "complete") return paidAlready("cart-other", db, now, mail, ref);
+      if (now?.status !== "expired") console.error(`store cart-other: couldn't close ${ref}'s card page (${e.code || e.message}); it closes by itself within a day`, page.id);
+    }
+  }
+  const was = String(rows[0].notes ?? "");
+  if (was.endsWith(CARD_NOTE) && rows.every(r => r.notes === was)) {
+    const { data: changed, error } = await db.from("Orders").update({ notes: `${was.slice(0, -CARD_NOTE.length)} · Paying by ${way}` })
+      .in("id", ids).eq("notes", was).eq("status", "pending").select("id");
+    if (error) console.error(`store cart-other: couldn't note ${ref} as paid by ${way}, so its emails wait:`, error.message);
+    else if (changed?.length) {
+      const r = rows[0], coupon = COUPON_RE.exec(was);
+      await Promise.allSettled(orderReceived(mail, {
+        firstName: firstName(r.ship_name), fullName: String(r.ship_name || "").trim(), email: r.client_email, phone: r.ship_phone || "",
+        addr: [r.ship_address, r.ship_city, r.ship_state, r.ship_zip, r.ship_country].filter(Boolean).join(", "),
+        orderRef: ref, items: rows.map(x => ({ title: x.item_title, amount: Number(x.amount) })), total: sumCents(rows) / 100,
+        couponApplied: !!coupon, discount: coupon ? Number(coupon[1]) : 0,
+      }));
+    }
+  }
+  return { ok: true, ref };
 }
 
 // The checkout opening again with a Cart order it saved earlier: paid by now, still open to pay,

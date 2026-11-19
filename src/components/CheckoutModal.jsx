@@ -37,6 +37,11 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // tap counts once and two card calls never race (each would close the page before and open
   // its own, leaving one open that nobody pays).
   const busy = useRef(false);
+  // The checkout is gone (✕, or the page moved on) while a card attempt is still on its way:
+  // Stripe.js can take up to 15 s to load, and a buyer may walk away first. Then nothing more is
+  // asked of the server, and no card form opens in a checkout that is closed.
+  const closed = useRef(false);
+  useEffect(() => { closed.current = false; return () => { closed.current = true; }; }, []);
 
   // Predict the next sequential order number (Orders.id is auto-incrementing).
   useEffect(() => {
@@ -103,14 +108,28 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // markSold intentionally removed — Andy marks sold manually in Admin after verifying payment received
   const finish = () => { setDone(true); onSuccess?.(); };
   // Zelle, Venmo, Cash App. A card order this cart already saved is the order: nothing is saved
-  // or emailed again, it is simply paid another way.
+  // again. The server closes its card page and only now sends its "order received" emails, once
+  // (cart-other: a card order's emails wait until it is paid, api/_lib/cartCheckout.js). If the
+  // card payment came through after all, that thank-you shows instead.
   const confirmPaid = async () => {
     if (busy.current) return;
-    if (saved) { dropCardOrder(); finish(); return; }
     busy.current = true;
-    setSaving(true); const ok = await saveOrder(); setSaving(false);
-    busy.current = false;
-    if (ok) finish();
+    setSaving(true); setCheckoutError("");
+    try {
+      if (!saved) { if (await saveOrder()) finish(); return; }
+      const out = await storeCall("cart-other", { ...cardOrderBody(saved, items), method });
+      if (out.paid) { paidNow(out); return; }
+      dropCardOrder(); finish();
+    } catch (e) {
+      console.warn("Paying another way:", e);
+      if (e.status === 404) {
+        startAfresh();
+        setCheckoutError("We couldn't find your saved order. Please enter your details again.");
+      } else if (e.status === 409) setCheckoutError(e.message);
+      else setCheckoutError(`We couldn't record that just now. Your order ${saved.ref} is saved: please try again in a moment, or email ${BREVO_SENDER || "us"} with your order number.`);
+    } finally {
+      busy.current = false; setSaving(false);
+    }
   };
   const handleConfirmZelle   = confirmPaid;
   const handleConfirmVenmo   = confirmPaid;
@@ -147,17 +166,22 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     busy.current = true;
     setSaving(true); setCheckoutError(""); setCalm(""); setRetry(false);
     try {
-      if (!(await stripeJsReady())) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+      const ready = await stripeJsReady();
+      if (closed.current) return; // closed while Stripe.js loaded: nothing saved, nothing sent
+      if (!ready) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
       const site = window.location.origin;
       const order = saved
         ? await storeCall("cart-again", { ...cardOrderBody(saved, items), embedded: true, site })
         : await storeCall("cart-card", { ...orderPayload(), embedded: true, site });
       if (order.paid) { paidNow(order); return; }
-      // Kept BEFORE the form opens, so the next attempt names this page.
-      setSaved(saveCardOrder({
+      // Kept BEFORE the form opens, so the next attempt names this page. Kept even if the checkout
+      // closed meanwhile, so opening it again pays THIS order, never a second one.
+      const kept = saveCardOrder({
         ref: order.ref, ids: order.ids, email: saved ? saved.email : customer.email.trim(),
         lines: order.lines, total: order.total, session: order.session || saved?.session,
-      }));
+      });
+      if (closed.current) return; // no card form in a checkout that is gone
+      setSaved(kept);
       if (order.clientSecret) { setPay(order); return; }
       // Saved, but no card form to open (Stripe failed as the order was saved): the calm word, and
       // Try Again re-opens THAT order (cart-again). Whatever the answer, this tab never leaves.

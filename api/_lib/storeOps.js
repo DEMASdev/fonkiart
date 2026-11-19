@@ -11,7 +11,7 @@ import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
 import { cardReady, cardSetup, createCheckout, checkoutPaidFor, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
-import { opCartCard, opCartPaid, opCartAgain, opCartOrder, isCartPage, cartStripeEvent } from "./cartCheckout.js";
+import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, CARD_NOTE } from "./cartCheckout.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -152,11 +152,27 @@ export async function opCoupon(db, body) {
   return { status: "valid" };
 }
 
+// The two "order received" emails, to the buyer and to the shop, about exactly these pieces (each
+// shows their pictures: emails.js). Sent as an order is placed, except for a Cart card order:
+// its confirmation is the paid pair (cartCheckout.js settleCart), or these two once it is paid
+// another way after all (cartCheckout.js opCartOther).
+export function orderReceived(mail, { firstName, orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed = false }) {
+  const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
+  return [
+    mail.send({ to: email, subject: `Order Received — ${itemsLabel} · Fonkiart`,
+      htmlContent: T.orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender: mail.sender }) }),
+    mail.send({ to: mail.sender, subject: `🎨 New Order ${orderRef}: ${itemsLabel} — ${fullName}`,
+      htmlContent: T.orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) }),
+  ];
+}
+
 // price (server only, never from a browser): the Cart's card payment (cartCheckout.js). It
 // prices every piece from the Artworks table, after the coupon is checked and BEFORE anything
-// is saved; the order rows, both emails and Stripe then use its prices, never the browser's.
-// A piece it can't price refuses the order, and nothing is saved. With it, the answer also
-// carries what the card payment needs: the new rows' ids, the prices and the reference.
+// is saved; the order rows and Stripe then use its prices, never the browser's. A piece it
+// can't price refuses the order, and nothing is saved. With it, the answer also carries what
+// the card payment needs (the new rows' ids, the prices and the reference), and the two "order
+// received" emails WAIT (Andy, 2026-11-18: a card order's emails only once it is paid): the
+// rows' notes end with CARD_NOTE until it is paid, by card or another way.
 export async function opOrder(db, body, mail, { price } = {}) {
   const c = body.customer || {};
   const firstName = text(c.firstName, 100, "first name", { required: true });
@@ -188,7 +204,7 @@ export async function opOrder(db, body, mail, { price } = {}) {
   }
   const discount = await couponDiscount(db);
   if (price) ({ items, total } = await price(items, couponLead ? discount : 0));
-  const notes = [`Order Ref: ${orderRef}`, fullName, phone, addr].filter(Boolean).join(" · ") + (couponLead ? ` · ${discount}% coupon applied` : "");
+  const notes = [`Order Ref: ${orderRef}`, fullName, phone, addr].filter(Boolean).join(" · ") + (couponLead ? ` · ${discount}% coupon applied` : "") + (price ? CARD_NOTE : "");
 
   // The address also goes on the order itself (Andy, 2026-11-17: "also make sure in the admin
   // and for the user can add the shipping address !"): Admin -> Orders and the invoice page
@@ -200,15 +216,11 @@ export async function opOrder(db, body, mail, { price } = {}) {
   const { data: savedRows, error: orderErr } = await (price ? insert.select("id") : insert);
   if (orderErr) console.error("store order insert:", orderErr.message);
 
-  const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
   const couponApplied = !!couponLead;
   await Promise.allSettled([
     existing?.length ? null : db.from("Clients").insert([{ name: fullName, email, phone: phone || null, address: address || null, city: city || null, state: state || null, zip: zip || null, country: country || null }]),
     couponLead ? db.from("Leads").update({ coupon_used: true }).eq("id", couponLead.id) : null,
-    mail.send({ to: email, subject: `Order Received — ${itemsLabel} · Fonkiart`,
-      htmlContent: T.orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender: mail.sender }) }),
-    mail.send({ to: mail.sender, subject: `🎨 New Order ${orderRef}: ${itemsLabel} — ${fullName}`,
-      htmlContent: T.orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed: !!orderErr }) }),
+    ...(price ? [] : orderReceived(mail, { firstName, orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed: !!orderErr })),
   ]);
   if (!price) return { ok: true, saved: !orderErr };
   const ids = (savedRows || []).map(r => r.id).filter(id => Number.isSafeInteger(id));
@@ -429,6 +441,9 @@ export const STORE_OPS = {
   // Paying that same saved order again, and asking whether it is paid: never a second order.
   "cart-again": (db, req, mail) => opCartAgain(db, req.body || {}, mail),
   "cart-order": (db, req, mail) => opCartOrder(db, req.body || {}, mail),
+  // ...and paying it another way after all (Zelle, Venmo, Cash App): its card page closed, and
+  // its "order received" emails then, once (orderReceived, handed in like opOrder above).
+  "cart-other": (db, req, mail) => opCartOther(db, req.body || {}, mail, orderReceived),
   // Is the card form ready to open inside fonkiart.com, and if not, why (stripe.js). Never a key.
   "card-setup": () => cardSetup(),
   "track": (db, req) => opTrack(db, req.body || {}),
