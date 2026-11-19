@@ -34,7 +34,7 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
           {item.salePrice
             ? <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
                 <div className="modal-price" style={{color:"var(--gold)",marginBottom:0}}>${Number(item.salePrice).toLocaleString()}</div>
-                {item.price && <div style={{fontSize:23,color:"var(--muted)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</div>}
+                {item.price && <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:23,fontWeight:600,fontVariantNumeric:"lining-nums",color:"var(--muted)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</div>}
               </div>
             : item.price
               ? <div className="modal-price">${Number(item.price).toLocaleString()}</div>

@@ -100,7 +100,7 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
                 background:"#c0392b",color:"#fff",border:"2px solid #fff",cursor:"pointer",
                 lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0,zIndex:2
               }}>✕</button>
-              {i===0 && <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,textAlign:"center",letterSpacing:".08em",padding:"4px 0",pointerEvents:"none"}}>MAIN</div>}
+              {i===0 && <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:16,textAlign:"center",letterSpacing:".08em",padding:"3px 0",pointerEvents:"none"}}>MAIN</div>}
               <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0)",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .2s",pointerEvents:"none"}}
                 className="img-hover-overlay">
                 <span style={{color:"#fff",letterSpacing:".1em",opacity:0,transition:"opacity .2s"}}>🔍 Preview</span>

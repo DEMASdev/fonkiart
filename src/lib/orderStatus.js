@@ -77,15 +77,17 @@ export function paidPick(order, status) {
 // How each status looks to a buyer. My Account and Track my order both read this one table, so a
 // paid order can never look less far along in one than in the other (2026-11-18: My Account had no
 // Paid, so a paid order showed a plain chip and nothing lit on its line, behind an unpaid one).
-// The colours are Track my order's, the same five as Admin -> Dashboard. bg = the chip, fg = its
-// words, dot = its dot on My Account's line where that differs from the chip: Pending's light chip
-// colour would be lost as a small dot on white.
+// The colours are Track my order's; Admin -> Dashboard reads them too. bg = the chip, fg = its
+// words, dot = its dot on a line where that differs from the chip: Pending's light chip colour
+// would be lost as a small dot on white. Every chip's words read at 4.5:1 or more (Andy's rule is
+// for people who can't see well): white was 2.5:1 on Paid's green and 2.9:1 on Delivered's gold,
+// so those two have dark ink words (7.0:1 and 6.0:1).
 export const STATUS_LOOK = {
   pending: { bg: "#f0d5a8", fg: "var(--ink)", dot: "#c9a96e" },
   confirmed: { bg: "#1e3a52", fg: "#fff" },
-  paid: { bg: "#52b788", fg: "#fff" },
+  paid: { bg: "#52b788", fg: "var(--ink)" },
   shipped: { bg: "#2d6a4f", fg: "#fff" },
-  delivered: { bg: "var(--gold)", fg: "#fff" },
+  delivered: { bg: "var(--gold)", fg: "var(--ink)" },
 };
 
 // One status as a buyer sees it: its word, its colours and its step on the list (0 = Pending ...

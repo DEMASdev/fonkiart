@@ -68,11 +68,11 @@ export default function ItemList({ data, deleteArtwork, patchArtwork, onEdit }) 
             <div style={{ display:"flex", gap:5, marginBottom:5 }}>
               <button className="ai-toggle"
                 onClick={async () => { await patchArtwork(item.id, { isNew: !item.isNew }); }}
-                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isNew?"var(--sidebar-bg)":"var(--border)", background:item.isNew?"var(--sidebar-bg)":"transparent", color:item.isNew?"var(--gold)":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
+                style={{ padding:"4px 12px", fontSize:16, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isNew?"var(--sidebar-bg)":"var(--border)", background:item.isNew?"var(--sidebar-bg)":"transparent", color:item.isNew?"var(--ink)":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
               >New</button>
               <button className="ai-toggle"
                 onClick={async () => { await patchArtwork(item.id, { isSold: !item.isSold }); }}
-                style={{ padding:"2px 8px", fontSize:10, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isSold?"#c0392b":"var(--border)", background:item.isSold?"#c0392b":"transparent", color:item.isSold?"#fff":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
+                style={{ padding:"4px 12px", fontSize:16, letterSpacing:".08em", textTransform:"uppercase", border:"1px solid", borderColor:item.isSold?"#c0392b":"var(--border)", background:item.isSold?"#c0392b":"transparent", color:item.isSold?"#fff":"var(--muted)", cursor:"pointer", transition:"all .2s", borderRadius:2 }}
               >Sold</button>
             </div>
             <div style={{ display:"flex", gap:5 }}>

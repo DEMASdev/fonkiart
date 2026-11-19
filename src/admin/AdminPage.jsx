@@ -5,7 +5,7 @@ import AdminPanel from "./AdminPanel";
 import { mouseHover } from "../utils/hover";
 
 const ADMIN_EMAIL = "fonkiart@gmail.com";
-const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:12, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
+const linkBtn = { background:"none", border:"none", cursor:"pointer", color:"var(--gold)", fontSize:16, fontFamily:"'DM Sans',sans-serif", textDecoration:"underline", textUnderlineOffset:3, padding:0 };
 
 export default function AdminPage({ data, updateData, addArtwork, editArtwork, deleteArtwork, patchArtwork, loadArtworks, onBack, autoAuth, onAutoAuthUsed, onViewRoom, tab, setTab }) {
   const [authed, setAuthed] = useState(() => autoAuth || adminHasToken());
@@ -72,7 +72,7 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
             onKeyDown={e => { if(e.key==="Enter") doAuth(); }} />
           {err && <p className="err">{err}</p>}
         </div>
-        <p style={{ fontSize:12, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
+        <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
           {reset === "sent"
             ? <span style={{ color:"#2d6a4f" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
             : <button className="tap" onClick={forgot} disabled={reset === "sending"} style={linkBtn}>

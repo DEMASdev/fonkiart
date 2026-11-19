@@ -13,7 +13,7 @@ import ArtFlipper from "./ArtFlipper";
 import { mouseHover, mouseOnly } from "../utils/hover";
 
 const Badge = ({ n }) => n > 0
-  ? <span style={{ background:"#c0392b", color:"#fff", borderRadius:10, fontSize:10, padding:"1px 6px", marginLeft:6, fontWeight:600 }}>{n}</span>
+  ? <span style={{ display:"inline-block", minWidth:24, background:"#c0392b", color:"#fff", borderRadius:12, fontSize:16, lineHeight:1.35, letterSpacing:0, textAlign:"center", padding:"0 7px", marginLeft:8, fontWeight:600, fontVariantNumeric:"lining-nums" }}>{n}</span>
   : null;
 
 export default function AdminPanel({ data, updateData, addArtwork, editArtwork, deleteArtwork, patchArtwork, loadArtworks, onBack, onLogout, onViewRoom, tab, setTab }) {

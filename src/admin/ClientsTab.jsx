@@ -132,7 +132,7 @@ export default function ClientsTab() {
                                 {clientOrders[c.id].map(o=>(
                                   <tr key={o.id}>
                                     <td style={{padding:"8px 12px"}}>{o.item_title}</td>
-                                    <td style={{padding:"8px 12px"}}>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
+                                    <td style={{padding:"8px 12px",fontFamily:"'Cormorant Garamond',serif",fontSize:19,fontWeight:600,fontVariantNumeric:"lining-nums"}}>{o.amount?`$${Number(o.amount).toLocaleString()}`:"—"}</td>
                                     <td style={{padding:"8px 12px",textTransform:"capitalize"}}>{o.status||"pending"}</td>
                                     <td style={{padding:"8px 12px"}}>{o.created_at?new Date(o.created_at).toLocaleDateString():"—"}</td>
                                   </tr>

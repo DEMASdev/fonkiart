@@ -2,6 +2,7 @@
 // src/lib/orderStatus.js (ORDER_STATUSES + STATUS_LOOK). 2026-11-18: My Account kept its own
 // four-step list with no Paid, so a buyer who had just paid saw a plain chip and nothing lit on
 // the line: their order looked less far along than an unpaid one. These tests fail on that code.
+// Group 4 (same day): every chip's words at 4.5:1 or more, and Admin -> Dashboard reads the table too.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -19,7 +20,7 @@ test("a paid order reads Paid, on the paid colour, at step 3 of 5", () => {
   const paid = look("paid");
   assert.equal(paid.label, "Paid");
   assert.equal(paid.bg, "#52b788");
-  assert.equal(paid.fg, "#fff");
+  assert.equal(paid.fg, "var(--ink)", "dark ink words: white read at 2.5:1 on the green");
   assert.equal(paid.step, 2);
 });
 
@@ -63,4 +64,35 @@ test("My Account's line walks the shared list: a dot and a word for every status
   assert.ok((code.match(/ORDER_STATUSES\.map\(/g) || []).length >= 2, "the dots and the words both walk ORDER_STATUSES");
   assert.match(code, /statusLook\(s\)\.dot/, "a lit dot takes its colour from the table");
   assert.ok(!/indexOf\(o\.status\)/.test(code), "no step counting of its own");
+});
+
+// A colour from the table as #rrggbb: var(--x) is read from src/index.css's :root, #abc is spelled out.
+const css = read("src/index.css");
+const hex = (c) => {
+  const v = /^var\(--([a-z-]+)\)$/.exec(c);
+  const h = v ? (css.match(new RegExp(`--${v[1]}:(#[0-9a-fA-F]{3,6})\\b`)) || [])[1] : c;
+  return /^#[0-9a-f]{3}$/i.test(h || "") ? "#" + [...h.slice(1)].map(x => x + x).join("") : h;
+};
+const lum = (h) => {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+
+test("every status chip's words read at 4.5:1 or more on the chip (Andy's rule is for people who can't see well)", () => {
+  assert.ok(Math.abs(contrast("#ffffff", "#000000") - 21) < 0.01 && Math.abs(contrast("#777777", "#ffffff") - 4.48) < 0.01, "the contrast sum itself");
+  for (const s of [...ORDER_STATUSES.map(([s]) => s), "a-status-the-list-does-not-know"]) {
+    const l = look(s), fg = hex(l.fg), bg = hex(l.bg);
+    assert.ok(/^#[0-9a-f]{6}$/i.test(fg) && /^#[0-9a-f]{6}$/i.test(bg), `${s}: its colours resolve (${l.fg} on ${l.bg})`);
+    const r = contrast(fg, bg);
+    assert.ok(r >= 4.5, `${s}: ${l.fg} words on ${l.bg} read at ${r.toFixed(2)}:1, under 4.5:1`);
+  }
+});
+
+test("Admin -> Dashboard's Orders by Status reads the one table too: no status list or colours of its own", () => {
+  const code = read("src/admin/DashboardTab.jsx");
+  assert.match(code, /import \{[^}]*\bstatusLook\b[^}]*\} from "\.\.\/lib\/orderStatus"/, "it reads statusLook from lib/orderStatus");
+  assert.match(code, /ORDER_STATUSES\.map\(/, "it walks the shared list");
+  for (const c of ["#f0d5a8", "#52b788", "#c9a96e"]) assert.ok(!code.toLowerCase().includes(c), `it has a status colour of its own: ${c}`);
+  assert.ok(!/label:"(Pending|Confirmed|Paid|Shipped|Delivered)"/.test(code), "it spells the status words itself");
 });

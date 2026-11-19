@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { adminDb as supabase } from "../lib/adminDb";
 import AdminTasksWidget from "./AdminTasksWidget";
-import { isPaid } from "../lib/orderStatus";
+import { isPaid, ORDER_STATUSES, statusLook } from "../lib/orderStatus";
 
 const Stat = ({ label, value, sub, color }) => (
   <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", borderTop:`3px solid ${color||"var(--gold)"}` }}>
     <div style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:10 }}>{label}</div>
-    <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:42, fontWeight:300, color:"var(--ink)", lineHeight:1 }}>{value}</div>
+    <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:42, fontWeight:600, fontVariantNumeric:"lining-nums", color:"var(--ink)", lineHeight:1 }}>{value}</div>
     {sub && <div style={{ color:"var(--muted)", marginTop:8 }}>{sub}</div>}
   </div>
 );
@@ -83,11 +83,12 @@ export default function DashboardTab({ goToTab, goToSettings }) {
       <div style={{ background:"#fff", border:"1px solid var(--border)", padding:"24px 28px", marginTop:2 }}>
         <p style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:18 }}>Orders by Status</p>
         <div style={{ display:"flex", gap:32, flexWrap:"wrap" }}>
-          {[{label:"Pending",value:stats.pending,color:"#f0d5a8"},{label:"Confirmed",value:stats.confirmed,color:"#1e3a52"},{label:"Paid",value:stats.paidCount,color:"#52b788"},{label:"Shipped",value:stats.shipped,color:"#2d6a4f"},{label:"Delivered",value:stats.delivered,color:"var(--gold)"}].map(({ label, value, color }) => (
-            <div key={label} style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:10, height:10, borderRadius:"50%", background:color, flexShrink:0, border:"1px solid rgba(0,0,0,.1)" }} />
+          {/* The five steps and their colours come from lib/orderStatus, as on My Account and Track my order. */}
+          {ORDER_STATUSES.map(([s, label]) => (
+            <div key={s} style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:10, height:10, borderRadius:"50%", background:statusLook(s).dot, flexShrink:0, border:"1px solid rgba(0,0,0,.1)" }} />
               <span style={{ color:"var(--muted)" }}>{label}</span>
-              <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:"var(--ink)" }}>{value}</span>
+              <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:600, fontVariantNumeric:"lining-nums", color:"var(--ink)" }}>{stats[s === "paid" ? "paidCount" : s]}</span>
             </div>
           ))}
         </div>
