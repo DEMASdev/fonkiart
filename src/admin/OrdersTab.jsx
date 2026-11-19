@@ -9,7 +9,7 @@ import CopyButton from "../components/CopyButton";
 import ArtThumb from "./ArtThumb";
 import ShipAddressDialog from "./ShipAddressDialog";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
-import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave } from "../lib/tracking";
+import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave, withNumber } from "../lib/tracking";
 import { hasShipAddress, shipLines } from "../lib/shipAddress";
 import { needsAddress, shipShort, shipPrefill, orderRef, approvalNote } from "../lib/orderRow";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
@@ -283,6 +283,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   //    Delivered), adds or edits the tracking.
   const clientLabel = (o) => o.client_name || clientName(o.client_email) || o.client_email || "the client";
   const editTrack = (id, patch) => setTrack(t => ({ ...t, [id]: { ...t[id], ...patch } }));
+  // Typing the number fills the carrier menu in from it (withNumber, src/lib/tracking.js).
+  const typeNumber = (id, number) => setTrack(t => ({ ...t, [id]: withNumber(t[id], number) }));
   const noteTrack = (id, note) => setTrackNote(n => ({ ...n, [id]: note }));
   // One save at a time per order: false when this order is already saving.
   const startBusy = (id, what) => {
@@ -420,7 +422,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         <div className="track">
           <span className="o-panel-head">{hasTrackingSaved(o) && !fromMenu(o) ? "Edit the tracking" : "Shipped with a carrier"}</span>
           <div className="track-form">
-            <select aria-label="Carrier" value={draft.carrier} onChange={e=>editTrack(o.id, { carrier:e.target.value, err:"" })}>
+            <select aria-label="Carrier" value={draft.carrier} onChange={e=>editTrack(o.id, { carrier:e.target.value, err:"", guessed:false })}>
               <option value="">Carrier…</option>
               {CARRIERS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
             </select>
@@ -428,7 +430,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
               ? <input type="url" inputMode="url" autoCapitalize="none" autoComplete="off" spellCheck={false} aria-label="Tracking link" placeholder="Tracking link (https://…)"
                   value={draft.url} onChange={e=>editTrack(o.id, { url:e.target.value, err:"" })} />
               : <input type="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} aria-label="Tracking number" placeholder="Tracking number"
-                  value={draft.number} onChange={e=>editTrack(o.id, { number:e.target.value, err:"" })} />}
+                  value={draft.number} onChange={e=>typeNumber(o.id, e.target.value)} />}
             <button className="tap track-save" onClick={()=>askTrack(o)} disabled={busy}>Save</button>
             <button className="tap track-btn" onClick={()=>closeTrack(o.id)} disabled={busy}>Cancel</button>
           </div>

@@ -116,3 +116,28 @@ export function trackingSave(order, fields, { email = false, ship = false } = {}
   const emailStatus = !email ? null : shipped || order?.status !== "delivered" ? "shipped" : "delivered";
   return { change, emailStatus };
 }
+
+// Which carrier a tracking number belongs to, from its shape alone (Andy, 2026-11-18: "shouldn't
+// by the tracking be easy to know which method was used ?"). Only shapes that are clear; anything
+// else is null and the menu is left to him. The spaces and dashes people type are ignored.
+//   UPS: 1Z + 16 letters/digits · USPS: 20-22 digits starting 91-95, the same with "420" + the ZIP
+//   in front, or 2 letters + 9 digits + "US" · FedEx: 12 or 15 digits · DHL Express: 10 digits.
+export function guessCarrier(number) {
+  const n = String(number ?? "").replace(/[\s-]/g, "").toUpperCase();
+  if (/^1Z[0-9A-Z]{16}$/.test(n)) return "ups";
+  if (/^9[1-5]\d{18,20}$/.test(n) || /^420\d{5}(\d{4})?9[1-5]\d{18,20}$/.test(n) || /^[A-Z]{2}\d{9}US$/.test(n)) return "usps";
+  if (/^(\d{12}|\d{15})$/.test(n)) return "fedex";
+  if (/^\d{10}$/.test(n)) return "dhl";
+  return null;
+}
+
+// Typing the tracking number: the carrier menu fills itself in from the number while it is empty
+// or was filled in this way (guessed), and follows the number as it changes. A carrier picked by
+// hand, or saved before, is never changed. Only carrier, number and link are ever saved
+// (trackingFields), so "guessed" stays in the form.
+export function withNumber(draft = {}, number) {
+  const next = { ...draft, number, err: "" };
+  if (draft.carrier && !draft.guessed) return next;
+  const g = guessCarrier(number);
+  return { ...next, carrier: g || "", guessed: !!g };
+}

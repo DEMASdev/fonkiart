@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { CARRIERS, NO_TRACKING, PICKUP, PICKUP_FIELDS, PICKUP_LABEL, isPickup, hasTrackingSaved, carrierLabel, trackingLink, httpsLink, trackingFields, trackingSave, orderTrackingLink, trackingLabel } from "../src/lib/tracking.js";
+import { CARRIERS, NO_TRACKING, PICKUP, PICKUP_FIELDS, PICKUP_LABEL, isPickup, hasTrackingSaved, carrierLabel, trackingLink, httpsLink, trackingFields, trackingSave, orderTrackingLink, trackingLabel, guessCarrier, withNumber } from "../src/lib/tracking.js";
 import { validateChain, runQuery, adminEmail, TRACKING_CARRIERS, isHttpsLink } from "../api/_lib/adminOps.js";
 import { InputError } from "../api/_lib/errors.js";
 import { statusEmailFor } from "../src/lib/adminEmails.js";
@@ -295,4 +295,37 @@ test("Admin -> Orders asks its questions on the order itself, never in a browser
   const POPUP = /\b(alert|confirm|prompt)\s*\(/;
   assert.doesNotMatch(readFileSync(new URL("../src/admin/OrdersTab.jsx", import.meta.url), "utf8"), POPUP);
   assert.match(`if (!window.confirm("Delete this order?")) return;`, POPUP, "control: the check sees a pop-up when there is one");
+});
+
+// Andy, 2026-11-18: "shouldn't by the tracking be easy to know which method was used ?" The carrier
+// menu fills itself in from the shape of the number; anything unclear is left to him.
+test("guessCarrier: the carrier from the shape of the tracking number", () => {
+  for (const [n, c] of [
+    ["1Z999AA10123456784", "ups"], ["1z 999 aa1 01 2345 6784", "ups"],
+    ["9400111899223333123456", "usps"], ["9400 1118 9922 3333 1234 56", "usps"], ["92055901649173127510", "usps"],
+    ["420331019400111899223333123456", "usps"], ["EC123456789US", "usps"],
+    ["123456789012", "fedex"], ["1234 5678 9012", "fedex"], ["123456789012345", "fedex"],
+    ["1234567890", "dhl"],
+  ]) assert.equal(guessCarrier(n), c, n);
+  for (const n of ["", "12345", "12345678901", "1Z12345", "EC123456789DE", "9612019012345678901234", "ABCDEFGHIJ", null, undefined]) {
+    assert.equal(guessCarrier(n), null, String(n));
+  }
+});
+
+test("typing the number: fills an empty menu, follows its own guess, never changes a carrier picked by hand", () => {
+  assert.deepEqual(withNumber({ carrier: "", number: "" }, "1Z999AA10123456784"), { carrier: "ups", number: "1Z999AA10123456784", err: "", guessed: true });
+  assert.equal(withNumber({ carrier: "dhl", guessed: true }, "123456789012").carrier, "fedex", "its own guess follows the number");
+  assert.deepEqual(withNumber({ carrier: "fedex", guessed: true }, "12345678901"), { carrier: "", number: "12345678901", err: "", guessed: false }, "an unclear number empties its own guess");
+  for (const d of [{ carrier: "usps" }, { carrier: "usps", guessed: false }]) {
+    assert.equal(withNumber(d, "1Z999AA10123456784").carrier, "usps", "picked by hand, or saved before: never changed");
+  }
+  assert.equal(withNumber({ carrier: "" }, "12345").carrier, "", "an unclear number leaves an empty menu empty");
+  assert.deepEqual(trackingFields(withNumber({ carrier: "" }, "1Z999AA10123456784")), { fields: { tracking_carrier: "ups", tracking_number: "1Z999AA10123456784", tracking_url: null } }, "only carrier, number and link are saved");
+});
+
+test("the Orders page uses it: the number box goes through withNumber, a hand pick is marked as such", () => {
+  const code = readFileSync(new URL("../src/admin/OrdersTab.jsx", import.meta.url), "utf8");
+  assert.match(code, /const typeNumber = \(id, number\) => setTrack\(t => \(\{ \.\.\.t, \[id\]: withNumber\(t\[id\], number\) \}\)\);/);
+  assert.match(code, /aria-label="Tracking number"[\s\S]{0,160}onChange=\{e=>typeNumber\(o\.id, e\.target\.value\)\}/);
+  assert.match(code, /aria-label="Carrier" value=\{draft\.carrier\} onChange=\{e=>editTrack\(o\.id, \{ carrier:e\.target\.value, err:"", guessed:false \}\)\}/);
 });
