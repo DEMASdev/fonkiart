@@ -73,3 +73,27 @@ export function paidPick(order, status) {
   if (!asksPaidMethod(status)) return "save";
   return knownPaidMethod(order) ? "save-quietly" : "ask";
 }
+
+// How each status looks to a buyer. My Account and Track my order both read this one table, so a
+// paid order can never look less far along in one than in the other (2026-11-18: My Account had no
+// Paid, so a paid order showed a plain chip and nothing lit on its line, behind an unpaid one).
+// The colours are Track my order's, the same five as Admin -> Dashboard. bg = the chip, fg = its
+// words, dot = its dot on My Account's line where that differs from the chip: Pending's light chip
+// colour would be lost as a small dot on white.
+export const STATUS_LOOK = {
+  pending: { bg: "#f0d5a8", fg: "var(--ink)", dot: "#c9a96e" },
+  confirmed: { bg: "#1e3a52", fg: "#fff" },
+  paid: { bg: "#52b788", fg: "#fff" },
+  shipped: { bg: "#2d6a4f", fg: "#fff" },
+  delivered: { bg: "var(--gold)", fg: "#fff" },
+};
+
+// One status as a buyer sees it: its word, its colours and its step on the list (0 = Pending ...
+// 4 = Delivered). A status the list doesn't know shows its own word on a plain chip, step -1, so
+// nothing is lit.
+export function statusLook(status) {
+  const step = ORDER_STATUSES.findIndex(([v]) => v === status);
+  if (step < 0) return { label: status || "", bg: "var(--border)", fg: "var(--ink)", dot: "var(--border)", step: -1 };
+  const { bg, fg, dot = bg } = STATUS_LOOK[status];
+  return { label: ORDER_STATUSES[step][1], bg, fg, dot, step };
+}

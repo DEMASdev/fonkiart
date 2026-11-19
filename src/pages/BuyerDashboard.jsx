@@ -1,8 +1,37 @@
 import { useState, useEffect } from "react";
 import { storeCall } from "../lib/store";
+import { ORDER_STATUSES, statusLook } from "../lib/orderStatus";
 
-const STATUS_COLOR = { pending:"#c9a96e", confirmed:"#1e3a52", shipped:"#2d6a4f", delivered:"var(--gold)" };
-const STATUS_LABEL = { pending:"Pending", confirmed:"Confirmed", shipped:"Shipped", delivered:"Delivered" };
+// Where an order is: a dot for every step of the shared list (lib/orderStatus.js), lit through the
+// order's own step, and each step's word at its dot. On a narrow card the words take turns above and
+// below the line, so all five fit on a phone (index.css, .acct-steps).
+function OrderSteps({ step }) {
+  const last = ORDER_STATUSES.length - 1;
+  return (
+    <div className="acct-steps">
+      <div className="acct-steps-in">
+        <div style={{ display:"flex", alignItems:"center" }} aria-hidden="true">
+          {ORDER_STATUSES.map(([s], i) => {
+            const dot = i <= step ? statusLook(s).dot : "#e0dbd5";
+            return (
+              <div key={s} style={{ display:"flex", alignItems:"center", flex: i < last ? 1 : "none" }}>
+                <div style={{ width:10, height:10, borderRadius:"50%", background:dot, flexShrink:0, border:`2px solid ${dot}` }} />
+                {i < last && <div style={{ flex:1, height:2, background:i < step?"var(--border)":"#e0dbd5", margin:"0 2px" }} />}
+              </div>
+            );
+          })}
+        </div>
+        {ORDER_STATUSES.map(([s, word], i) => (
+          <span key={s} className={i % 2 ? "acct-step up" : "acct-step"} aria-current={i === step ? "step" : undefined}
+            style={{ color: i <= step ? "var(--ink)" : "var(--muted)",
+              ...(i === 0 ? { left:0 } : i === last ? { right:0 } : { left:`calc(${i} * (100% - 10px) / ${last} + 5px)`, transform:"translateX(-50%)" }) }}>
+            {word}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const TabBtn = ({ label, active, onClick }) => (
   <button onClick={onClick}
@@ -73,7 +102,7 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
               </div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                {orders.map(o => (
+                {orders.map(o => { const look = statusLook(o.status); return (
                   <div key={o.id} style={{ background:"#fff", border:"1px solid var(--border)", padding:"20px clamp(14px, 4vw, 24px)" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
                       <div style={{ flex:"1 1 180px", minWidth:0, overflowWrap:"anywhere" }}>
@@ -89,32 +118,14 @@ export default function BuyerDashboard({ user, onLogout, onBack }) {
                             ${Number(o.amount).toLocaleString()}
                           </div>
                         )}
-                        <div style={{ fontSize:16, letterSpacing:".08em", lineHeight:1.3, textTransform:"uppercase", color:["confirmed","shipped","delivered"].includes(o.status)?"#fff":"var(--ink)", background:STATUS_COLOR[o.status]||"var(--border)", padding:"4px 14px", borderRadius:20 }}>
-                          {STATUS_LABEL[o.status] || o.status}
+                        <div style={{ fontSize:16, letterSpacing:".08em", lineHeight:1.3, textTransform:"uppercase", color:look.fg, background:look.bg, padding:"4px 14px", borderRadius:20 }}>
+                          {look.label}
                         </div>
                       </div>
                     </div>
-                    {/* Status progress */}
-                    <div style={{ marginTop:16, display:"flex", alignItems:"center", gap:0 }}>
-                      {["pending","confirmed","shipped","delivered"].map((s, i, arr) => {
-                        const statuses = ["pending","confirmed","shipped","delivered"];
-                        const orderIdx = statuses.indexOf(o.status);
-                        const isActive = i <= orderIdx;
-                        return (
-                          <div key={s} style={{ display:"flex", alignItems:"center", flex: i < arr.length-1 ? 1 : "none" }}>
-                            <div style={{ width:10, height:10, borderRadius:"50%", background:isActive?STATUS_COLOR[s]||"var(--border)":"#e0dbd5", flexShrink:0, border:`2px solid ${isActive?STATUS_COLOR[s]||"var(--border)":"#e0dbd5"}` }} />
-                            {i < arr.length-1 && <div style={{ flex:1, height:2, background:i < orderIdx?"var(--border)":"#e0dbd5", margin:"0 2px" }} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div style={{ display:"flex", justifyContent:"space-between", gap:8, marginTop:6 }}>
-                      {["Pending","Confirmed","Shipped","Delivered"].map(l => (
-                        <div key={l} style={{ fontSize:16, color:"var(--muted)", whiteSpace:"nowrap" }}>{l}</div>
-                      ))}
-                    </div>
+                    <OrderSteps step={look.step} />
                   </div>
-                ))}
+                ); })}
               </div>
             )}
           </>
