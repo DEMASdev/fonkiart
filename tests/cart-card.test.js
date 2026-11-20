@@ -61,7 +61,7 @@ function fakeStripe({ refuse, onExpire } = {}) {
     }
     if (init.method === "POST" && path === "/checkout/sessions") {
       const no = refuse?.(body, calls.length);
-      if (no) return reply(no.status, { error: { message: no.message, code: no.code } });
+      if (no) return reply(no.status, { error: { message: no.message, code: no.code, param: no.param } });
       const id = `cs_test_cart${String(++made).padStart(14, "0")}`;
       let total = 0;
       for (let i = 0; body.has(`line_items[${i}][quantity]`); i++) {
@@ -197,6 +197,7 @@ test("the charged amounts come from the Artworks table: a browser price of $1 fo
   assert.equal(body.has("line_items[2][quantity]"), false, "one line per piece");
   assert.equal(body.get("mode"), "payment");
   assert.equal(body.get("payment_method_types[0]"), "card");
+  assert.equal(body.get("payment_method_types[1]"), "klarna", "and Klarna (tests/klarna.test.js)");
   assert.equal(body.get("customer_email"), "jane@x.co");
 
   // The rows are saved with the server's prices, and Stripe's page names exactly them.
@@ -291,18 +292,20 @@ test("card payments OFF: today's message, and nothing is saved or asked of Strip
 
 // ── inside fonkiart.com, or not at all ──────────────────────────
 
-test("with the publishable key set and Stripe.js ready, the card form opens INSIDE fonkiart.com, and once paid the buyer is sent nowhere", async () => {
+test("with the publishable key set and Stripe.js ready, the card form opens INSIDE fonkiart.com, and once paid by card the buyer is sent nowhere", async () => {
   const stripe = fakeStripe();
   const db = shop();
   const out = await cartCard(db, checkout());
   const body = stripe.calls[0].body;
   assert.equal(body.get("ui_mode"), "embedded");
-  // Andy: "i don't want to be making the user jump to stripe then back". Paid, the buyer stays on
-  // fonkiart.com; cards only, so no payment ever needs a redirect (3-D Secure included).
-  assert.equal(body.get("redirect_on_completion"), "never");
-  assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]"]);
-  assert.equal(body.get("payment_method_types[0]"), "card");
-  for (const sent of ["return_url", "success_url", "cancel_url"]) assert.equal(body.has(sent), false, `no ${sent}`);
+  // Andy: "i don't want to be making the user jump to stripe then back". Paid by card, the buyer
+  // stays on fonkiart.com (3-D Secure included): "if_required" sends a card nowhere. Only Klarna
+  // (Andy, 2026-11-20) leaves for Klarna's site, and comes back to this order's own return path.
+  assert.equal(body.get("redirect_on_completion"), "if_required");
+  assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]", "payment_method_types[1]"]);
+  assert.deepEqual([body.get("payment_method_types[0]"), body.get("payment_method_types[1]")], ["card", "klarna"]);
+  assert.equal(body.get("return_url"), "https://fonkiart.com/?cart=FA-1752&card={CHECKOUT_SESSION_ID}");
+  for (const sent of ["success_url", "cancel_url"]) assert.equal(body.has(sent), false, `no ${sent}`);
   assert.deepEqual(out, {
     ref: "FA-1752", ids: cartRows(db).map(r => r.id), session: stripe.last().id,
     lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800,
@@ -345,7 +348,7 @@ test("NO JUMP: when the card form can't open inside fonkiart.com, the card payme
   assert.equal(out.clientSecret, stripe.last().client_secret);
 });
 
-test("paid in the form, the buyer stays where they are: whatever address a browser sends, Stripe is given none to send anyone to", async () => {
+test("paid by card, the buyer stays where they are; Klarna's way back is the shop's own address, whatever address a browser sends", async () => {
   for (const [label, site] of [
     ["www", "https://www.fonkiart.com"],
     ["the bare address", "https://fonkiart.com"],
@@ -364,10 +367,11 @@ test("paid in the form, the buyer stays where they are: whatever address a brows
     assert.equal(made.length, 2, label);
     for (const { body } of made) {
       assert.equal(body.get("ui_mode"), "embedded", label);
-      assert.equal(body.get("redirect_on_completion"), "never", label);
+      assert.equal(body.get("redirect_on_completion"), "if_required", label);
       const addresses = [...body.entries()].filter(([k, v]) => /^https?:/.test(v) && !k.includes("[images]")).map(([k]) => k);
-      assert.deepEqual(addresses, [], `${label}: no address of any kind (only the pictures)`);
-      for (const sent of ["return_url", "success_url", "cancel_url"]) assert.equal(body.has(sent), false, `${label}: no ${sent}`);
+      assert.deepEqual(addresses, ["return_url"], `${label}: no other address (only the pictures)`);
+      assert.equal(body.get("return_url"), "https://fonkiart.com/?cart=FA-1752&card={CHECKOUT_SESSION_ID}", `${label}: the shop's own, never the browser's`);
+      for (const sent of ["success_url", "cancel_url"]) assert.equal(body.has(sent), false, `${label}: no ${sent}`);
     }
   }
 });
@@ -408,7 +412,8 @@ test("Stripe failing after the order is saved: the checkout keeps the order and 
 });
 
 test("a picture Stripe refuses never stops the payment: the page is made again without pictures", async () => {
-  const stripe = fakeStripe({ refuse: (body) => body.has("line_items[0][price_data][product_data][images][0]") ? { status: 400, message: "Invalid URL", code: "url_invalid" } : null });
+  // As Stripe answers it: the field it refused is named (param), so Klarna stays (tests/klarna.test.js).
+  const stripe = fakeStripe({ refuse: (body) => body.has("line_items[0][price_data][product_data][images][0]") ? { status: 400, message: "Invalid URL", code: "url_invalid", param: "line_items[0][price_data][product_data][images][0]" } : null });
   const out = await cartCard(shop(), checkout());
   assert.equal(stripe.calls.length, 2);
   assert.equal([...stripe.calls[1].body.keys()].some(k => k.includes("[images]")), false);
@@ -646,8 +651,8 @@ test("paying again opens the card form inside fonkiart.com too; when it can't, n
   const again = await cartAgain(db, kept(first));
   const inside = stripe.calls.at(-1).body;
   assert.equal(inside.get("ui_mode"), "embedded");
-  assert.equal(inside.get("redirect_on_completion"), "never", "paid again, still sent nowhere");
-  assert.equal(inside.has("return_url"), false);
+  assert.equal(inside.get("redirect_on_completion"), "if_required", "paid again by card, still sent nowhere");
+  assert.equal(inside.get("return_url"), "https://fonkiart.com/?cart=FA-1752&card={CHECKOUT_SESSION_ID}", "Klarna's way back: this same order");
   assert.deepEqual([again.clientSecret, again.publishableKey], [stripe.last().client_secret, PK]);
   assert.equal("url" in again, false);
   assert.equal(stripe.sessions.get(first.session).status, "expired");

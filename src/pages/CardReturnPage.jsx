@@ -2,7 +2,9 @@ import { useState, useEffect, useEffectEvent } from "react";
 import { storeCall } from "../lib/store";
 import PaidThanks from "../components/PaidThanks";
 
-// Back on fonkiart.com after paying a Cart order by card (?cart=FA-...&card=cs_..., App.jsx).
+// Back on fonkiart.com after paying a Cart order away from it: with Klarna, on Klarna's own site,
+// or on Stripe's own page from before the card form (?cart=FA-...&card=cs_..., App.jsx). A card
+// paid in the form never comes here: it is heard in the form (CardCheckout.jsx, onComplete).
 // The server asks Stripe itself whether that payment page was paid ("cart-paid",
 // api/_lib/cartCheckout.js). Only once it says paid do those pieces leave the cart (onPaid) and
 // the thank-you show (src/components/PaidThanks.jsx). Until then the cart stays exactly as it was.

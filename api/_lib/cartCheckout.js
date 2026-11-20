@@ -15,17 +15,18 @@
 //    is saved as for Zelle (opOrder: the rows, the client, the coupon), with the server's prices,
 //    but WITHOUT the two "order received" emails: a card order is confirmed once it is PAID (2.
 //    and 3.), or once it is paid another way after all (6.). Its rows' notes end with CARD_NOTE
-//    until then. Stripe makes the card form for exactly those rows. Paid, the buyer stays right
-//    there: Stripe sends nobody anywhere (stripe.js createCartCheckout), and the form says so.
-// 2. "cart-paid": the card form says the buyer has paid (or an order started on Stripe's own page
-//    before comes back: ?cart=FA-...&card=cs_..., 5.). The server asks Stripe about that page
+//    until then. Stripe makes the card form for exactly those rows. Paid by card, the buyer stays
+//    right there (stripe.js createCartCheckout), and the form says so. The form also offers
+//    Klarna, which leaves for Klarna's own site and comes back to ?cart=FA-...&card=<page id> (2.).
+// 2. "cart-paid": the card form says the buyer has paid, or the buyer is back from Klarna (or from
+//    Stripe's own page, 5.): ?cart=FA-...&card=cs_.... The server asks Stripe about that page
 //    itself: paid, for this reference, for the rows' exact cents, in dollars. Only then do the
 //    rows turn Paid by card and the pieces SOLD, and ONE "Payment received" email goes to the
 //    buyer and ONE "Paid by card" to the shop, for the whole cart.
 // 3. Stripe's own "paid" message (op "stripe-event", storeOps.js) does the same for a buyer who
 //    closes the tab. Whichever of the two gets there first sends the emails; the other, none.
 // 4. ONE order per cart, however the buyer retries (a double tap, closing the card form and
-//    opening it again, coming back from Stripe's page without paying, a card form that couldn't
+//    opening it again, coming back from Klarna or Stripe's page without paying, a card form that couldn't
 //    open). The checkout keeps the saved order (its reference, rows, email and last payment page)
 //    and asks again with it: "cart-again" opens a new card form for the SAME rows, and
 //    "cart-order" says whether that order is paid by now, still open, or closed. Neither saves

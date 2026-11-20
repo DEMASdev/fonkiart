@@ -267,7 +267,8 @@ const cardLater = (op, e) => {
 // then back"). As the Cart's (cartCheckout.js formKey): the browser must have Stripe.js ready
 // (embedded: true) and the shop's publishable key must be set and right, or no page is made and
 // the page says so calmly (CARD_FORM_DOWN, 409). Stripe's own page is never made any more; pages
-// made before still bring the client back (&card=..., opCardPaid).
+// made before still bring the client back (&card=..., opCardPaid), and so does Klarna, the one
+// way to pay in the form that leaves for its own site (stripe.js waysToPay).
 // last: the card page this tab opened before for this invoice, asked about first so only ONE page
 // can take the money. Paid after all: recorded (markCardPaid: Paid, the emails once) and no new
 // form. Still open: closed (Stripe "expire") before the new one. Another invoice's: left alone.
@@ -334,7 +335,8 @@ async function paidBefore(db, page, order, mail) {
 }
 
 // Stripe says this invoice is paid: mark the order Paid, by card (the paid invoice says "Paid by
-// Card"), then email the shop and the client.
+// Card"), then email the shop and the client. Klarna, paid in the same Stripe form, is recorded
+// the same way.
 // The update only matches an order that is still Pending or Confirmed, so whoever gets there
 // first (the client coming back, Stripe's webhook, a second tab, a replay) sends the two
 // emails, and everyone after them sends none.
@@ -355,9 +357,10 @@ async function markCardPaid(db, order, mail, via) {
   ]);
 }
 
-// Paid in the card form on the invoice page (or back from Stripe's own page, for a page made
-// before the form opened inside it). Ask Stripe if that page was really paid, for this invoice
-// and amount; only then mark the order Paid and email the shop and the client, once.
+// Paid in the card form on the invoice page, or back on it (?invoice=...&card=<page id>) from
+// Klarna's own site, or from Stripe's own page for a page made before the form opened inside it.
+// Ask Stripe if that page was really paid, for this invoice and amount; only then mark the order
+// Paid and email the shop and the client, once. Not paid yet (Klarna can say so): nothing changes.
 export async function opCardPaid(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
   if (PAID_STATUSES.includes(order.status)) return { paid: true };

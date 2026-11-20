@@ -6,7 +6,10 @@
 // "Pay by card", the website asks Stripe for a payment page with that invoice's EXACT
 // amount and invoice number, and shows its card form right there on the invoice page
 // (Stripe.js), never on Stripe's own page (Andy, 2026-11-18: "i don't want to be making the
-// user jump to stripe then back").
+// user jump to stripe then back"). The form takes cards and Klarna (Andy, 2026-11-20: "Klarna is
+// something we should try to push ... little payments"): a card is paid right there in the form;
+// Klarna takes the buyer to Klarna's own site to agree the payments, and brings them back to
+// fonkiart.com (return_url, waysToPay below).
 //
 // Once paid, the website asks Stripe AGAIN whether that page was really paid, for this
 // invoice and this amount, before it marks the order Paid. Nothing the browser sends is
@@ -16,13 +19,16 @@
 // Needs STRIPE_SECRET_KEY in Vercel (a restricted key with "Checkout Sessions: Write" is
 // enough). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
 
+import { siteUrl } from "./site.js";
+
 const API = "https://api.stripe.com/v1";
 const VERSION = "2024-06-20"; // pinned: a change in Stripe's default can't change what we send
 export const MIN_CENTS = 50;  // Stripe's smallest US card charge
 
 // httpStatus: Stripe's own HTTP answer (400 = it refused what we sent), when it answered at all.
+// param: the field Stripe named as the one it refused, when it named one.
 export class StripeError extends Error {
-  constructor(message, code, httpStatus) { super(message); this.code = code; this.httpStatus = httpStatus; }
+  constructor(message, code, httpStatus, param) { super(message); this.code = code; this.httpStatus = httpStatus; this.param = param; }
 }
 
 const key = () => String(process.env.STRIPE_SECRET_KEY || "").trim();
@@ -133,7 +139,7 @@ async function stripe(path, body) {
     throw new StripeError(`Could not reach Stripe: ${e?.message || e}`, "network");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new StripeError(data?.error?.message || `Stripe answered ${res.status}`, data?.error?.code || `http-${res.status}`, res.status);
+  if (!res.ok) throw new StripeError(data?.error?.message || `Stripe answered ${res.status}`, data?.error?.code || `http-${res.status}`, res.status, data?.error?.param);
   return data;
 }
 
@@ -142,9 +148,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A payment page's id as Stripe makes them. Checked before it goes anywhere near a URL.
 export const isSessionId = (id) => /^cs_(live|test)_[A-Za-z0-9]{10,250}$/.test(String(id || ""));
 
-// Every payment page we make: one item, paid once, in dollars, by CARD ONLY. Cards only, so
-// no slower method (a bank transfer) can come back "not paid yet" when the client returns.
-// Apple Pay and Google Pay still show: Stripe counts them as cards.
+// A payment page: one item, paid once, in dollars, by card (Apple Pay and Google Pay count as
+// cards). The card form adds Klarna (waysToPay below); Admin's card check (cardCheck) stays
+// cards only. Never a slower method such as a bank transfer, which comes back "not paid yet".
 // image: one picture shown beside the item (Stripe's product_data.images), or none.
 function paymentPage({ cents, name, description, image, ...rest }) {
   return {
@@ -155,16 +161,57 @@ function paymentPage({ cents, name, description, image, ...rest }) {
   };
 }
 
+// The ways to pay in our card form, and where Stripe brings a buyer back to. Cards and Klarna
+// (Andy, 2026-11-20: "Klarna is something we should try to push ... little payments").
+// redirect_on_completion "if_required": a CARD is paid right there in the form and the buyer
+// STAYS (Stripe.js says so, onComplete, exactly as with "never": 3-D Secure opens inside Stripe's
+// own form); only a way to pay that must leave, Klarna (its own site), comes back to return_url.
+// "never" would turn Klarna off ("redirect-based payment methods will be disabled").
+// return_url: the shop's own address (site.js), NEVER one from the browser, on the return path the
+// site already reads (back): an invoice's ?invoice=<token>&card=<page id> (InvoicePage, op
+// card-paid), a Cart order's ?cart=FA-...&card=<page id> (CardReturnPage, op cart-paid). Stripe
+// puts the page's id in place of {CHECKOUT_SESSION_ID}. Back there, the server asks Stripe itself
+// whether that page is paid, for the exact amount (paidFor, cartPaidFor): until Stripe says
+// "paid", the order stays unpaid. klarna false: cards only, never sent anywhere, as before Klarna.
+function waysToPay(klarna, back) {
+  return klarna
+    ? { payment_method_types: ["card", "klarna"], redirect_on_completion: "if_required", return_url: `${siteUrl()}${back}{CHECKOUT_SESSION_ID}` }
+    : { payment_method_types: ["card"], redirect_on_completion: "never" };
+}
+
+// Asks Stripe for a payment page (make({ klarna, pictures }) builds it), so that neither Klarna nor
+// a picture can ever stop a card payment. If Stripe refuses it (a 400): when Stripe names a
+// picture as the field it refused, it is asked again without the pictures; otherwise (Klarna off
+// for the account, the amount outside Klarna's range...) again with cards only, as before Klarna,
+// then without the pictures too. At most three asks. Anything else (Stripe down, a bad key) is
+// thrown at once.
+async function askForPage(what, make, { pictures }) {
+  let want = { klarna: true, pictures: !!pictures };
+  for (;;) {
+    try {
+      return await stripe("/checkout/sessions", make(want));
+    } catch (e) {
+      if (!(e instanceof StripeError) || e.httpStatus !== 400) throw e;
+      const next = want.pictures && /\[images\]/.test(String(e.param || "")) ? { ...want, pictures: false }
+        : want.klarna ? { ...want, klarna: false }
+        : want.pictures ? { ...want, pictures: false }
+        : null;
+      if (!next) throw e;
+      console.warn(`stripe: Stripe refused ${what} (${want.klarna ? "card and Klarna" : "cards only"}, ${want.pictures ? "with" : "without"} pictures); asking again ${next.klarna ? "with Klarna" : "with cards only"}, ${next.pictures ? "with" : "without"} pictures:`, e.code, e.param || "", e.message);
+      want = next;
+    }
+  }
+}
+
 // The card form for one invoice, INSIDE the invoice page (Stripe.js; ui_mode "embedded"), as the
 // Cart's (createCartCheckout below), and never Stripe's own page any more. The page carries the
 // invoice's token (metadata invoice_token), so the check once paid (op card-paid) and Stripe's
-// own message find the order from Stripe's answer, never from the browser. Paid, the client STAYS
-// on the invoice page: redirect_on_completion "never", so Stripe sends nobody anywhere and needs
-// no return address (cards only: 3-D Secure opens inside Stripe's own form). Pages made before
-// this change are Stripe's own: they still bring the client back to ?invoice=...&card=<page id>,
-// which is checked the same way (storeOps.js opCardPaid).
-// image: the artwork's picture (artworks.js cardPicture), or nothing. A picture never stops a
-// payment: if Stripe refuses the page with it (a 400), the page is asked for again without it.
+// own message find the order from Stripe's answer, never from the browser. Paid by card, the
+// client STAYS on the invoice page; paid with Klarna, Klarna brings them back to
+// ?invoice=<token>&card=<page id> (waysToPay), the same way back as Stripe's own pages made before
+// this change, checked the same way (storeOps.js opCardPaid).
+// image: the artwork's picture (artworks.js cardPicture), or nothing. Neither the picture nor
+// Klarna ever stops a payment: if Stripe refuses the page, it is asked for again (askForPage).
 // Returns { id, clientSecret }: id, which the invoice page names once paid (card-paid) or when it
 // asks for a form again (card-checkout's last); clientSecret, for Stripe.js to open the form.
 export async function createCheckout({ order, invNum, image }) {
@@ -172,24 +219,18 @@ export async function createCheckout({ order, invNum, image }) {
   if (cents < MIN_CENTS) throw new StripeError("This invoice is too small for a card payment", "too-small");
   const title = String(order.item_title || "Fonkiart artwork").slice(0, 200);
   const picture = typeof image === "string" && image.startsWith("https://") ? image : undefined;
-  const page = (img) => paymentPage({
-    cents, name: title, description: `Invoice ${invNum}`, image: img,
+  const back = `/?invoice=${encodeURIComponent(order.invoice_token)}&card=`;
+  const page = ({ klarna, pictures }) => paymentPage({
+    cents, name: title, description: `Invoice ${invNum}`, image: pictures ? picture : undefined,
     customer_email: EMAIL_RE.test(order.client_email || "") ? order.client_email : undefined,
     client_reference_id: invNum,
     metadata: { invoice: invNum, invoice_token: order.invoice_token, order_id: order.id },
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart invoice ${invNum}: ${title}`, metadata: { invoice: invNum, order_id: order.id } },
     ui_mode: "embedded",
-    redirect_on_completion: "never", // paid, the client stays on the invoice page
+    ...waysToPay(klarna, back), // paid by card, the client stays on the invoice page
   });
-  let session;
-  try {
-    session = await stripe("/checkout/sessions", page(picture));
-  } catch (e) {
-    if (!picture || !(e instanceof StripeError) || e.httpStatus !== 400) throw e;
-    console.warn("stripe: Stripe refused the payment page with the picture; making it without:", e.code, e.message);
-    session = await stripe("/checkout/sessions", page(undefined));
-  }
+  const session = await askForPage("the invoice's payment page", page, { pictures: picture });
   if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
   if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
   return { id: session.id, clientSecret: session.client_secret };
@@ -200,23 +241,23 @@ export async function createCheckout({ order, invNum, image }) {
 // jump to stripe then back"). One line per piece, each with its name, its picture and the price
 // the SERVER found for it. The page carries the order's rows (metadata order_ids) and its
 // reference (cart_ref), so the check once paid (cart-paid) and Stripe's own message find the
-// order from Stripe's answer, never from the browser. Paid, the buyer STAYS on fonkiart.com:
-// redirect_on_completion "never", so Stripe sends nobody anywhere and needs no return address.
-// Cards only, so no payment ever needs a redirect (3-D Secure opens inside Stripe's own form).
-// The page hears it from Stripe.js (onComplete), asks cart-paid, and shows the thank-you there.
+// order from Stripe's answer, never from the browser. Paid by card, the buyer STAYS on
+// fonkiart.com (3-D Secure opens inside Stripe's own form): the page hears it from Stripe.js
+// (onComplete), asks cart-paid, and shows the thank-you there. Paid with Klarna, Klarna brings
+// them back to ?cart=FA-...&card=<page id> (waysToPay), the way back the site already reads
+// (CardReturnPage asks cart-paid).
 // Returns { id, clientSecret }: id, kept by the checkout so paying again re-opens THIS order
 // (cart-again); clientSecret, for Stripe.js to open the form.
-// lines: [{ title, amount, image }]. A picture never stops a payment: if Stripe refuses the
-// page with pictures (a 400), it is asked for again without them.
+// lines: [{ title, amount, image }]. Neither a picture nor Klarna ever stops a payment: if Stripe
+// refuses the page, it is asked for again (askForPage).
 export async function createCartCheckout({ ref, ids, lines, email }) {
   const cents = lines.map(l => toCents(l.amount));
   if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
   if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
   const names = lines.map(l => String(l.title || "Fonkiart artwork").slice(0, 200));
   const tags = { cart_ref: ref, order_ids: ids.join(",") };
-  const page = (withPictures) => ({
+  const page = ({ klarna, pictures: withPictures }) => ({
     mode: "payment",
-    payment_method_types: ["card"], // as invoices: cards only, so nothing comes back "not paid yet"
     line_items: lines.map((l, n) => {
       const picture = withPictures && typeof l.image === "string" && l.image.startsWith("https://") ? [l.image] : undefined;
       return { quantity: 1, price_data: { currency: "usd", unit_amount: cents[n], product_data: { name: names[n], images: picture } } };
@@ -227,16 +268,9 @@ export async function createCartCheckout({ ref, ids, lines, email }) {
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
     ui_mode: "embedded",
-    redirect_on_completion: "never", // paid, the buyer stays: Stripe sends nobody anywhere
+    ...waysToPay(klarna, `/?cart=${encodeURIComponent(ref)}&card=`), // as invoices: cards and Klarna
   });
-  let session;
-  try {
-    session = await stripe("/checkout/sessions", page(true));
-  } catch (e) {
-    if (!lines.some(l => l.image) || !(e instanceof StripeError) || e.httpStatus !== 400) throw e;
-    console.warn("stripe: Stripe refused the Cart's payment page with the pictures; making it without:", e.code, e.message);
-    session = await stripe("/checkout/sessions", page(false));
-  }
+  const session = await askForPage("the Cart's payment page", page, { pictures: lines.some(l => typeof l.image === "string" && l.image.startsWith("https://")) });
   if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
   if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
   return { id: session.id, clientSecret: session.client_secret };
@@ -273,8 +307,8 @@ export async function checkoutPaidFor({ sessionId, order }) {
 // Admin -> Settings -> Stripe: can this key take card payments?
 //  - Quick (when the panel opens): a read. Proves Stripe accepts the key, NOT that it may
 //    make payment pages.
-//  - Deep ("Check again"): makes a real $0.50 payment page, the same kind an invoice makes,
-//    and cancels it at once, so nobody can pay it and nothing is charged. Ready only if
+//  - Deep ("Check again"): makes a real $0.50 payment page, cards only (an invoice's adds
+//    Klarna), and cancels it at once, so nobody can pay it and nothing is charged. Ready only if
 //    Stripe allows both; if not, Stripe's own message says why (it names a missing permission).
 export async function cardCheck({ deep = false, site } = {}) {
   if (!cardReady()) return { ready: false, reason: "No Stripe key in Vercel yet (STRIPE_SECRET_KEY)." };

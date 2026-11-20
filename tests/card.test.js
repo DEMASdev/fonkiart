@@ -76,7 +76,7 @@ test("Stripe gets form fields with [brackets], and money in cents", () => {
   assert.equal(toCents("abc"), 0);
 });
 
-test("the payment page asks for the invoice's EXACT amount, with its number, as a card form for INSIDE the invoice page: paid, nobody is sent anywhere", async () => {
+test("the payment page asks for the invoice's EXACT amount, with its number, as a card form for INSIDE the invoice page: paid by card, nobody is sent anywhere; Klarna comes back to the invoice", async () => {
   fakeStripe(() => ({ json: { id: SESSION, client_secret: `${SESSION}_secret_FAKE` } }));
   const made = await createCheckout({ order: order(), invNum: "FA-261117161956080" });
   assert.deepEqual(made, { id: SESSION, clientSecret: `${SESSION}_secret_FAKE` });
@@ -94,9 +94,12 @@ test("the payment page asks for the invoice's EXACT amount, with its number, as 
   assert.equal(body.get("client_reference_id"), "FA-261117161956080");
   assert.equal(body.get("customer_email"), "ana@example.com");
   assert.equal(body.get("ui_mode"), "embedded");
-  assert.equal(body.get("redirect_on_completion"), "never");
-  for (const k of ["success_url", "cancel_url", "return_url"]) assert.equal(body.has(k), false, k);
-  assert.deepEqual([...body.values()].filter(v => /^https?:/.test(v)), [], "no address for Stripe to send anyone to");
+  // Cards and Klarna (Andy, 2026-11-20): a card is paid in the form ("if_required" sends it nowhere);
+  // only Klarna leaves, and comes back to this invoice on the shop's own address (tests/klarna.test.js).
+  assert.equal(body.get("redirect_on_completion"), "if_required");
+  assert.equal(body.get("return_url"), `https://fonkiart.com/?invoice=${TOKEN}&card={CHECKOUT_SESSION_ID}`);
+  for (const k of ["success_url", "cancel_url"]) assert.equal(body.has(k), false, k);
+  assert.deepEqual([...body.entries()].filter(([, v]) => /^https?:/.test(v)).map(([k]) => k), ["return_url"], "no other address for Stripe to send anyone to");
   // Stripe answering without the form's secret, or without a page id, is a failure, not a form.
   for (const json of [{ id: SESSION }, { client_secret: "x" }, { id: "nope", client_secret: "x" }]) {
     fakeStripe(() => ({ json }));
@@ -254,12 +257,12 @@ test("Resend warns before sending again, and says 'and paid' once the money is i
   assert.deepEqual([undefined, "pending", "confirmed", "paid", "shipped", "delivered"].map(resendQuestion), [sent, sent, sent, paid, paid, paid]);
 });
 
-test("cards only: no slower method (a bank transfer) can come back 'not paid yet'; Apple Pay and Google Pay count as cards", async () => {
+test("cards and Klarna, nothing slower (no bank transfer that comes back 'not paid yet'); Apple Pay and Google Pay count as cards", async () => {
   fakeStripe(() => ({ json: { id: SESSION, client_secret: `${SESSION}_secret_FAKE` } }));
   await createCheckout({ order: order(), invNum: "FA-261117161956080" });
   const { body } = calls[0];
-  assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]"]);
-  assert.equal(body.get("payment_method_types[0]"), "card");
+  assert.deepEqual([...body.keys()].filter(k => k.startsWith("payment_method_types")), ["payment_method_types[0]", "payment_method_types[1]"]);
+  assert.deepEqual([body.get("payment_method_types[0]"), body.get("payment_method_types[1]")], ["card", "klarna"]);
 });
 
 // ── the invoice's card form INSIDE the invoice page (Andy, 2026-11-18: "i don't want to be making
@@ -295,7 +298,7 @@ function stripePages(pages, { paidWhenClosed = null } = {}) {
 const openPage = (over = {}) => ({ id: OLD, status: "open", payment_status: "unpaid", amount_total: 45000, currency: "usd", metadata: { invoice_token: TOKEN }, ...over });
 const asked = () => calls.map(c => [c.method, c.url.replace("https://api.stripe.com/v1/checkout/sessions", "") || "(new page)"]);
 
-test("Pay by card: the card form, INSIDE the invoice page: the invoice's exact amount and number, the piece first, and once paid nobody is sent anywhere", async () => {
+test("Pay by card: the card form, INSIDE the invoice page: the invoice's exact amount and number, the piece first, and once paid by card nobody is sent anywhere", async () => {
   process.env.STRIPE_PUBLISHABLE_KEY = PK;
   fakeStripe(() => ({ json: { id: SESSION, client_secret: SECRET } }));
   const db = fakeDb([order()]);
@@ -307,11 +310,12 @@ test("Pay by card: the card form, INSIDE the invoice page: the invoice's exact a
   assert.deepEqual(asked(), [["POST", "(new page)"]]);
   const { body } = calls[0];
   assert.equal(body.get("ui_mode"), "embedded");
-  assert.equal(body.get("redirect_on_completion"), "never");
+  assert.equal(body.get("redirect_on_completion"), "if_required", "a card is paid in place; only Klarna leaves");
+  assert.equal(body.get("return_url"), `https://fonkiart.com/?invoice=${TOKEN}&card={CHECKOUT_SESSION_ID}`, "...and comes back to this invoice");
   assert.equal(body.get("line_items[0][price_data][unit_amount]"), "45000");
   assert.equal(body.get("metadata[invoice_token]"), TOKEN);
   assert.equal(body.get("client_reference_id"), "FA-261117161956080");
-  for (const k of ["success_url", "cancel_url", "return_url"]) assert.equal(body.has(k), false, `no ${k}: there is nowhere to send anyone`);
+  for (const k of ["success_url", "cancel_url"]) assert.equal(body.has(k), false, `no ${k}: never Stripe's own page`);
   assert.deepEqual([db.updates, mail.sent], [[], []], "a card form changes nothing and emails nobody");
 });
 
@@ -634,7 +638,8 @@ test("Admin's full card check ('Check again'): makes a $0.50 payment page and ca
   assert.equal(made.get("line_items[0][price_data][unit_amount]"), "50");
   assert.equal(made.get("line_items[0][price_data][currency]"), "usd");
   assert.equal(made.get("line_items[0][price_data][product_data][name]"), "Fonkiart card check");
-  assert.equal(made.get("payment_method_types[0]"), "card", "the same kind of page an invoice makes");
+  assert.equal(made.get("payment_method_types[0]"), "card", "a card page, as an invoice makes");
+  assert.equal(made.get("payment_method_types[1]"), null, "cards only: the check proves the key, Klarna is not needed for it");
 
   // A key that may only read: Stripe's own message (it names the missing permission) is shown.
   fakeStripe(() => ({ status: 403, json: { error: { code: "permission_error", message: "The provided key 'rk_test_*****ESTS' does not have the required permissions for this endpoint. Having the 'rak_checkout_session_write' permission would allow this request to continue." } } }));

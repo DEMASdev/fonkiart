@@ -167,10 +167,12 @@ test("Stripe refuses the page with the picture: it's made again without it, so t
   fakeStripe(() => ({ status: 401, json: { error: { code: "invalid_key", message: "Invalid API Key provided" } } }));
   await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()], Artworks: [art()] }), FORM, mailbox()), /isn't working right now/);
   assert.equal(calls.length, 1);
-  // Refused with no picture on it: nothing to leave out, so not asked twice.
+  // Refused with no picture on it: asked once more with cards only (Klarna left out,
+  // tests/klarna.test.js), then nothing left to leave out, so not asked a third time.
   fakeStripe(() => ({ status: 400, json: { error: { code: "email_invalid", message: "Invalid email address" } } }));
   await assert.rejects(opCardCheckout(fakeDb({ Orders: [order()] }), FORM, mailbox()), /isn't working right now/);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].body.get("payment_method_types[1]"), null, "the second time, cards only");
 });
 
 test("the picture's address is one Vercel will make: the shop's own bucket (vercel.json), at an allowed width", () => {

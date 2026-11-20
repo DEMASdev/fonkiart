@@ -9,10 +9,13 @@ const forms = { turn: Promise.resolve() };
 // (InvoicePage) (Andy: "can it be imbedded inside fonkiart instead of sending the customer
 // away ?"), as the last step of buying a work of art: the pieces first
 // (PayArt), then Stripe's own card form (Embedded Checkout, mounted with Stripe.js from
-// js.stripe.com, src/lib/stripeJs.js). Paid, the buyer STAYS here (Andy: "i don't want to be
+// js.stripe.com, src/lib/stripeJs.js). Paid by card, the buyer STAYS here (Andy: "i don't want to be
 // making the user jump to stripe then back"): Stripe.js says so (onComplete), the form goes, and
 // the checkout asks the server whether the payment is in, then shows the thank-you right here.
 // 3-D Secure, when a bank asks for it, opens inside Stripe's own form, not on another page.
+// The form also offers Klarna (Andy, 2026-11-20), the one way to pay that leaves: Klarna's own
+// site, which brings the buyer back to the page's way back (api/_lib/stripe.js waysToPay: the
+// Cart's ?cart=...&card=..., CardReturnPage; an invoice's ?invoice=...&card=..., InvoicePage).
 // pay: the server's answer (cart-card / cart-again, or an invoice's card-checkout):
 // { ref, session, lines, total, clientSecret, publishableKey }. noun: what pay.ref names, "order"
 // (the Cart: its order is saved) or "invoice"; totalLabel: the line above the total.

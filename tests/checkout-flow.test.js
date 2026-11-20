@@ -283,8 +283,9 @@ for (const name of ["alert", "confirm", "prompt"]) globalThis[name] = (message) 
 // Stripe.js as it behaves: one embedded form on a page at a time (another is refused until the
 // first is destroyed); the form asks for its secret, then goes into its box. Paying in it
 // (log.pay) calls the onComplete it was made with, as Stripe.js does once the page is paid, and
-// nothing else: a page made with redirect_on_completion "never" sends nobody anywhere. refuse:
-// Stripe.js is there but won't make the form (a wrong key, say).
+// nothing else: paid by card, a page made with redirect_on_completion "if_required" sends nobody
+// anywhere (only Klarna leaves, for Klarna's own site). refuse: Stripe.js is there but won't make
+// the form (a wrong key, say).
 function fakeStripeJs({ refuse = false } = {}) {
   const log = [];
   let live = 0, form = null;
@@ -569,7 +570,7 @@ test("NO JUMP: the server can't offer the card form (its public key missing or m
     assert.doesNotMatch(screen(root), /Secure Credit Card via Stripe|securely by card, through Stripe|Pay Securely/, "no page in between: Continue asked for the card form itself");
 
     const [asked] = server.asked("cart-card");
-    assert.deepEqual([asked.embedded, "site" in asked, asked.orderRef], [true, false, "FA-1739"], "Stripe.js was ready, so the server was asked (no return address: nobody is sent anywhere)");
+    assert.deepEqual([asked.embedded, "site" in asked, asked.orderRef], [true, false, "FA-1739"], "Stripe.js was ready, so the server was asked (no return address: the server gives Stripe the shop's own)");
     assert.deepEqual([server.world.orders, server.world.emails], [[], 0], "no order saved, no email");
     assert.equal(kept(), null, "nothing kept");
     assert.deepEqual(statuses(root), [CARD_FORM_DOWN], "said calmly, in place");
