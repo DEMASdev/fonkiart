@@ -380,7 +380,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
                   </button>
                   <p style={{fontSize:"var(--inv-small)",color:"var(--muted)",marginTop:8,lineHeight:1.5}}>Secure card form by Stripe, right here on this page. The amount is already filled in.</p>
                   {retry && !paying && (payZelle || payVenmo || payCashApp) && (
-                    <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay ↑</button>
+                    <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay&nbsp;↑</button>
                   )}
                   {cardMsg && <p role="alert" style={{fontSize:"var(--inv-text)",color:"#c0392b",lineHeight:1.6,marginTop:10}}>{cardMsg}</p>}
                 </div>

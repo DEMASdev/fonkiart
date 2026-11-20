@@ -71,6 +71,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     if (!saved && !customer.email.includes("@")) { setCheckoutError("Please enter a valid email address."); return; }
     setCheckoutError("");
     setStep(2);
+    // Credit Card: the card form opens at once, with no page in between (Andy: "jumps into another
+    // useless page ... instead of just going into the CC page"). The buyer sees "Opening the secure
+    // card form…", then the form.
+    if (method === "card") startCard();
   };
 
   const applyCoupon = async () => {
@@ -149,7 +153,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     setSaved(null); setPay(null); setRetry(false); setCalm(""); setStep(1);
   };
 
-  // "Pay Securely with Card". The card form opens INSIDE fonkiart.com, or not at all: the buyer is
+  // Paying by card: Continue with Credit Card chosen (and "Try Again" after a calm word). The card
+  // form opens INSIDE fonkiart.com, or not at all: the buyer is
   // never sent to Stripe's own page (Andy, 2026-11-18: "i don't want to be making the user jump to
   // stripe then back , everything should and can happen in fonkiart.com seamlessly easily  and
   // intuitively"). So Stripe.js comes FIRST, before anything is saved: if it can't load (a
@@ -231,6 +236,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // Stripe.js wouldn't open the form: the same calm word; Try Again re-opens this order's form.
   const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
   const otherWay = () => { setStep(1); setCalm(""); setRetry(false); };
+  // "← Choose another way to pay" in the card form: back to the ways to pay, not to an empty step.
+  // The order stays saved, so choosing card again re-opens THAT order (cart-again).
+  const leaveCardForm = () => { setPay(null); otherWay(); };
 
   // Opening with a saved card order, the server is asked once what became of it ("cart-order"):
   // paid by now (paid, then the tab closed before coming back): the thank-you, and the cart
@@ -263,6 +271,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // the thank-you's top sat above the screen: paid at the bottom of the card form, 149px at 375
   // wide and 91px at 1280; placed with Zelle at 375, 151px.
   useLayoutEffect(() => { if (done && fullPage) window.scrollTo(0, 0); }, [done, fullPage]);
+  // Continue with Credit Card: "Opening the secure card form…", then the form, at the top of the
+  // page. Measured before, at 375 wide the buyer was left down where Continue was, below a step
+  // now much shorter: only the footer showed, and the opening word sat above the screen.
+  useLayoutEffect(() => { if (step === 2 && method === "card" && fullPage) window.scrollTo(0, 0); }, [step, method, fullPage]);
 
   // Paid by card (in the card form, or found paid): the same thank-you as on the way back from
   // Stripe's own page, the pieces first, right where the form was.
@@ -424,22 +436,16 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
               </div>
             )}
             {method === "card" && pay && (
-              <CardCheckout pay={pay} artworks={items} onBack={() => setPay(null)} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
-            )}
-            {method === "card" && !pay && (
-              <div className="pay-detail">
-                <h4>Secure Credit Card via Stripe</h4>
-                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <p style={{ fontSize:16, color:"var(--muted)", lineHeight:1.7 }}>Pay for <strong>{itemsLabel}</strong>{amountDue ? ` ($${Number(amountDue).toLocaleString()})` : ""} securely by card, through Stripe.</p>
-              </div>
+              <CardCheckout pay={pay} artworks={items} onBack={leaveCardForm} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
             )}
             {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
             {method==="card" && calm && <p className="pay-calm" role="status">{calm}</p>}
+            {/* Card: Continue already opened the form. Here only while it opens, or once it couldn't. */}
             {method==="card" && !pay && (saving
               ? <p className="pay-card-wait" role="status">Opening the secure card form…</p>
-              : <button className="stripe-btn" onClick={handleCard}>{retry ? "Try Again" : "Pay Securely with Card →"}</button>)}
+              : <button className="stripe-btn" onClick={handleCard}>Try Again</button>)}
             {method==="card" && !pay && retry && !saving && <button type="button" className="tap pay-other" onClick={otherWay}>Choose Another Way to Pay</button>}
             {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
           </>

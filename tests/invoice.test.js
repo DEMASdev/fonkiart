@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { invoiceLink, readInvoiceParams, canApprove, paymentOptions, findArtwork, paidCongrats, paidByLabel, SHOP_VIEW } from "../src/lib/invoiceView.js";
 import { invoiceNumber } from "../src/lib/invoiceNumber.js";
 import { invoiceNumber as serverInvoiceNumber } from "../api/_lib/invoiceNumber.js";
@@ -178,4 +179,12 @@ test("when a client confirms, the shop's email says CONFIRMED BY CUSTOMER and NO
 
   await opInvoiceApprove(db, { token: TOKEN2 }, mail);
   assert.equal(sent.length, 1, "confirming twice sends one email, not two");
+});
+
+// At 375px wide the "↑" of "Choose Another Way to Pay ↑" (the card form couldn't open) fell onto a
+// line of its own. A non-breaking space keeps it with its word.
+test("the invoice's 'Choose Another Way to Pay ↑': the arrow stays with its word", () => {
+  const page = readFileSync(new URL("../src/pages/InvoicePage.jsx", import.meta.url), "utf8");
+  assert.match(page, />Choose Another Way to Pay&nbsp;↑</);
+  assert.doesNotMatch(page, /Pay ↑/, "no breakable space before the arrow");
 });
