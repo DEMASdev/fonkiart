@@ -4,7 +4,10 @@ import CheckoutModal from "../components/CheckoutModal";
 import { mouseHover } from "../utils/hover";
 import Pic from "../components/Pic";
 
-export default function CollectorsRoomPage({ user, artworks, settings, onLogout, onBack, isAdmin, onAdminEnter }) {
+// onBackToOrders: given when the room was opened from the Admin Panel, so there is a way back to
+// its Orders (Andy: "when going to the collectors room there's no way back to the orders page").
+// The admin can be signed in to Admin with no site account, and then "Admin Panel" never shows.
+export default function CollectorsRoomPage({ user, artworks, settings, onLogout, onBack, isAdmin, onAdminEnter, onBackToOrders }) {
   const exclusiveWorks = artworks.filter(a => a.isCollectorsOnly && !a.isSold);
   const earlyAccess    = artworks.filter(a => a.isEarlyAccess && !a.isSold);
   const [selected, setSelected] = useState(null);
@@ -39,6 +42,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
           Private Collectors Room
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"4px 14px", flexWrap:"wrap", minWidth:0 }}>
+          {onBackToOrders && <button className="tap" onClick={onBackToOrders} style={{ background:"none", border:"none", cursor:"pointer", color:CR.gold, fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".08em", whiteSpace:"nowrap" }}>← Back to Orders</button>}
           {isAdmin && <button className="tap" onClick={onAdminEnter} style={{ background:"none", border:`1px solid ${CR.gold}`, color:CR.gold, padding:"6px 16px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".08em", textTransform:"uppercase" }}>Admin Panel</button>}
           <span style={{ fontSize:16, color:CR.muted, overflowWrap:"anywhere" }}>{user?.email}</span>
           <button className="tap" onClick={onBack} style={{ background:"none", border:"none", cursor:"pointer", color:CR.muted, fontSize:16, letterSpacing:".08em" }}>← Back to Site</button>

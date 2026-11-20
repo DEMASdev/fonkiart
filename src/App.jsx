@@ -49,6 +49,8 @@ import AdminPage from "./admin/AdminPage";
 // Pages that only exist while their link (?thread= / ?invoice=) is in the address bar, and the
 // way back from a card payment on Stripe (?cart=FA-...&card=...), which is read once on arrival.
 const LINK_PAGES = new Set(["conversation", "invoice", "card-return"]);
+// Where the Collectors Room was opened from: "admin" (the Admin Panel), or "" (the site).
+const ROOM_FROM = "fonkiart-room-from";
 
 export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
@@ -106,6 +108,11 @@ export default function App() {
   const [adminAuthed, setAdminAuthed] = useState(() => adminHasToken());
   const [adminTab, setAdminTabState] = useState(() => localStorage.getItem("fonkiart-admin-tab") || "dashboard");
   const setAdminTab = (t) => { localStorage.setItem("fonkiart-admin-tab", t); setAdminTabState(t); };
+  // The Collectors Room leads back to where it was opened from (Andy: "when going to the collectors
+  // room there's no way back to the orders page"): from Admin, "← Back to Orders". Kept beside the
+  // page, so a reload in the room still knows.
+  const [roomFrom, setRoomFromState] = useState(() => localStorage.getItem(ROOM_FROM) || "");
+  const setRoomFrom = (from) => { localStorage.setItem(ROOM_FROM, from); setRoomFromState(from); };
   // "My Account" / mobile account icon — go straight back to admin if already logged in,
   // without re-prompting for the admin password. AdminPage still re-verifies the token
   // with the server on mount, so a stale/forged token doesn't get a free pass here.
@@ -241,16 +248,26 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return;
-    // A signed-in customer opening a conversation or invoice link stays on it.
+    // A signed-in customer opening a conversation or invoice link stays on it. Anyone else signed
+    // in: a buyer's own account, or the Collectors Room, which remembers where it was opened from.
+    const land = (u) => {
+      if (!u || LINK_PAGES.has(pageRef.current)) return;
+      if (u.user_metadata?.role === "buyer") { setPage("buyer-dashboard"); return; }
+      if (pageRef.current !== "collectors-room") {
+        const from = pageRef.current === "admin" ? "admin" : "";
+        localStorage.setItem(ROOM_FROM, from); setRoomFromState(from);
+      }
+      setPage("collectors-room");
+    };
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user || null;
       setUser(u);
-      if (u && !LINK_PAGES.has(pageRef.current)) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      land(u);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       const u = session?.user || null;
       setUser(u);
-      if (u && !LINK_PAGES.has(pageRef.current)) setPage(u.user_metadata?.role === "buyer" ? "buyer-dashboard" : "collectors-room");
+      land(u);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -305,9 +322,10 @@ export default function App() {
 
   if (page === "collectors" && collectorsClient) return <ExclusiveCollectorsPage client={collectorsClient} onLogout={() => { setCollectorsClient(null); setPage("home"); }} artworks={mergedData?.items ?? []} />;
 
-  if (page === "collectors-room") return <CollectorsRoomPage user={user} artworks={mergedData?.items ?? []} settings={mergedData?.settings} onLogout={async () => { await supabase.auth.signOut(); setUser(null); setPage("home"); }} onBack={() => setPage("home")} isAdmin={user?.email?.toLowerCase() === "fonkiart@gmail.com"} onAdminEnter={() => setPage("admin")} />;
+  if (page === "collectors-room") return <CollectorsRoomPage user={user} artworks={mergedData?.items ?? []} settings={mergedData?.settings} onLogout={async () => { await supabase.auth.signOut(); setUser(null); setPage("home"); }} onBack={() => setPage("home")} isAdmin={user?.email?.toLowerCase() === "fonkiart@gmail.com"} onAdminEnter={() => setPage("admin")}
+    onBackToOrders={roomFrom === "admin" ? () => { setAdminTab("orders"); setPage("admin"); } : undefined} />;
 
-  if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => setPage("collectors-room")} tab={adminTab} setTab={setAdminTab} />;
+  if (page === "admin") return <AdminPage data={mergedData} updateData={updateData} addArtwork={addArtwork} editArtwork={editArtwork} deleteArtwork={deleteArtwork} patchArtwork={patchArtwork} loadArtworks={loadArtworks} onBack={() => setPage("home")} autoAuth={adminAuthed} onAutoAuthUsed={() => setAdminAuthed(false)} onViewRoom={() => { setRoomFrom("admin"); setPage("collectors-room"); }} tab={adminTab} setTab={setAdminTab} />;
 
   const currentNav = page === "cart" || (page === "card-return" && !cardReturn?.session) ? { label: "Your Cart", Icon: ShoppingBag }
     : page === "card-return" ? { label: "Your Order", Icon: Receipt }
