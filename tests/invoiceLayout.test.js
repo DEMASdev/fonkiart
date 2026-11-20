@@ -82,7 +82,7 @@ test("a phone: one tight column, the order as one strip at the top, a tap opens 
 });
 
 test("nothing removed: the same fields and controls as before", () => {
-  for (const s of ["Client</span>", "Notes</span>", "Artwork / Item</span>", '"Total Paid" : "Total Due"', "Confirm order →", "by card →", "Choose Another Way to Pay ↑",
+  for (const s of ["Client</span>", "Notes</span>", "Artwork / Item</span>", '"Total Paid" : "Total Due"', "Confirm order →", "by card →", "Choose Another Way to Pay&nbsp;↑",
     "Add shipping address", "Save address", "Change</button>", "Track your package →", "Thank you for your payment!", "Order Confirmed ✓", "Send Payment To", "<CopyButton text={invNum} />",
     "Shop view, read-only.", "Not approved by the customer yet.", "Payment due upon receipt", "<CardCheckout pay={pay}"]) {
     assert.ok(page.includes(s), `still there: ${s}`);
