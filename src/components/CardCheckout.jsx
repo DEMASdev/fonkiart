@@ -19,12 +19,14 @@ const forms = { turn: Promise.resolve() };
 // pay: the server's answer (cart-card / cart-again, or an invoice's card-checkout):
 // { ref, session, lines, total, clientSecret, publishableKey }. noun: what pay.ref names, "order"
 // (the Cart: its order is saved) or "invoice"; totalLabel: the line above the total.
+// art: the pieces above the form (PayArt). The Cart's checkout passes false: its order is already
+// on the screen, beside the form on a computer and one line above it on a phone (CheckoutModal).
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
 // onFail: the form couldn't open here; the checkout says so calmly, with Try Again and another
 // way to pay (never Stripe's own page).
 // onComplete(pay): paid in the form. check: what the checkout has heard since: "checking",
 // "unpaid" or "error" (each of the last two with Check Again, which asks again).
-export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete, check, noun = "order", totalLabel = "Total" }) {
+export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete, check, noun = "order", totalLabel = "Total", art = true }) {
   const [box, setBox] = useState(null); // the element the form goes into, once it is on the page
   const [ready, setReady] = useState(false);
   const failed = useEffectEvent((error) => onFail?.(error));
@@ -58,7 +60,7 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
     <div className="pay-card">
       {!paid && <button type="button" className="tap pay-card-back" onClick={onBack}>← Choose another way to pay</button>}
       <p className="pay-card-label">Your {noun} <span className="pay-card-ref">{pay.ref}</span></p>
-      <PayArt lines={pay.lines} total={pay.total} artworks={artworks} totalLabel={totalLabel} />
+      {art && <PayArt lines={pay.lines} total={pay.total} artworks={artworks} totalLabel={totalLabel} />}
       {!paid && (
         <>
           {!ready && <p className="pay-card-wait" role="status">Opening the secure card form…</p>}

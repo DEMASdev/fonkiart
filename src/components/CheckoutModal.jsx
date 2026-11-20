@@ -34,6 +34,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [cardCheck, setCardCheck] = useState(null);    // paid in the card form: "checking" · "unpaid" · "error"
   const [calm, setCalm] = useState("");                // the card form didn't open: said calmly
   const [retry, setRetry] = useState(false);           // ...with "Try Again" and another way to pay
+  const [orderOpen, setOrderOpen] = useState(false);   // a phone: the order's one line, tapped open
   // Set the moment a pay button is tapped and cleared once the server has answered, so a double
   // tap counts once and two card calls never race (each would close the page before and open
   // its own, leaving one open that nobody pays).
@@ -63,6 +64,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const amountDue = saved ? saved.total : effectivePrice;
   const refShown = saved ? saved.ref : orderRef;
   const canNext = method && (saved ? checked : fullName && customer.email.includes("@"));
+  const money = (n) => `$${Number(n).toLocaleString()}`;
+  const couponOn = !saved && couponStatus === "valid";
 
   const handleContinue = () => {
     if (saved && !checked) return; // a moment: the server is saying what became of the saved order
@@ -309,147 +312,184 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     </div>
   );
 
+  // Ways to pay, as the buyer chooses among them (step 1, under the details).
+  const payOptions = (
+    <>
+      <p className="checkout-step-label">How to Pay</p>
+      <div className="pay-opts">
+        {[["zelle","💚","Zelle","Instant · Free"],["venmo","🔵","Venmo","Instant · Free"],["cashapp","💵","Cash App","Instant · Free"],["card","💳","Credit Card","Stripe · Secure"]].map(([id,icon,label,sub]) => (
+          <button key={id} className={`pay-opt${method===id?" sel":""}`} onClick={() => { setMethod(id); if (id === "card") stripeJsReady(); }}>
+            <span className="pay-opt-icon">{icon}</span>
+            <div className="pay-opt-label">{label}</div>
+            <div className="pay-opt-sub">{sub}</div>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  // The checkout as a shop counter (Andy, 2026-11-19, yes to: "one wide page with two sides ...
+  // Your art stays on the left: pictures, titles and total, always in view. The steps go on the
+  // right: your details, how to pay, then the card form. The card form sits beside the art
+  // instead of under it"). The order (.checkout-order) is drawn ONCE, for every step, in the
+  // invoice page's art-first look (the pay-art classes, as PayArt.jsx draws them): on a computer
+  // it is the left side, sticky while the steps scroll (src/index.css); on a phone it is one line
+  // at the top ("The order shrinks to one line at the top that you tap to see the pieces"), and
+  // the card form below it repeats no pictures (CardCheckout art={false}). Its amounts are the
+  // ones the buyer pays: the saved order's (the server's) once there is one, else the shop's
+  // prices less a valid coupon.
+  const pieceOff = (i) => couponOn && itemPrice(i) !== itemEffective(i);
+  const orderBox = (
+    <aside className={`checkout-order${orderOpen ? " is-open" : ""}`} aria-label="Your order">
+      <button type="button" className="tap checkout-order-line" aria-expanded={orderOpen} onClick={() => setOrderOpen(open => !open)}>
+        <span className="checkout-order-thumbs" aria-hidden="true">
+          {items.slice(0, 3).map(i => i.image && <Pic key={i.id} src={i.image} w={160} alt="" className="checkout-order-thumb" />)}
+        </span>
+        <span className="checkout-order-what">{items.length === 1 ? items[0].title : `${items.length} pieces`}</span>
+        {amountDue ? <span className="checkout-order-sum">{money(amountDue)}</span> : null}
+        <span className="checkout-order-chev" aria-hidden="true">{orderOpen ? "▴" : "▾"}</span>
+      </button>
+      <div className="checkout-order-pieces pay-art">
+        <p className="checkout-order-head">Your Order</p>
+        <ul className="pay-art-list">
+          {items.map(i => (
+            <li key={i.id} className="pay-art-piece">
+              {i.image && <Pic src={i.image} w={320} alt={i.title} className="pay-art-pic" />}
+              <div className="pay-art-info">
+                <div className="pay-art-title">{i.title}</div>
+                {shownAmount(i) ? <div className="pay-art-price">{money(shownAmount(i))}</div> : null}
+                {pieceOff(i) && <div className="checkout-order-off">✓ {discount}% off</div>}
+              </div>
+            </li>
+          ))}
+        </ul>
+        {amountDue ? (
+          <div className="invoice-total pay-art-total">
+            <span className="invoice-label">Total</span>
+            <span className="invoice-value">{money(amountDue)}</span>
+          </div>
+        ) : null}
+        {items.length > 1 && couponOn && basePrice !== effectivePrice && <p className="checkout-order-off checkout-order-total-off">✓ {discount}% off</p>}
+      </div>
+    </aside>
+  );
+
   return (
     <div className={fullPage ? "checkout-page-bg" : "modal-bg"} onClick={fullPage ? undefined : onClose}>
-      <div className={`checkout checkout-buy${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
+      <div className={`checkout checkout-buy checkout-counter${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close" style={{ position:"absolute", top:18, right:22 }} onClick={onClose}>✕</button>
         <h2>Purchase</h2>
-        {!pay && (
-          <div className="checkout-items" style={{ marginBottom:24 }}>
-            {items.map(i => (
-              <div key={i.id} className="checkout-item-row">
-                {i.image && <Pic src={i.image} w={320} alt={i.title} className="checkout-item-thumb" />}
-                <p className="checkout-sub" style={{ margin:0 }}>
-                  {i.title}{shownAmount(i) ? ` · $${Number(shownAmount(i)).toLocaleString()}` : ""}
-                  {!saved && couponStatus === "valid" && itemPrice(i) !== itemEffective(i) ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
-                </p>
+        {orderBox}
+        <div className="checkout-steps">
+          {step === 1 && (
+            <>
+              {saved ? (
+                <div className="pay-saved" aria-busy={!checked}>
+                  <p className="pay-saved-title">Your order <span className="pay-card-ref">{saved.ref}</span> is saved</p>
+                  <p className="pay-saved-text">Your details are saved with it, so just choose how you&apos;d like to pay.</p>
+                </div>
+              ) : (
+              <div style={{ borderTop:"1px solid var(--border)", paddingTop:18, marginBottom:4 }}>
+                <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="fld"><label>First Name *</label><input autoComplete="given-name" value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
+                  <div className="fld"><label>Last Name *</label><input autoComplete="family-name" value={customer.lastName} onChange={e=>cv("lastName",e.target.value)} placeholder="Smith" /></div>
+                </div>
+                <div className="fld"><label>Email *</label><input type="email" autoComplete="email" autoCapitalize="none" value={customer.email} onChange={e=>cv("email",e.target.value)} placeholder="jane@email.com" /></div>
+                <div className="fld"><label>Phone</label><input type="tel" autoComplete="tel" value={customer.phone} onChange={e=>cv("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
+                <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"12px 0 10px" }}>Shipping Address</p>
+                <div className="fld"><label>Street</label><input autoComplete="street-address" value={customer.address} onChange={e=>cv("address",e.target.value)} placeholder="123 Main St" /></div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="fld"><label>City</label><input autoComplete="address-level2" value={customer.city} onChange={e=>cv("city",e.target.value)} placeholder="Miami" /></div>
+                  <div className="fld"><label>State</label><input autoComplete="address-level1" value={customer.state} onChange={e=>cv("state",e.target.value)} placeholder="FL" /></div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="fld"><label>ZIP</label><input autoComplete="postal-code" inputMode="numeric" value={customer.zip} onChange={e=>cv("zip",e.target.value)} placeholder="33101" /></div>
+                  <div className="fld"><label>Country</label><input autoComplete="country-name" value={customer.country} onChange={e=>cv("country",e.target.value)} placeholder="USA" /></div>
+                </div>
+                <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
+                <div style={{ display:"flex", gap:8 }}>
+                  <input autoCapitalize="characters" autoComplete="off" value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
+                    placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
+                    style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
+                  />
+                  {couponStatus !== "valid"
+                    ? <button className="btn-s" onClick={applyCoupon} disabled={couponStatus==="checking"||!couponCode.trim()} style={{whiteSpace:"nowrap"}}>{couponStatus==="checking"?"Checking…":"Apply"}</button>
+                    : <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
+                  }
+                </div>
+                {couponStatus==="valid"       && <p style={{fontSize:16,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied — you save ${(basePrice-effectivePrice).toLocaleString()}</p>}
+                {couponStatus==="invalid"     && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
+                {couponStatus==="used"        && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}
+                {couponStatus==="need-email"  && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Enter your email address first, then apply the coupon.</p>}
+                {couponStatus==="wrong-email" && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon is not linked to this email address.</p>}
               </div>
-            ))}
-            {items.length > 1 && (
-              <p className="checkout-sub" style={{ marginTop:6, fontWeight:600 }}>
-                Total{amountDue ? ` · $${Number(amountDue).toLocaleString()}` : ""}
-                {!saved && couponStatus === "valid" && basePrice !== effectivePrice ? <span style={{fontSize:16,color:"#2d6a4f",marginLeft:8}}>✓ {discount}% off</span> : null}
-              </p>
-            )}
-          </div>
-        )}
+              )}
+              {payOptions}
+              <button className="confirm-btn" style={{ background:canNext?"var(--gold)":"var(--border)", marginTop:12 }} onClick={handleContinue}>Continue →</button>
+              {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+            </>
+          )}
 
-        {step === 1 && (
-          <>
-            <div className="pay-opts">
-              {[["zelle","💚","Zelle","Instant · Free"],["venmo","🔵","Venmo","Instant · Free"],["cashapp","💵","Cash App","Instant · Free"],["card","💳","Credit Card","Stripe · Secure"]].map(([id,icon,label,sub]) => (
-                <button key={id} className={`pay-opt${method===id?" sel":""}`} onClick={() => { setMethod(id); if (id === "card") stripeJsReady(); }}>
-                  <span className="pay-opt-icon">{icon}</span>
-                  <div className="pay-opt-label">{label}</div>
-                  <div className="pay-opt-sub">{sub}</div>
-                </button>
-              ))}
-            </div>
-            {saved ? (
-              <div className="pay-saved" aria-busy={!checked}>
-                <p className="pay-saved-title">Your order <span className="pay-card-ref">{saved.ref}</span> is saved</p>
-                <p className="pay-saved-text">Your details are saved with it, so just choose how you&apos;d like to pay.</p>
-              </div>
-            ) : (
-            <div style={{ borderTop:"1px solid var(--border)", paddingTop:18, marginBottom:4 }}>
-              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:14 }}>Your Information</p>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>First Name *</label><input autoComplete="given-name" value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
-                <div className="fld"><label>Last Name *</label><input autoComplete="family-name" value={customer.lastName} onChange={e=>cv("lastName",e.target.value)} placeholder="Smith" /></div>
-              </div>
-              <div className="fld"><label>Email *</label><input type="email" autoComplete="email" autoCapitalize="none" value={customer.email} onChange={e=>cv("email",e.target.value)} placeholder="jane@email.com" /></div>
-              <div className="fld"><label>Phone</label><input type="tel" autoComplete="tel" value={customer.phone} onChange={e=>cv("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
-              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"12px 0 10px" }}>Shipping Address</p>
-              <div className="fld"><label>Street</label><input autoComplete="street-address" value={customer.address} onChange={e=>cv("address",e.target.value)} placeholder="123 Main St" /></div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>City</label><input autoComplete="address-level2" value={customer.city} onChange={e=>cv("city",e.target.value)} placeholder="Miami" /></div>
-                <div className="fld"><label>State</label><input autoComplete="address-level1" value={customer.state} onChange={e=>cv("state",e.target.value)} placeholder="FL" /></div>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <div className="fld"><label>ZIP</label><input autoComplete="postal-code" inputMode="numeric" value={customer.zip} onChange={e=>cv("zip",e.target.value)} placeholder="33101" /></div>
-                <div className="fld"><label>Country</label><input autoComplete="country-name" value={customer.country} onChange={e=>cv("country",e.target.value)} placeholder="USA" /></div>
-              </div>
-              <p style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:"14px 0 10px" }}>Coupon Code <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></p>
-              <div style={{ display:"flex", gap:8 }}>
-                <input autoCapitalize="characters" autoComplete="off" value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
-                  placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
-                  style={{ flex:1, border:`1px solid ${couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":"var(--border)"}`, padding:"9px 13px", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".06em", outline:"none", background:couponStatus==="valid"?"#f0faf5":"#fff" }}
-                />
-                {couponStatus !== "valid"
-                  ? <button className="btn-s" onClick={applyCoupon} disabled={couponStatus==="checking"||!couponCode.trim()} style={{whiteSpace:"nowrap"}}>{couponStatus==="checking"?"Checking…":"Apply"}</button>
-                  : <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
-                }
-              </div>
-              {couponStatus==="valid"       && <p style={{fontSize:16,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied — you save ${(basePrice-effectivePrice).toLocaleString()}</p>}
-              {couponStatus==="invalid"     && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
-              {couponStatus==="used"        && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}
-              {couponStatus==="need-email"  && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Enter your email address first, then apply the coupon.</p>}
-              {couponStatus==="wrong-email" && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon is not linked to this email address.</p>}
-            </div>
-            )}
-            <button className="confirm-btn" style={{ background:canNext?"var(--gold)":"var(--border)", marginTop:12 }} onClick={handleContinue}>Continue →</button>
-            {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            {!pay && !(method === "card" && saving) && <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>}
-            {method === "zelle" && (
-              <div className="pay-detail">
-                <h4>Send via Zelle</h4>
-                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
-                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <div style={{ fontSize:16, color:"var(--muted)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div>
-                <div className="zelle-contact">{settings.zelleContact}</div>
-                <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+          {step === 2 && (
+            <>
+              {!pay && !(method === "card" && saving) && <button className="tap" onClick={() => setStep(1)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"var(--muted)", letterSpacing:".12em", textTransform:"uppercase", marginBottom:16, padding:0 }}>← Back</button>}
+              {method === "zelle" && (
+                <div className="pay-detail">
+                  <h4>Send via Zelle</h4>
+                  <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                  {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                  <div style={{ fontSize:16, color:"var(--muted)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div>
+                  <div className="zelle-contact">{settings.zelleContact}</div>
+                  <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
+                    <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                    <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+                  </div>
+                  <div className="zelle-steps">1. Open your bank app → Zelle<br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: copy <strong>{refShown}</strong> and paste it into your Zelle transaction memo/note<br />4. Confirm below — we ship once payment clears ✓</div>
                 </div>
-                <div className="zelle-steps">1. Open your bank app → Zelle<br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: copy <strong>{refShown}</strong> and paste it into your Zelle transaction memo/note<br />4. Confirm below — we ship once payment clears ✓</div>
-              </div>
-            )}
-            {method === "venmo" && (
-              <div className="pay-detail">
-                <h4>Send via Venmo</h4>
-                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
-                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <div className="zelle-contact">{venmoHandle}</div>
-                <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+              )}
+              {method === "venmo" && (
+                <div className="pay-detail">
+                  <h4>Send via Venmo</h4>
+                  <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                  {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                  <div className="zelle-contact">{venmoHandle}</div>
+                  <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
+                    <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                    <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+                  </div>
+                  <div className="zelle-steps">1. Open Venmo → Search <strong>{venmoHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Venmo note<br />4. Confirm below — we ship once payment clears ✓</div>
                 </div>
-                <div className="zelle-steps">1. Open Venmo → Search <strong>{venmoHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Venmo note<br />4. Confirm below — we ship once payment clears ✓</div>
-              </div>
-            )}
-            {method === "cashapp" && (
-              <div className="pay-detail">
-                <h4>Send via Cash App</h4>
-                <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
-                {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
-                <div className="zelle-contact">{cashAppHandle}</div>
-                <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
-                  <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
-                  <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+              )}
+              {method === "cashapp" && (
+                <div className="pay-detail">
+                  <h4>Send via Cash App</h4>
+                  <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
+                  {!saved && couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+                  <div className="zelle-contact">{cashAppHandle}</div>
+                  <div style={{ background:"var(--cream)", border:"1px solid var(--border)", padding:"10px 14px", margin:"12px 0" }}>
+                    <div style={{ fontSize:16, letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", marginBottom:4 }}>Order Number</div>
+                    <div style={{ fontFamily:"monospace", fontSize:18, letterSpacing:".06em", color:"var(--ink)", fontWeight:600 }}>{refShown}</div>
+                  </div>
+                  <div className="zelle-steps">1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Cash App note<br />4. Confirm below — we ship once payment clears ✓</div>
                 </div>
-                <div className="zelle-steps">1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: copy <strong>{refShown}</strong> and paste it into the Cash App note<br />4. Confirm below — we ship once payment clears ✓</div>
-              </div>
-            )}
-            {method === "card" && pay && (
-              <CardCheckout pay={pay} artworks={items} onBack={leaveCardForm} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
-            )}
-            {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
-            {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
-            {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
-            {method==="card" && calm && <p className="pay-calm" role="status">{calm}</p>}
-            {/* Card: Continue already opened the form. Here only while it opens, or once it couldn't. */}
-            {method==="card" && !pay && (saving
-              ? <p className="pay-card-wait" role="status">Opening the secure card form…</p>
-              : <button className="stripe-btn" onClick={handleCard}>Try Again</button>)}
-            {method==="card" && !pay && retry && !saving && <button type="button" className="tap pay-other" onClick={otherWay}>Choose Another Way to Pay</button>}
-            {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
-          </>
-        )}
+              )}
+              {method === "card" && pay && (
+                <CardCheckout pay={pay} artworks={items} art={false} onBack={leaveCardForm} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
+              )}
+              {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
+              {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
+              {method==="cashapp" && <button className="confirm-btn" onClick={handleConfirmCashApp} disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
+              {method==="card" && calm && <p className="pay-calm" role="status">{calm}</p>}
+              {/* Card: Continue already opened the form. Here only while it opens, or once it couldn't. */}
+              {method==="card" && !pay && (saving
+                ? <p className="pay-card-wait" role="status">Opening the secure card form…</p>
+                : <button className="stripe-btn" onClick={handleCard}>Try Again</button>)}
+              {method==="card" && !pay && retry && !saving && <button type="button" className="tap pay-other" onClick={otherWay}>Choose Another Way to Pay</button>}
+              {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

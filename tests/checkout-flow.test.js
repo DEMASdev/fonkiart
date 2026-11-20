@@ -139,7 +139,11 @@ const payOption = (root, label) => only(root, `"${label}" payment option`, n => 
 const field = (root, autoComplete) => only(root, `${autoComplete} field`, n => n.type === "input" && n.props.autoComplete === autoComplete);
 const alerts = (root) => findAll(root.tree, n => n.props.role === "alert");
 const statuses = (root) => findAll(root.tree, n => n.props.role === "status").map(textOf);
-const buttons = (root) => findAll(root.tree, n => n.type === "button").map(n => textOf(n).trim());
+// The order's one line (tap to see the pieces, src/components/CheckoutModal.jsx) is the order, not a
+// step: the steps' own buttons are read without it, and orderLine() reads it.
+const isOrderLine = (n) => String(n.props.className || "").includes("checkout-order-line");
+const buttons = (root) => findAll(root.tree, n => n.type === "button" && !isOrderLine(n)).map(n => textOf(n).trim());
+const orderLine = (root) => only(root, "order line", n => n.type === "button" && isOrderLine(n));
 const pics = (root, className) => findAll(root.tree, n => n.type === "img" && n.props.className === className).map(n => n.props.src);
 const fields = (root) => findAll(root.tree, n => n.type === "input").length;
 function click(node) {
@@ -1229,7 +1233,8 @@ test("card form INSIDE the page, paid: the form goes, the server checks, and the
   assert.deepEqual(stripe.slice(-2), [{ paid: `${page(1)}_secret_FAKE` }, { destroy: `${page(1)}_secret_FAKE` }], "destroyed once paid");
   assert.deepEqual(statuses(root), ["Confirming your payment…"]);
   assert.deepEqual(checkoutButtons(root), [], "no card button, no way back, no other way to pay");
-  assert.match(screen(root), /Your order FA-1739Test Print Z\$1,000Test Print Y\$120Total\$1,120/);
+  assert.match(screen(root), /Your OrderTest Print Z\$1,000Test Print Y\$120Total\$1,120/, "the order stays on the screen");
+  assert.match(screen(root), /Your order FA-1739/);
   assert.deepEqual([log.paid, log.cart.length, kept()?.session], [[], 2, page(1)], "the cart and the saved order stay until the server says paid");
   assert.deepEqual(scrolls, [], "the page stays put while it checks");
   release(); server.world.hold = null; await settle();
@@ -1280,6 +1285,67 @@ test("card form INSIDE the page, paid, then Check Again tapped twice: the server
     release(); server.world.hold = null; await settle();
     assertPaidThanks(root);
   });
+});
+
+// The checkout as a shop counter (Andy, 2026-11-19, yes to: "Your art stays on the left: pictures,
+// titles and total, always in view. The steps go on the right: your details, how to pay, then the
+// card form ... On a phone ... The order shrinks to one line at the top that you tap to see the
+// pieces, and the big pictures don't repeat above the card form"). Where each part sits is CSS
+// (tests/checkout-layout.test.js); here, what is drawn, step by step.
+const orderPics = (root) => findAll(root.tree, n => n.type === "aside" && String(n.props.className).includes("checkout-order"))
+  .flatMap(a => findAll(a, n => n.type === "img" && n.props.className === "pay-art-pic").map(n => n.props.src));
+test("COUNTER: the order is drawn once for every step (pictures, titles, prices, total) with its one line; the details come before the ways to pay; the card form repeats no pictures", async () => {
+  await quiet(async () => {
+    freshWorld();
+    const stripe = fakeStripeJs();
+    const { root } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    // Step 1: the order, then the details, then the ways to pay.
+    const text = screen(root);
+    assert.match(text, /^✕Purchase2 pieces\$1,231▾Your OrderTest Print Z\$1,111Test Print Y\$120Total\$1,231/, "the order first, in the shop's prices");
+    assert.deepEqual(orderPics(root), [PRINT.image, PRINT2.image], "each piece's picture, once");
+    assert.deepEqual(pics(root, "pay-art-pic"), [PRINT.image, PRINT2.image], "no other big pictures");
+    assert.ok(text.indexOf("Your Information") < text.indexOf("How to Pay") && text.indexOf("How to Pay") < text.indexOf("Zelle"), "details, then how to pay");
+    assert.ok(text.indexOf("Zelle") < text.indexOf("Continue →"));
+
+    // The one line opens and closes (a phone shows the pieces only once it is tapped: CSS).
+    const line = orderLine(root);
+    assert.equal(line.props["aria-expanded"], false);
+    click(line); await settle();
+    assert.equal(orderLine(root).props["aria-expanded"], true);
+    assert.match(textOf(orderLine(root)), /^2 pieces\$1,231▴$/);
+    assert.ok(findAll(root.tree, n => n.type === "aside" && /\bis-open\b/.test(n.props.className)).length === 1, "open: marked for the CSS");
+    click(orderLine(root)); await settle();
+    assert.equal(orderLine(root).props["aria-expanded"], false);
+
+    // How to pay (Zelle): the order is still there, beside (or above) the panel.
+    await fillIn(root, "Zelle");
+    assert.deepEqual(orderPics(root), [PRINT.image, PRINT2.image], "the order stays for the payment step");
+    click(button(root, "← Back")); await settle();
+
+    // The card form: the order stays, now in the SERVER's prices, and nothing is drawn twice.
+    await choose(root, "Credit Card");
+    assert.deepEqual(stripe.at(-1), { mount: "string" }, "the form is in");
+    assert.deepEqual(orderPics(root), [PRINT.image, PRINT2.image]);
+    assert.deepEqual(pics(root, "pay-art-pic"), [PRINT.image, PRINT2.image], "the card form repeats no pictures");
+    assert.equal((screen(root).match(/Test Print Z/g) || []).length, 1, "each title once");
+    assert.match(textOf(orderLine(root)), /^2 pieces\$1,120▾$/, "the one line: the amount the card is charged");
+    assert.match(screen(root), /Your OrderTest Print Z\$1,000Test Print Y\$120Total\$1,120/);
+  });
+});
+
+test("COUNTER: one piece: its one line names it; a coupon shows on the piece, and the total is what is paid", async () => {
+  freshWorld();
+  server.call = ((call) => async (op, payload) => op === "coupon" ? { status: "valid" } : call(op, payload))(server.call);
+  const { root } = openShop([PRINT]);
+  click(button(root, "Checkout →")); await settle();
+  assert.match(textOf(orderLine(root)), /^Test Print Z\$1,111▾$/);
+  await details(root);
+  typeIn(only(root, "coupon field", n => n.type === "input" && n.props.placeholder === "FK-XXXX-XXXX"), "FK-TEST-0001");
+  await settle();
+  click(button(root, "Apply")); await settle();
+  assert.match(textOf(orderLine(root)), /^Test Print Z\$944▾$/, "15% off 1,111, rounded as the checkout always has");
+  assert.match(screen(root), /Your OrderTest Print Z\$944✓ 15% offTotal\$944/);
 });
 
 test("control: the Collectors Room's checkout (no onSuccess) still shows its own thank-you screen, and Close closes it", async () => {
