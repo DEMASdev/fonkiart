@@ -685,6 +685,51 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .inv-num-dates > div { white-space:nowrap; }
 @media(max-width:480px){ .inv-num-row { flex-direction:column; } .inv-num-dates { text-align:left;margin-left:0; } }
 @media(max-width:600px){ .invoice-card { padding:28px 20px; } }
+/* ── The invoice as a shop counter (src/pages/InvoicePage.jsx) ──
+   Andy, 2026-11-20: "that page still looks vertical in a computer ... again in a phone needs to be
+   crisp but in a computer there's a lot of unused space". The layout he approved for the shop's
+   checkout. The page measures its own box (inv-shell), not the screen:
+   - Phone, and anything under 900px: one column, tight. The order is ONE strip at the top (the
+     piece, its title, the total); tapping it opens the whole picture under it. The card form does
+     not show the picture again. (On the old one-column page Andy asked, 2026-11-17: "just keep it
+     small like in the email": on a phone it stays small, the whole picture only on a tap.)
+   - Computer (900px and up): one wide page with two sides. The art on the LEFT (its picture, title
+     and total), kept in view while the steps on the RIGHT scroll: details, how to pay, the card
+     form (beside the art, not under it).
+   Text 16px and up; money in Cormorant Garamond 600 with lining figures. */
+.inv-shell { container:inv-page / inline-size; }
+.inv-side-art { margin-bottom:16px; }
+.inv-strip { display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"pic label label" "pic title hint" "pic total total";align-items:center;gap:1px 12px;width:100%;padding:10px 14px 10px 10px;background:#fffdf8;border:1px solid var(--border);text-align:left;font-family:'DM Sans',sans-serif;color:var(--ink); }
+button.inv-strip { cursor:pointer; }
+div.inv-strip { grid-template-columns:minmax(0,1fr);grid-template-areas:none;padding:12px 14px; }
+.inv-strip-pic { grid-area:pic;display:block;width:64px;height:64px;object-fit:contain;background:#f7f1e6; }
+/* Its words sit straight in the strip's grid: the label and the total each get the whole width
+   beside the picture, so each stays on one line, and "View" sits beside the title. */
+.inv-strip-text { display:contents; }
+.inv-strip-text > .invoice-label { grid-area:label;line-height:1.3; }
+div.inv-strip .inv-strip-text { display:flex;flex-direction:column;gap:1px;min-width:0; }
+.inv-strip-title { grid-area:title;font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:500;line-height:1.2;color:var(--ink);overflow-wrap:anywhere; }
+.inv-strip-total { grid-area:total;display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px; }
+.inv-strip-money { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;line-height:1.15;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums; }
+.inv-strip-hint { grid-area:hint;font-size:var(--inv-small);letter-spacing:.06em;color:var(--gold);white-space:nowrap; }
+.inv-side-pic { display:none;margin:10px 0 0;padding:16px;background:#faf6ee;border:1px solid var(--border);text-align:center; }
+.inv-side-art.is-open .inv-side-pic { display:block; }
+.inv-side-pic img { display:inline-block;vertical-align:top;width:auto;height:auto;max-width:100%;max-height:70vh;box-shadow:0 8px 24px rgba(28,26,24,.16); }
+.inv-side-cap { display:none; }
+.inv-card-panel .pay-art-pic { display:none; }
+@container inv-page (min-width:900px) {
+  .inv-shell .invoice-card.inv-counter { max-width:1120px;padding:32px 44px 44px; }
+  .inv-sides { display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:0 52px;align-items:start; }
+  .inv-side-art { position:sticky;top:calc(var(--marquee) + var(--topbar) + 18px);margin:0; }
+  .inv-strip { display:none; }
+  .inv-side-pic { display:block;margin:0 0 20px;padding:26px; }
+  .inv-side-pic img { max-height:clamp(220px, calc(100vh - 376px), 460px); }
+  .inv-side-cap { display:block; }
+  .inv-side-cap .invoice-row { flex-direction:column;align-items:flex-start;gap:4px;padding:0 0 14px; }
+  .inv-side-cap .invoice-row .invoice-value { font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:500;line-height:1.2;overflow-wrap:anywhere; }
+  .inv-card-panel .pay-art { display:none; }
+  .inv-card-panel { margin-top:20px; }
+}
 
 /* ════════════════════════════════════════════════════════════════════
    PHONE PASS — iPhone Safari + Android Chrome (2026-11)

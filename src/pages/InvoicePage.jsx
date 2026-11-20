@@ -61,6 +61,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const [shipMsg, setShipMsg] = useState(null);
   // Set the moment Save is tapped, so a double tap saves once.
   const shipBusy = useRef(false);
+  // Phone: the order's strip at the top, opened to show the whole picture (a computer always shows it).
+  const [artOpen, setArtOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -183,7 +185,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     } finally { shipBusy.current = false; setShipSaving(false); }
   };
 
-  const shell = (content) => <div className={embedded ? "inv-embed" : "invoice-page"}>{content}</div>;
+  // inv-shell: the box the page measures to choose one column or two sides (index.css).
+  const shell = (content) => <div className={embedded ? "inv-embed inv-shell" : "invoice-page inv-shell"}>{content}</div>;
 
   if (loading) return shell(<p style={{color:"var(--muted)",fontFamily:"'Cormorant Garamond',serif",fontSize:20}}>Loading…</p>);
 
@@ -222,11 +225,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <span className="invoice-value">{order.client_name}</span>
     </div>
   );
-  // Beside the picture the notes stack under their label; without one, label left, notes right.
-  const notesRow = (side) => order.notes && (
+  // Label left, notes right.
+  const notesRow = order.notes && (
     <div className="invoice-row" style={{alignItems:"flex-start"}}>
       <span className="invoice-label">Notes</span>
-      <span className="invoice-value" style={{fontSize:"var(--inv-text)",lineHeight:1.6,whiteSpace:"pre-wrap",...(side ? {} : {maxWidth:"60%",textAlign:"right"})}}>{order.notes}</span>
+      <span className="invoice-value" style={{fontSize:"var(--inv-text)",lineHeight:1.6,whiteSpace:"pre-wrap",maxWidth:"60%",textAlign:"right"}}>{order.notes}</span>
     </div>
   );
   const itemRow = (
@@ -235,13 +238,23 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <span className="invoice-value">{order.item_title}</span>
     </div>
   );
+  const totalLabel = paid ? "Total Paid" : "Total Due";
+  // The order in one strip (the phone's top line): the piece, its title and the total. With a
+  // picture it is a button that opens the whole picture under it.
+  const stripText = (
+    <span className="inv-strip-text">
+      <span className="invoice-label">Artwork / Item</span>
+      <span className="inv-strip-title">{order.item_title}</span>
+      <span className="inv-strip-total"><span className="invoice-label">{totalLabel}</span> <span className="inv-strip-money">{amountText}</span></span>
+    </span>
+  );
   const shipGone = order.status === "shipped" || order.status === "delivered";
   const shipSaved = hasShipAddress(order);
   const invDate = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "";
   const dueDate = order.due_date ? new Date(order.due_date + "T00:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : null;
 
   return shell(
-    <div className="invoice-card" ref={cardTop}>
+    <div className="invoice-card inv-counter" ref={cardTop}>
       {shopView && (
         <p style={{fontSize:"var(--inv-small)",lineHeight:1.5,color:"#7a5b14",background:"#fff8ec",border:"1px solid #e8d5a0",padding:"7px 14px",marginBottom:18,textAlign:"center"}}>
           Shop view, read-only. This is the page the customer sees; the Confirm order button is hidden here.
@@ -258,6 +271,38 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           </div>
         )}
       </div>
+
+      {/* Like a shop counter (Andy, 2026-11-20: "that page still looks vertical in a computer ...
+          in a phone needs to be crisp but in a computer there's a lot of unused space"). On a
+          computer, two sides: the art on the left (its picture, title and total), kept in view
+          while the steps on the right scroll (details, how to pay, the card form, beside the art).
+          On a phone, one column: the order as one strip at the top (tap it for the whole
+          picture), then the steps. index.css, "the invoice as a shop counter". */}
+      <div className="inv-sides">
+      <aside className={`inv-side-art${artOpen ? " is-open" : ""}`} aria-label="Your order">
+        {art ? (
+          <button type="button" className="tap inv-strip" aria-expanded={artOpen} aria-controls="inv-side-pic" onClick={() => setArtOpen(o => !o)}>
+            <Pic src={art.image} w={320} alt="" className="inv-strip-pic" />
+            {stripText}
+            <span className="inv-strip-hint" aria-hidden="true">{artOpen ? "Hide ▴" : "View ▾"}</span>
+          </button>
+        ) : (
+          <div className="inv-strip">{stripText}</div>
+        )}
+        {art && (
+          <figure className="inv-side-pic" id="inv-side-pic">
+            <Pic src={art.image} w={1080} alt={art.title} loading="lazy" />
+          </figure>
+        )}
+        <div className="inv-side-cap">
+          {itemRow}
+          <div className="invoice-total">
+            <span className="invoice-label">{totalLabel}</span>
+            <span className="invoice-value">${Number(order.amount).toLocaleString()}</span>
+          </div>
+        </div>
+      </aside>
+      <div className="inv-side-steps">
 
       {/* Number left, dates right; on a phone the dates go under the number (index.css). */}
       <div className="inv-num-row">
@@ -277,20 +322,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           already-confirmed invoice has no such button (seen 2026-11-17 on a paid invoice). */}
       <p style={{fontSize:"var(--inv-text)",color:"var(--muted)",lineHeight:1.6,marginBottom:16}}>Hi {firstName}, here is your invoice from Fonkiart.{!paid && !approved && <> Please review the details and click <em>Confirm order</em> when you&apos;re ready.</>}</p>
 
-      {/* With a picture, Client and Artwork sit beside it (Andy, 2026-11-17: "compact it
-          more, use the space next to the picture"). Without one, the plain rows. */}
-      {art ? (
-        <div className="inv-art-row">
-          <figure className="inv-art">
-            <Pic src={art.image} w={320} alt={art.title} />
-          </figure>
-          <div className="inv-art-info">{clientRow}{itemRow}{notesRow(true)}</div>
-        </div>
-      ) : (<>{clientRow}{itemRow}{notesRow(false)}</>)}
-      <div className="invoice-total">
-        <span className="invoice-label">{paid ? "Total Paid" : "Total Due"}</span>
-        <span className="invoice-value">${Number(order.amount).toLocaleString()}</span>
-      </div>
+      {/* The piece, its title and the total are on the art's side; the client and the notes here. */}
+      {clientRow}{notesRow}
 
       {/* Paid: never ask for money again (Andy, 2026-11-17: a paid, shipped order's link
           still said "not paid yet, please send"). */}
@@ -388,8 +421,9 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
             </div>
           )}
         </div>
-        {/* Pay by card: the piece first, then Stripe's form, in place of the ways to pay
-            (src/components/CardCheckout.jsx). "← Choose another way to pay" brings them back. */}
+        {/* Pay by card: Stripe's form, in place of the ways to pay (src/components/CardCheckout.jsx),
+            beside the art on a computer. The art's side already shows the piece, so the panel does not
+            show its picture again (index.css). "← Choose another way to pay" brings them back. */}
         {pay && (
           <div className="inv-card-panel">
             <CardCheckout pay={pay} artworks={artworks} noun="invoice" totalLabel="Total Due"
@@ -449,6 +483,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <p style={{fontSize:"var(--inv-small)",color:"var(--muted)",textAlign:"center",marginTop:28,lineHeight:1.7}}>
         Questions? Contact us at <a href={`mailto:${BREVO_SENDER}`} style={{color:"var(--gold)"}}>{BREVO_SENDER}</a>
       </p>
+      </div>{/* inv-side-steps */}
+      </div>{/* inv-sides */}
     </div>
   );
 }
