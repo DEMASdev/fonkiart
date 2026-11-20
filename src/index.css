@@ -899,10 +899,12 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .o-chip-n { color:var(--muted);font-variant-numeric:tabular-nums; }
 .orders-tab .o-chip[aria-pressed="true"] { background:var(--ink);border-color:var(--ink);color:#fff; }
 .orders-tab .o-chip[aria-pressed="true"] .o-chip-n { color:rgba(255,255,255,.78); }
-/* The table: soft gold hairlines between orders, a gentle cream on hover. */
+/* The table: soft gold hairlines between orders, a gentle cream on hover. Thin rows (Andy, 2026-11-20:
+   "still too thick rows"): less air above and below each order, a tighter line height, and short
+   pieces side by side where they fit. The text keeps its sizes (17px, small 16px). */
 .orders-tab .orders-table { border-collapse:separate;border-spacing:0; }
-.orders-tab .orders-table th { padding:0 8px 12px;font-size:16px;font-weight:400;letter-spacing:.12em;color:var(--muted);background:none;border-bottom:1px solid var(--border);white-space:nowrap; }
-.orders-tab .orders-table td { padding:18px 8px;font-size:17px;line-height:1.4;vertical-align:top;border-bottom:1px solid var(--o-line); }
+.orders-tab .orders-table th { padding:0 6px 10px;font-size:16px;font-weight:400;letter-spacing:.12em;color:var(--muted);background:none;border-bottom:1px solid var(--border);white-space:nowrap; }
+.orders-tab .orders-table td { padding:10px 6px;font-size:17px;line-height:1.3;vertical-align:top;border-bottom:1px solid var(--o-line); }
 .orders-tab .orders-table th:first-child, .orders-tab .orders-table td:first-child { padding-left:4px; }
 .orders-tab .orders-table > tbody > tr.order-row:hover > td, .orders-tab .orders-table > tbody > tr.order-row.is-open > td { background:var(--o-soft); }
 .orders-tab .orders-table > tbody > tr.order-row.is-open > td { border-bottom-color:transparent; }
@@ -915,27 +917,27 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .order-art-none svg { opacity:.6; }
 .orders-tab .o-art-text { min-width:0; }
 .orders-tab .o-title { font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;line-height:1.15;color:var(--ink);overflow-wrap:anywhere; }
-.orders-tab .o-ref { display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;margin-top:6px;font-size:16px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap; }
+.orders-tab .o-ref { display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;margin-top:3px;font-size:16px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap; }
 .orders-tab .o-ref .copy-btn { border-color:transparent; }
 .orders-tab .o-ref .copy-btn:hover, .orders-tab .o-ref .copy-btn:focus-visible { border-color:var(--gold); }
 .orders-tab .o-name { font-weight:500;overflow-wrap:anywhere; }
 .orders-tab .o-email { margin-top:2px;font-size:16px;color:var(--muted);overflow-wrap:anywhere; }
 /* Money in the invoice's serif, with lining figures, so a 1 is a real 1. */
 .orders-tab .o-money { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;line-height:1.05;color:var(--o-money);font-variant-numeric:lining-nums;letter-spacing:.01em;white-space:nowrap; }
-.orders-tab .o-date { margin-top:5px;font-size:16px;color:var(--muted);white-space:nowrap; }
+.orders-tab .o-date { margin-top:2px;font-size:16px;color:var(--muted);white-space:nowrap; }
 /* Status: shown once, as a soft pill (its colour dot) that is also the menu to change it. */
 .orders-tab .o-pill { position:relative;display:inline-flex;align-items:center;background:#fff;border:1px solid var(--border);border-radius:999px;--o-dot:#9e7fa0; }
 .orders-tab .o-pill::before { content:"";position:absolute;left:13px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--o-dot);pointer-events:none; }
-.orders-tab .o-pill select { -webkit-appearance:none;appearance:none;margin:0;padding:6px 34px 6px 29px;font-family:inherit;font-size:16px;color:var(--ink);background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a5f7c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center;border:0;border-radius:999px;cursor:pointer; }
+.orders-tab .o-pill select { -webkit-appearance:none;appearance:none;margin:0;padding:4px 34px 4px 29px;font-family:inherit;font-size:16px;color:var(--ink);background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a5f7c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center;border:0;border-radius:999px;cursor:pointer; }
 .orders-tab .o-pill select:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 .orders-tab .o-pill[data-status="confirmed"] { --o-dot:#b8923f;background:#fff8ec;border-color:#e8d5a0; }
 .orders-tab .o-pill[data-status="paid"] { --o-dot:#2d6a4f;background:#e8f5ee;border-color:#a3d4b3; }
 .orders-tab .o-pill[data-status="shipped"] { --o-dot:#DF88B7;background:rgba(223,136,183,.1);border-color:rgba(223,136,183,.5); }
 .orders-tab .o-pill[data-status="delivered"] { --o-dot:var(--ink);background:rgba(28,26,24,.04);border-color:rgba(28,26,24,.2); }
-.orders-tab .o-note { margin-top:8px;font-size:16px;line-height:1.35;color:var(--muted); }
+.orders-tab .o-note { margin-top:4px;font-size:16px;line-height:1.35;color:var(--muted); }
 /* Every button on the tab: rounded, the same family. o-btn quiet, o-btn-ink the main one, o-link
    a word that is a button (Edit, Add, Remove). */
-.orders-tab .o-btn { display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 16px;font-family:inherit;font-size:16px;line-height:1.25;color:var(--ink);text-decoration:none;white-space:nowrap;background:#fff;border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:border-color .15s,background .15s; }
+.orders-tab .o-btn { display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:4px 15px;font-family:inherit;font-size:16px;line-height:1.25;color:var(--ink);text-decoration:none;white-space:nowrap;background:#fff;border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:border-color .15s,background .15s; }
 .orders-tab .o-btn:hover { border-color:var(--gold);background:var(--o-soft); }
 .orders-tab .o-btn:focus-visible, .orders-tab .o-link:focus-visible, .orders-tab .o-chip:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 .orders-tab .o-btn-ink { color:#fff;background:var(--ink);border-color:var(--ink); }
@@ -956,18 +958,19 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .o-btn-add { padding:4px 14px;color:#9a4a0c;border-color:#f3c49b; }
 .orders-tab .o-btn-add:hover { background:#fff1e6;border-color:#e8772e; }
 .orders-tab .o-ship-short { overflow-wrap:anywhere; }
-/* "Shipping": the carrier, its live tracking link, Edit and Remove. */
-.orders-tab .o-track { display:flex;flex-direction:column;align-items:flex-start;gap:2px; }
-.orders-tab .o-carrier { font-weight:500; }
-.orders-tab .o-track .track-link, .orders-tab .o-track-no { font-size:16px;overflow-wrap:anywhere; }
+/* "Shipping": the carrier, its live tracking link, Edit and Remove, side by side as one line of
+   text that wraps only where it must (the carrier's name never breaks; Edit and Remove stay together). */
+.orders-tab .o-track { display:block; }
+.orders-tab .o-carrier { font-weight:500;white-space:nowrap;margin-right:8px; }
+.orders-tab .o-track .track-link, .orders-tab .o-track-no { font-size:16px;overflow-wrap:anywhere;margin-right:8px; }
 .orders-tab .o-shipping .track-tick { gap:8px;font-size:16px;line-height:1.35; }
-.orders-tab .o-inline-btns { display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:2px; }
+.orders-tab .o-inline-btns { display:inline-flex;flex-wrap:wrap;gap:4px 14px; }
 .orders-tab input[type=checkbox] { -webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;flex:none;width:20px;height:20px;margin:0;background:#fff;border:1.5px solid var(--o-money);border-radius:5px;cursor:pointer; }
 .orders-tab input[type=checkbox]:checked { background:#2d6a4f;border-color:#2d6a4f; }
 .orders-tab input[type=checkbox]:checked::before { content:"";width:10px;height:5px;margin-top:-2px;border:2px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg); }
 .orders-tab input[type=checkbox]:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 /* Open, More (its menu: Link, Resend, Delete last and red) and Notes, stacked. */
-.orders-tab .o-actions-in { display:flex;flex-direction:column;align-items:stretch;gap:8px; }
+.orders-tab .o-actions-in { display:flex;flex-direction:column;align-items:stretch;gap:5px; }
 .orders-tab .o-more { position:relative;display:flex;flex-direction:column; }
 .orders-tab .o-more-btn::after, .orders-tab .o-notes-btn::after { content:"";width:7px;height:7px;margin:-4px 0 0 2px;border:solid var(--muted);border-width:0 1.5px 1.5px 0;transform:rotate(45deg); }
 .orders-tab .o-more-btn[aria-expanded="true"]::after, .orders-tab .o-notes-btn[aria-expanded="true"]::after { margin:3px 0 0 2px;transform:rotate(-135deg); }
@@ -990,7 +993,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .mark-paid-yes { padding:4px 10px;background:#2d6a4f;border:1px solid #2d6a4f;color:#fff;cursor:pointer;font-size:16px; }
 .mark-paid-no { padding:4px 10px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px; }
 .ask-danger { padding:4px 10px;background:#c0392b;border:1px solid #c0392b;color:#fff;cursor:pointer;font-size:16px; }
-.orders-tab .mark-paid { margin-top:10px;padding:4px 12px;font-family:inherit;border-radius:999px;letter-spacing:.02em; }
+.orders-tab .mark-paid { margin-top:6px;padding:2px 12px;font-family:inherit;border-radius:999px;letter-spacing:.02em; }
 .orders-tab .mark-paid-ask { margin-top:0;gap:8px 10px; }
 .orders-tab .mark-paid-ask > span:first-child { margin-right:4px; }
 .orders-tab .mark-paid-yes, .orders-tab .mark-paid-no, .orders-tab .ask-danger, .orders-tab .track-save, .orders-tab .track-btn { padding:7px 16px;border-radius:999px;font-family:inherit; }
@@ -1051,15 +1054,18 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .ship-dlg-actions { display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--o-line); }
 .ship-dlg-actions .o-btn { padding:10px 22px;font-size:17px; }
 /* Wide screens (1280px and up): one line per order. The widths are hints: the browser still
-   gives every column at least what its content needs, so nothing is cut and nothing overlaps. */
+   gives every column at least what its content needs, so nothing is cut and nothing overlaps.
+   The Client column is wider so a usual email takes fewer lines; the invoice number and its copy
+   button share one line under the title. */
 @media(min-width:1280px){
-  .orders-tab .orders-table th:nth-child(1) { width:24%; }
-  .orders-tab .orders-table th:nth-child(2) { width:12%; }
+  .orders-tab .orders-table th:nth-child(1) { width:23%; }
+  .orders-tab .orders-table th:nth-child(2) { width:15%; }
   .orders-tab .orders-table th:nth-child(3) { width:9%; }
-  .orders-tab .orders-table th:nth-child(4) { width:13%; }
-  .orders-tab .orders-table th:nth-child(5) { width:19%; }
-  .orders-tab .orders-table th:nth-child(6) { width:13.5%; }
-  .orders-tab .orders-table th:nth-child(7) { width:9.5%; }
+  .orders-tab .orders-table th:nth-child(4) { width:12%; }
+  .orders-tab .orders-table th:nth-child(5) { width:18%; }
+  .orders-tab .orders-table th:nth-child(6) { width:14.5%; }
+  .orders-tab .orders-table th:nth-child(7) { width:8.5%; }
+  .orders-tab .o-ref { flex-wrap:nowrap; }
   /* The "Needs address" flag and its Add button always share one line. */
   .orders-tab .o-shipto-flag { flex-wrap:nowrap; }
 }
@@ -1068,16 +1074,20 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 @media(max-width:1279px){
   .orders-tab .orders-table thead { display:none; }
   .orders-tab .orders-table, .orders-tab .orders-table > tbody { display:block; }
-  .orders-tab .orders-table > tbody > tr.order-row { display:grid;gap:18px 20px;padding:18px 20px;margin-bottom:14px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 4px rgba(28,26,24,.05); }
+  .orders-tab .orders-table > tbody > tr.order-row { display:grid;gap:12px 18px;padding:14px 18px;margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 4px rgba(28,26,24,.05); }
   .orders-tab .orders-table > tbody > tr.order-row.is-open { margin-bottom:0;border-bottom:0;border-radius:14px 14px 0 0; }
   .orders-tab .orders-table > tbody > tr.order-row > td { display:block;min-width:0;padding:0;background:none;border:0;overflow-wrap:anywhere; }
   .orders-tab .orders-table > tbody > tr.order-row:hover > td, .orders-tab .orders-table > tbody > tr.order-row.is-open > td { background:none; }
-  .orders-tab .orders-table > tbody > tr > td[data-label]::before { content:attr(data-label);display:block;margin-bottom:6px;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted); }
+  .orders-tab .orders-table > tbody > tr > td[data-label]::before { content:attr(data-label);display:block;margin-bottom:1px;line-height:1.2;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted); }
   .orders-tab .orders-table > tbody > tr > td.o-art::before, .orders-tab .orders-table > tbody > tr > td.o-actions::before { content:none; }
-  .orders-tab .orders-table > tbody > tr > td.o-actions { padding-top:14px;border-top:1px solid var(--o-line); }
+  .orders-tab .orders-table > tbody > tr > td.o-actions { padding-top:10px;border-top:1px solid var(--o-line); }
+  /* The client's name and email side by side when both fit on the line, else the email under it. */
+  .orders-tab .orders-table > tbody > tr > td.o-client { display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px; }
+  .orders-tab .orders-table > tbody > tr > td.o-client::before { flex-basis:100%; }
+  .orders-tab .orders-table > tbody > tr > td.o-client .o-email { margin-top:0; }
   .orders-tab .o-actions-in { flex-direction:row;flex-wrap:wrap; }
   .orders-tab .o-menu { right:auto;left:0; }
-  .orders-tab .orders-table > tbody > tr.order-panel { display:block;margin:0 0 14px;background:var(--o-soft);border:1px solid var(--border);border-top:1px dashed var(--border);border-radius:0 0 14px 14px; }
+  .orders-tab .orders-table > tbody > tr.order-panel { display:block;margin:0 0 12px;background:var(--o-soft);border:1px solid var(--border);border-top:1px dashed var(--border);border-radius:0 0 14px 14px; }
   .orders-tab .orders-table > tbody > tr.order-panel > td { display:block;padding:12px;background:none;border:0; }
   .orders-tab .o-panel { padding:14px; }
 }
@@ -1103,7 +1113,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .orders-tab .crm-title { font-size:32px; }
   .orders-tab .crm-search { flex-basis:100%; }
   .orders-tab .btn-p, .orders-tab .btn-s { padding:10px 14px;letter-spacing:.04em;white-space:nowrap; }
-  .orders-tab .orders-table > tbody > tr.order-row { gap:18px 14px;padding:16px; }
+  .orders-tab .orders-table > tbody > tr.order-row { gap:10px 14px;padding:12px 14px; }
   .orders-tab .o-art .order-art { width:76px;height:76px; }
   .orders-tab .o-title { font-size:23px; }
   .track-form input { max-width:none; }
