@@ -18,7 +18,9 @@ const forms = { turn: Promise.resolve() };
 // Cart's ?cart=...&card=..., CardReturnPage; an invoice's ?invoice=...&card=..., InvoicePage).
 // pay: the server's answer (cart-card / cart-again, or an invoice's card-checkout):
 // { ref, session, lines, total, clientSecret, publishableKey }. noun: what pay.ref names, "order"
-// (the Cart: its order is saved) or "invoice"; totalLabel: the line above the total.
+// (the Cart: no number above the form, it shows on the thank-you once paid; Andy, 2026-11-19,
+// yes to: "no order number until they pay") or "invoice" ("Your invoice FA-..." above the form);
+// totalLabel: the line above the total.
 // art: the pieces above the form (PayArt). The Cart's checkout passes false: its order is already
 // on the screen, beside the form on a computer and one line above it on a phone (CheckoutModal).
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
@@ -59,7 +61,7 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
   return (
     <div className="pay-card">
       {!paid && <button type="button" className="tap pay-card-back" onClick={onBack}>← Choose another way to pay</button>}
-      <p className="pay-card-label">Your {noun} <span className="pay-card-ref">{pay.ref}</span></p>
+      {noun !== "order" && <p className="pay-card-label">Your {noun} <span className="pay-card-ref">{pay.ref}</span></p>}
       {art && <PayArt lines={pay.lines} total={pay.total} artworks={artworks} totalLabel={totalLabel} />}
       {!paid && (
         <>
@@ -75,7 +77,6 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
             {check === "unpaid"
               ? "We haven't received this payment yet. Please give it a moment, then check again."
               : "We couldn't check your payment right now. Please check again in a moment."}
-            {noun === "order" && <>{" "}Your order <strong>{pay.ref}</strong> is saved.</>}
           </p>
           <button type="button" className="tap confirm-btn" onClick={() => onComplete?.(pay)}>Check Again</button>
         </>

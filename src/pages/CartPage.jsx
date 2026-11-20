@@ -20,7 +20,8 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
   // names the order from this copy.
   const [placed, setPlaced] = useState(null);
   const [selected, setSelected] = useState(null);
-  // checking · open (the order is saved) · plain (no saved order to speak of) · paid
+  // checking · open (its order still waits to be paid; never called "saved" nor numbered to the
+  // buyer before paying) · plain (no saved order to speak of) · paid
   const [back, setBack] = useState(() => {
     if (!cancelledRef) return null;
     const order = readCardOrder();
@@ -84,7 +85,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
         <div className="cart-notice" role="status">
           <p className="cart-notice-title">No payment was taken</p>
           {back.state === "open" && cart.length > 0
-            ? <p className="cart-notice-text">Your order <strong className="cart-notice-ref">{cancelledRef}</strong> is saved, and your cart is just as you left it. Tap Checkout to pay by card again, or with Zelle, Venmo or Cash App.</p>
+            ? <p className="cart-notice-text">Your cart is just as you left it. Tap Checkout to pay by card again, or with Zelle, Venmo or Cash App.</p>
             : cart.length > 0 && <p className="cart-notice-text">Your cart is just as you left it. Tap Checkout whenever you&apos;re ready.</p>}
         </div>
       )}

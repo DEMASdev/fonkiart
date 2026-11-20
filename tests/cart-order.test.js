@@ -81,6 +81,25 @@ test("what the server is sent to find the saved order: its reference, rows and e
   assert.equal("session" in cardOrderBody({ ...ORDER, session: null }, items), false);
 });
 
+test("coming back: the buyer's details and the coupon are kept too, the checkout's own fields only, each as text, and sent back so the server can find the order by the email typed last", () => {
+  storage.clear();
+  const typed = { firstName: "Jane", lastName: "Doe", email: "jane.doe@x.co", phone: "305 555 0199", address: "9 Ocean Dr", city: "Miami Beach", state: "FL", zip: "33139", country: "USA" };
+  const out = saveCardOrder({ ...ORDER, customer: { ...typed, isAdmin: true, zip: 33139 }, coupon: "FK-1111-2222" });
+  assert.deepEqual(out, { ...ORDER, customer: { ...typed, zip: "" }, coupon: "FK-1111-2222" }, "no field the checkout lacks; a number is not text");
+  assert.deepEqual(readCardOrder(), out);
+  // Kept by hand, or by anything else: the same rules on the way back in.
+  storage.set("fonkiart-card-order", JSON.stringify({ ...ORDER, customer: { ...typed, firstName: { x: 1 }, extra: "<b>" }, coupon: 7 }));
+  assert.deepEqual(readCardOrder(), { ...ORDER, customer: { ...typed, firstName: "" } });
+  // Kept before the details were (no customer, no coupon): read exactly as before.
+  saveCardOrder(ORDER);
+  assert.deepEqual(readCardOrder(), ORDER);
+  // Sent back beside the order's own email.
+  const items = [{ id: 1, title: "Mango" }, { id: 2, title: "Frida" }];
+  assert.deepEqual(cardOrderBody({ ...ORDER, customer: typed }, items), { ref: "FA-1752", ids: [5001, 5002], email: "jane@x.co", titles: ["Mango", "Frida"], session: SESSION, customer: typed });
+  assert.equal("customer" in cardOrderBody(ORDER, items), false);
+  dropCardOrder();
+});
+
 test("once paid, each paid title leaves the cart ONCE: a second copy, or anything added since, stays", () => {
   const cart = [{ id: 1, title: "Frida" }, { id: 2, title: "Mango" }, { id: 3, title: "Frida" }, { id: 4, title: "Sol" }];
   assert.deepEqual(withoutTitles(cart, ["Frida", " Sol "]).map(i => i.id), [2, 3]);

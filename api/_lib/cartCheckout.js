@@ -26,11 +26,14 @@
 // 3. Stripe's own "paid" message (op "stripe-event", storeOps.js) does the same for a buyer who
 //    closes the tab. Whichever of the two gets there first sends the emails; the other, none.
 // 4. ONE order per cart, however the buyer retries (a double tap, closing the card form and
-//    opening it again, coming back from Klarna or Stripe's page without paying, a card form that couldn't
-//    open). The checkout keeps the saved order (its reference, rows, email and last payment page)
-//    and asks again with it: "cart-again" opens a new card form for the SAME rows, and
-//    "cart-order" says whether that order is paid by now, still open, or closed. Neither saves
-//    an order or sends an "order received" email.
+//    opening it again, coming back from Klarna or Stripe's page without paying, a card form
+//    that couldn't open). The checkout keeps the saved order (its reference, rows, email and last
+//    payment page) and asks again with it: "cart-again" opens a new card form for the SAME rows,
+//    and "cart-order" says whether that order is paid by now, still open, or closed. Neither
+//    saves an order or sends an "order received" email. The buyer never hears of it as "saved",
+//    nor its number, before paying (Andy, 2026-11-19, yes to: "there's no 'saved' message and no
+//    order number until they pay"): coming back, the checkout looks normal, the details filled
+//    in, and details changed there go on the same rows (withDetails).
 // 5. Orders started on Stripe's own page before the card form opened inside fonkiart.com come
 //    back the same way (?cart=FA-...&card=cs_... or &card=cancelled) and are paid exactly as
 //    above, by the card form if paid by card again. No new one is ever made.
@@ -127,16 +130,18 @@ export async function opCartCard(db, body, mail, saveOrder) {
   const key = formKey("cart-card", body);
   const order = await saveOrder(db, body, mail, { price: (items, discount) => priceCart(db, items, discount) });
   if (!order.saved) throw new InputError("We couldn't save your order.", 500);
-  // ids: the saved rows, which the checkout keeps to pay this same order again (cart-again).
-  const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total };
+  // ids: the saved rows, which the checkout keeps to pay this same order again (cart-again);
+  // coupon: the code, when it counted, so the checkout shows it again coming back.
+  const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total, ...(order.coupon ? { coupon: order.coupon } : {}) };
   let page;
   try {
     page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
     // The order is saved (its emails wait until it is paid). Not an error for the checkout: it
-    // keeps the order, says so, and offers card again (cart-again) or another way (cart-other).
-    return { ...saved, cardError: `Your order ${order.orderRef} is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.` };
+    // keeps the order and offers card again (cart-again) or another way (cart-other). It says
+    // nothing of "saved" or the order's number: the buyer hears of those once paid.
+    return { ...saved, cardError: "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay." };
   }
   return { ...saved, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
@@ -222,10 +227,17 @@ export async function opCartPaid(db, body, mail) {
 // was saved with and the titles in the cart now. Every row must be there, carry that reference
 // and that email, and the titles must be the rows' own, piece for piece. Anything else is "not
 // found", without saying which part was wrong. rows: in the order of ids.
+// The email may also be the one the buyer typed last (body.customer.email): when a changed email
+// reached the rows (withDetails) but the answer never reached the browser (Stripe failed just
+// after, or the connection dropped), the browser still names the order by its old one. Either
+// is the same proof as before: an email the rows hold. So a retry finds THIS order, never "not
+// found" and then a second order.
 async function savedCart(db, body) {
   const ref = String(body.ref ?? "");
   const ids = Array.isArray(body.ids) ? body.ids : [];
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const lower = (e) => typeof e === "string" ? e.trim().toLowerCase() : "";
+  const email = lower(body.email);
+  const emails = new Set([email, lower(body.customer?.email)].filter(Boolean));
   const titles = Array.isArray(body.titles) ? body.titles : [];
   if (!REF_RE.test(ref) || !email || !ids.length || ids.length > 25 || titles.length !== ids.length
     || !ids.every(id => Number.isSafeInteger(id) && id > 0) || new Set(ids).size !== ids.length
@@ -234,11 +246,45 @@ async function savedCart(db, body) {
   if (error) throw new Error(`Orders read: ${error.message}`);
   const rows = ids.map(id => (data || []).find(r => r.id === id));
   const notes = (r) => String(r.notes || "");
-  const ours = (r) => r && String(r.client_email || "").trim().toLowerCase() === email
+  const ours = (r) => r && emails.has(lower(r.client_email))
     && (notes(r) === `Order Ref: ${ref}` || notes(r).startsWith(`Order Ref: ${ref} · `));
   const sorted = (list) => JSON.stringify(list.map(t => String(t ?? "").trim()).sort());
   if (!rows.every(ours) || sorted(rows.map(r => r.item_title)) !== sorted(titles)) throw notFound();
   return { ref, ids, rows };
+}
+
+// The buyer's details, filled in again on the way back and maybe changed (Andy, 2026-11-19, yes
+// to: "When they come back, the checkout looks normal, with their name and address already
+// filled in"). They go on the order's own rows, the same rows, never a second order: the email, the
+// shipping columns, and the notes' words, when the notes are still as the checkout wrote them
+// (a hand-written note is never overwritten): their reference and their ending (the coupon,
+// how it is paid) stay. A new email gets its client card, as a new order's does. customer
+// missing (an older checkout), or nothing changed: nothing is written. checked:
+// storeOps.js checkoutDetails, with the checkout's limits. Rows changed meanwhile (another tab,
+// the shop): the guarded write passes over them, so the shop's words are never written over; the
+// buyer is asked to try again (409), and that try finishes the change.
+const ENDING_RE = /^( · \d{1,2}% coupon applied)?( · Paying by (?:card|Zelle|Venmo|Cash App))?$/;
+const wordsOf = (r) => [r.ship_name, r.ship_phone, [r.ship_address, r.ship_city, r.ship_state, r.ship_zip, r.ship_country].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+async function withDetails(db, ref, ids, rows, checked, { clientOnce } = {}) {
+  if (!checked) return rows;
+  const head = `Order Ref: ${ref}`;
+  const was = String(rows[0].notes ?? "");
+  const before = [head, wordsOf(rows[0])].filter(Boolean).join(" · ");
+  const ending = was.startsWith(before) ? was.slice(before.length) : null;
+  const ours = ending !== null && ENDING_RE.test(ending) && rows.every(r => String(r.notes ?? "") === was);
+  const change = { client_email: checked.email, ...checked.ship, ...(ours ? { notes: [head, checked.words].filter(Boolean).join(" · ") + ending } : {}) };
+  if (rows.every(r => Object.entries(change).every(([k, v]) => (r[k] ?? null) === v))) return rows;
+  let update = db.from("Orders").update(change).in("id", ids).eq("status", "pending");
+  if (ours) update = update.eq("notes", was);
+  const { data: changed, error } = await update.select("id");
+  if (error) throw new Error(`Orders update: ${error.message}`);
+  if ((changed?.length ?? 0) !== ids.length) {
+    console.warn(`store cart: ${ref} changed while its details were saved (${changed?.length ?? 0} of ${ids.length} rows)`);
+    throw new InputError("This order changed just now. Please try again in a moment.", 409);
+  }
+  const newEmail = rows.some(r => String(r.client_email ?? "").trim().toLowerCase() !== checked.email.trim().toLowerCase());
+  if (newEmail && clientOnce) await clientOnce(db, checked).catch(e => console.warn(`store cart: ${ref}'s new client card:`, e?.message || e));
+  return rows.map(r => ({ ...r, ...change }));
 }
 
 // The last page was paid after all (another tab, or Stripe's message hasn't come yet): recorded
@@ -281,9 +327,15 @@ async function lastPage(op, sessionId, ref, ids) {
 //  - The last page, if still open, is closed first (Stripe "expire"): only ONE page per order
 //    can ever take the money. If Stripe won't close it because it was just paid, that payment
 //    is recorded instead.
-export async function opCartAgain(db, body, mail) {
+//  - body.customer: the details as the checkout shows them again; changed, they go on these
+//    same rows (withDetails) once the new page is made, which carries that email; the answer
+//    gives back the email the rows now hold (the checkout names the order by it next time).
+// helpers: storeOps.js checkoutDetails and clientOnce, handed in by the router.
+export async function opCartAgain(db, body, mail, helpers = {}) {
   if (!cardReady()) throw new InputError(CARD_SOON, 409);
-  const { ref, ids, rows } = await savedCart(db, body);
+  const { ref, ids, rows: found } = await savedCart(db, body);
+  const checked = body.customer != null && helpers.checkoutDetails ? helpers.checkoutDetails(body.customer) : null;
+  let rows = found;
   if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...cartView(ref, rows) };
   let last = await lastPage("cart-again", body.session, ref, ids);
   if (last?.status === "complete") return paidAlready("cart-again", db, last, mail, ref);
@@ -308,14 +360,24 @@ export async function opCartAgain(db, body, mail) {
     }
   }
   const lines = rows.map((r, n) => ({ title: r.item_title, amount: Number(r.amount), image: arts[n] ? cardImage(arts[n].image) : null }));
+  // The new page carries the email the buyer gave last. The rows take the details only once it is
+  // made, so a Stripe failure writes nothing, and the browser's email still names the order.
   let page;
   try {
-    page = await createCartCheckout({ ref, ids, lines, email: rows[0].client_email });
+    page = await createCartCheckout({ ref, ids, lines, email: checked ? checked.email : rows[0].client_email });
   } catch (e) {
     throw stripeLater("cart-again", e);
   }
+  try {
+    rows = await withDetails(db, ref, ids, rows, checked, helpers);
+  } catch (e) {
+    // The details couldn't go on the rows: the page just made is closed again (nobody has it, and
+    // only ONE page per order may take the money), and the buyer tries again.
+    await expireCheckout(page.id).catch(x => console.error(`store cart-again: couldn't close ${ref}'s unused card page; it closes by itself within a day`, page.id, x?.code || x?.message || x));
+    throw e;
+  }
   const { name: _name, ...view } = cartView(ref, rows);
-  return { ...view, ids, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
+  return { ...view, ids, email: rows[0].client_email, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
 
 // "I've Sent the Payment" by Zelle, Venmo or Cash App for a Cart order the checkout saved for a
@@ -327,10 +389,15 @@ export async function opCartAgain(db, body, mail) {
 // out, exactly as for a Zelle order: only the call whose guarded write changes the rows' notes
 // from CARD_NOTE sends it, so a retry, a second tab or an order saved before this rule sends
 // nothing. orderReceived: the pair (storeOps.js), handed in by the router like opOrder above.
-export async function opCartOther(db, body, mail, orderReceived) {
+// body.customer: the details as the checkout shows them again; changed, they go on these same
+// rows first (withDetails, as in cart-again), so the pair goes to the email and names the
+// address the buyer gave last. helpers: storeOps.js checkoutDetails and clientOnce.
+export async function opCartOther(db, body, mail, orderReceived, helpers = {}) {
   const way = OTHER_WAYS.get(body.method);
   if (!way) throw new InputError("Bad payment method");
-  const { ref, ids, rows } = await savedCart(db, body);
+  const { ref, ids, rows: found } = await savedCart(db, body);
+  const checked = body.customer != null && helpers.checkoutDetails ? helpers.checkoutDetails(body.customer) : null;
+  let rows = found;
   if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...cartView(ref, rows) };
   let page = null;
   try {
@@ -341,6 +408,7 @@ export async function opCartOther(db, body, mail, orderReceived) {
   }
   if (page?.status === "complete") return paidAlready("cart-other", db, page, mail, ref);
   if (rows.some(r => r.status !== "pending")) throw new InputError("This order can't be paid here any more. Please contact Fonkiart.", 409);
+  rows = await withDetails(db, ref, ids, rows, checked, helpers);
   if (page?.status === "open") {
     try {
       await expireCheckout(page.id);
@@ -390,7 +458,8 @@ export async function opCartOrder(db, body, mail) {
   }
   if (rows.some(r => r.status !== "pending")) return { state: "closed" };
   const { name: _name, ...view } = cartView(ref, rows);
-  return { state: "open", ...view };
+  // email: the one the rows hold, which the checkout names the order by from now on (savedCart).
+  return { state: "open", ...view, email: rows[0].client_email };
 }
 
 // Stripe's own "paid" message for a Cart order (storeOps.js opStripeEvent). 200 means done,

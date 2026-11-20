@@ -242,6 +242,7 @@ test("the coupon only counts as the server checks it: right code, right email, n
   assert.deepEqual(cartRows(db).map(r => r.amount), [425, 255]);
   assert.equal(db.tables.Leads[0].coupon_used, true);
   assert.match(cartRows(db)[0].notes, /15% coupon applied/);
+  assert.equal(out.coupon, "FK-1111-2222", "the code the server took, so the checkout shows it again coming back");
 
   // Not valid: full price, whatever the browser claims, and the coupon stays unused.
   for (const [label, over, leads] of [
@@ -256,6 +257,7 @@ test("the coupon only counts as the server checks it: right code, right email, n
     assert.equal(out.total, 800, label);
     assert.equal(stripe.last().amount_total, 80000, label);
     assert.deepEqual(cartRows(db).map(r => r.amount), [500, 300], label);
+    assert.equal("coupon" in out, false, `${label}: no coupon to show again`);
     if (!leads) assert.equal(db.tables.Leads[0].coupon_used, false, label);
   }
 });
@@ -387,7 +389,7 @@ test("publishableKey: only a pk_ key of the same mode as the secret key, and onl
   assert.equal(publishableKey(), null, "no secret key: no card payments");
 });
 
-test("Stripe failing after the order is saved: the checkout keeps the order and says so; paying again later is the SAME order", async () => {
+test("Stripe failing after the order is saved: the checkout keeps the order (saying nothing of \"saved\" or its number); paying again later is the SAME order", async () => {
   const stripe = fakeStripe();
   stripe.down = true;
   const db = shop(), mail = mailbox();
@@ -395,8 +397,9 @@ test("Stripe failing after the order is saved: the checkout keeps the order and 
   assert.deepEqual(out, {
     ref: "FA-1752", ids: cartRows(db).map(r => r.id),
     lines: [{ title: "Frida the manatee", amount: 500 }, { title: "Madame Mango", amount: 300 }], total: 800,
-    cardError: "Your order FA-1752 is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.",
+    cardError: "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.",
   });
+  assert.equal(/saved|FA-/.test(out.cardError), false, "the buyer hears of the order and its number once paid");
   assert.equal(cartRows(db).length, 2, "the order stays saved: it can be paid again, by card or another way");
   assert.equal(mail.sent.length, 0, "no email: it isn't paid");
 
@@ -627,7 +630,7 @@ test("paying again re-opens the SAME order: no second order or email, the same r
   assert.equal(inserts(db), 1, "still ONE order");
   assert.deepEqual(cartRows(db).map(r => [r.item_title, r.amount, r.status]), [["Frida the manatee", 500, "pending"], ["Madame Mango", 300, "pending"]]);
   assert.equal(mail.sent.length, 0, "still no email");
-  assert.deepEqual(again, { ref: "FA-1752", ids: first.ids, session: stripe.last().id, lines: TWO, total: 800, clientSecret: stripe.last().client_secret, publishableKey: PK });
+  assert.deepEqual(again, { ref: "FA-1752", ids: first.ids, email: "jane@x.co", session: stripe.last().id, lines: TWO, total: 800, clientSecret: stripe.last().client_secret, publishableKey: PK });
   assert.equal([...stripe.sessions.values()].filter(p => p.status === "open").length, 1, "only one page can be paid");
   const body = stripe.calls.at(-1).body;
   assert.equal(body.get("metadata[order_ids]"), first.ids.join(","));
@@ -804,7 +807,7 @@ test("asking about a saved order: open (the rows' prices), paid, or closed; a pa
   const stripe = fakeStripe();
   const db = shop();
   const first = await cartCard(db, checkout());
-  assert.deepEqual(await cartOrder(db, kept(first)), { state: "open", ref: "FA-1752", lines: TWO, total: 800 });
+  assert.deepEqual(await cartOrder(db, kept(first)), { state: "open", ref: "FA-1752", lines: TWO, total: 800, email: "jane@x.co" });
   assert.equal(stripe.sessions.get(first.session).status, "open", "asking changes nothing");
 
   // Stripe out of reach: the rows answer.
@@ -829,6 +832,134 @@ test("asking about a saved order: open (the rows' prices), paid, or closed; a pa
   cartRows(db2)[0].status = "cancelled";
   assert.deepEqual(await cartOrder(db2, kept(o2)), { state: "closed" });
   await assert.rejects(cartOrder(db2, kept(o2, { email: "someone@x.co" })), (e) => e.status === 404);
+});
+
+// ── coming back: the details filled in again, maybe changed ─────
+// Andy, 2026-11-19, yes to: "When they come back, the checkout looks normal, with their name and
+// address already filled in". What the buyer changes there goes on the SAME rows (withDetails),
+// never a second order, and the order is found again by the email typed last.
+
+const moved = { firstName: "Jane", lastName: "Doe", email: "jane.doe@x.co", phone: "305 555 0199", address: "9 Ocean Dr", city: "Miami Beach", state: "FL", zip: "33139", country: "USA" };
+const JANE = "Jane Smith · 305 555 0100 · 1 Main, Miami, FL, 33101, USA";
+const DOE = "Jane Doe · 305 555 0199 · 9 Ocean Dr, Miami Beach, FL, 33139, USA";
+const NOTES = (words, ending = CARD_NOTE) => `Order Ref: FA-1752 · ${words}${ending}`;
+const shipOf = (r) => [r.client_email, r.ship_name, r.ship_phone, r.ship_address, r.ship_city, r.ship_state, r.ship_zip, r.ship_country, r.notes];
+const DOE_ROW = (notes) => ["jane.doe@x.co", "Jane Doe", "305 555 0199", "9 Ocean Dr", "Miami Beach", "FL", "33139", "USA", notes];
+
+test("coming back with the details changed: they go on the SAME rows, the new card page carries the new email, and the order is found by it from then on", async () => {
+  const stripe = fakeStripe();
+  const db = shop(), mail = mailbox();
+  const first = await cartCard(db, checkout(), mail);
+  assert.deepEqual(cartRows(db).map(r => r.notes), [NOTES(JANE), NOTES(JANE)]);
+
+  const again = await cartAgain(db, kept(first, { customer: moved }), mail);
+  assert.equal(inserts(db), 1, "still ONE order");
+  assert.equal(stripe.calls.at(-1).body.get("customer_email"), "jane.doe@x.co", "the card page's email");
+  assert.equal(again.email, "jane.doe@x.co", "the email the checkout names the order by next time");
+  assert.deepEqual(cartRows(db).map(shipOf), [DOE_ROW(NOTES(DOE)), DOE_ROW(NOTES(DOE))]);
+  assert.deepEqual(db.tables.Clients.map(c => c.email), ["jane@x.co", "jane.doe@x.co"], "the new email gets its client card, as a new order's does");
+  assert.equal(mail.sent.length, 0, "no email: it isn't paid");
+
+  // The same details again: nothing written.
+  const writes = orderWrites(db).length;
+  const third = await cartAgain(db, kept(first, { email: "jane.doe@x.co", session: again.session, customer: moved }), mail);
+  assert.equal(orderWrites(db).length, writes);
+  assert.equal(db.tables.Clients.length, 2);
+
+  // The answer lost on the way: the browser still names the order by the old email, with the
+  // details as typed. The same order, found by the email typed last...
+  const back = await cartOrder(db, kept(first, { session: third.session, customer: moved }));
+  assert.deepEqual([back.state, back.email], ["open", "jane.doe@x.co"]);
+  // ...and only so: the old email alone no longer names it.
+  await assert.rejects(cartOrder(db, kept(first, { session: third.session })), (e) => e.status === 404);
+
+  // Paid at last: the paid pair goes to the email given last.
+  stripe.pay(third.session);
+  const paid = mailbox();
+  assert.equal((await cartPaid(db, { ref: "FA-1752", session: third.session }, paid)).paid, true);
+  assert.deepEqual(paid.sent.map(m => m.to), ["shop@fonkiart.com", "jane.doe@x.co"]);
+  assert.equal(inserts(db), 1);
+});
+
+test("coming back with the details changed: the notes keep their reference, the coupon and how it is paid; notes the shop wrote by hand are never written over", async () => {
+  fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout({ couponCode: "FK-1111-2222" }));
+  await cartAgain(db, kept(first, { customer: moved }));
+  const coupon = NOTES(DOE, " · 15% coupon applied" + CARD_NOTE);
+  assert.deepEqual(cartRows(db).map(r => [r.amount, r.notes]), [[425, coupon], [255, coupon]]);
+
+  // A note the shop added by hand stays word for word; the email and the shipping columns still change.
+  const db2 = shop();
+  const o2 = await cartCard(db2, checkout());
+  const hand = NOTES(JANE, " · gift wrap, please" + CARD_NOTE);
+  for (const r of cartRows(db2)) r.notes = hand;
+  await cartAgain(db2, kept(o2, { customer: moved }));
+  assert.deepEqual(cartRows(db2).map(shipOf), [DOE_ROW(hand), DOE_ROW(hand)]);
+
+  // No details sent (an older checkout): nothing written.
+  const db3 = shop();
+  const o3 = await cartCard(db3, checkout());
+  const writes = orderWrites(db3).length;
+  await cartAgain(db3, kept(o3));
+  assert.equal(orderWrites(db3).length, writes);
+});
+
+test("coming back, a detail the checkout refuses, Stripe failing, the database failing or the rows changed meanwhile: never a second order, and trying again finishes it", async () => {
+  // A detail the checkout itself would refuse: 400, before anything is closed, made or written.
+  let failing = null;
+  const stripe = fakeStripe({ refuse: () => failing?.() ?? null });
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  const writes = orderWrites(db).length;
+  for (const [customer, said] of [
+    [{ ...moved, email: "jane.doe" }, "Invalid email"],
+    [{ ...moved, firstName: " " }, "Missing first name"],
+    [{ ...moved, address: "x".repeat(301) }, "street is too long"],
+  ]) {
+    await assert.rejects(cartAgain(db, kept(first, { customer })), (e) => e.status === 400 && e.message === said, said);
+  }
+  assert.equal(stripe.sessions.size, 1, "no page made");
+  assert.equal(stripe.sessions.get(first.session).status, "open", "the page before is not closed");
+
+  // Stripe failing to make the new page: nothing written, so the email the browser holds still
+  // names the order.
+  failing = () => ({ status: 503, message: "Stripe is down", code: "api_error" });
+  await assert.rejects(cartAgain(db, kept(first, { customer: moved })), (e) => e.status === 502 && /try again in a moment/.test(e.message));
+  assert.equal(orderWrites(db).length, writes, "nothing written");
+  assert.deepEqual(cartRows(db).map(r => [r.client_email, r.notes]), [["jane@x.co", NOTES(JANE)], ["jane@x.co", NOTES(JANE)]]);
+  failing = null;
+  assert.equal((await cartAgain(db, kept(first, { customer: moved }))).email, "jane.doe@x.co", "trying again: done");
+
+  // The database refusing the details once the new page is made: that page is closed again
+  // (nobody has it, and only one page per order may take the money).
+  const fail = {};
+  const stripe2 = fakeStripe();
+  const db2 = shop({}, { fail });
+  const o2 = await cartCard(db2, checkout());
+  fail["Orders.update"] = "the database is busy";
+  await assert.rejects(cartAgain(db2, kept(o2, { customer: moved })), /Orders update: the database is busy/);
+  assert.deepEqual([...stripe2.sessions.values()].map(p => p.status), ["expired", "expired"], "no page left open: the new one closed again");
+  assert.ok(cartRows(db2).every(r => r.client_email === "jane@x.co"));
+  delete fail["Orders.update"];
+  assert.equal((await cartAgain(db2, kept(o2, { customer: moved }))).email, "jane.doe@x.co");
+  assert.equal([...stripe2.sessions.values()].filter(p => p.status === "open").length, 1);
+
+  // The shop writing in the notes while the details are being saved: its words stay, the buyer
+  // is asked to try again, and that try finishes the change.
+  let meddle = null;
+  const stripe3 = fakeStripe({ refuse: () => { meddle?.(); meddle = null; return null; } });
+  const db3 = shop();
+  const o3 = await cartCard(db3, checkout());
+  const shops = NOTES(JANE, " · ships Monday" + CARD_NOTE);
+  meddle = () => { cartRows(db3)[1].notes = shops; };
+  await assert.rejects(cartAgain(db3, kept(o3, { customer: moved })), (e) => e.status === 409 && e.message === "This order changed just now. Please try again in a moment.");
+  assert.equal(cartRows(db3)[1].notes, shops, "the shop's words");
+  assert.equal([...stripe3.sessions.values()].filter(p => p.status === "open").length, 0, "the page just made closed again");
+  assert.equal((await cartAgain(db3, kept(o3, { customer: moved }))).email, "jane.doe@x.co");
+  assert.deepEqual(cartRows(db3).map(r => [r.client_email, r.ship_address, r.notes]), [["jane.doe@x.co", "9 Ocean Dr", NOTES(DOE)], ["jane.doe@x.co", "9 Ocean Dr", shops]]);
+  assert.deepEqual(db3.tables.Clients.map(c => c.email), ["jane@x.co", "jane.doe@x.co"]);
+  for (const d of [db, db2, db3]) assert.equal(inserts(d), 1, "ONE order each");
 });
 
 // ── paid another way after all: its "order received" emails then, once ──
@@ -1002,6 +1133,27 @@ test("paid another way from two tabs at the very same moment: the notes change o
   assert.deepEqual(mail.sent.map(m => m.to), ["jane@x.co", "shop@fonkiart.com"]);
   const noted = orderWrites(db).filter(w => w.op === "update" && "notes" in w.payload);
   assert.deepEqual(noted.map(w => w.ids.length).sort(), [0, 2], "both tried; only one of them changed the rows");
+});
+
+test("paid another way after coming back with the details changed: the pair goes to the email given last and names the address given last, once", async () => {
+  const stripe = fakeStripe();
+  const db = shop();
+  const first = await cartCard(db, checkout());
+  const mail = mailbox();
+  assert.deepEqual(await cartOther(db, otherWay(first, "zelle", { customer: moved }), mail), { ok: true, ref: "FA-1752" });
+  assert.deepEqual(mail.sent.map(m => [m.to, m.subject]), [["jane.doe@x.co", "Order Received — 2 items · Fonkiart"], ["shop@fonkiart.com", "🎨 New Order FA-1752: 2 items — Jane Doe"]]);
+  for (const m of mail.sent) assert.ok(m.htmlContent.includes("9 Ocean Dr, Miami Beach, FL, 33139, USA"), `${m.to}: the address given last`);
+  assert.ok(mail.sent[1].htmlContent.includes("305 555 0199"), "the phone given last");
+  assert.deepEqual(cartRows(db).map(shipOf), [DOE_ROW(NOTES(DOE, " · Paying by Zelle")), DOE_ROW(NOTES(DOE, " · Paying by Zelle"))]);
+  assert.equal(stripe.sessions.get(first.session).status, "expired");
+
+  // The answer lost on the way: tapped again with the old email and the details as typed. The
+  // same order, and nothing more sent or written.
+  const later = mailbox(), writes = orderWrites(db).length;
+  assert.deepEqual(await cartOther(db, otherWay(first, "zelle", { customer: moved }), later), { ok: true, ref: "FA-1752" });
+  assert.equal(later.sent.length, 0, "no second email");
+  assert.equal(orderWrites(db).length, writes);
+  assert.equal(inserts(db), 1, "still ONE order");
 });
 
 // ── the router and the emails ───────────────────────────────────

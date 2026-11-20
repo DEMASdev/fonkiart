@@ -7,7 +7,12 @@
 // beside the cart itself (App.jsx "fonkiart-cart"), so it lasts through a reload or a new tab
 // exactly as long as the cart does. Dropped once the order is paid (by card or another way), or
 // once the server no longer knows it.
+// It also keeps the buyer's details as they typed them, and the coupon the server took, so that
+// coming back the checkout looks normal, filled in (Andy, 2026-11-19, yes to: "When they come
+// back, the checkout looks normal, with their name and address already filled in"). They stay in
+// this browser: the server never hands them back.
 const KEY = "fonkiart-card-order";
+const DETAILS = ["firstName", "lastName", "email", "phone", "address", "city", "state", "zip", "country"];
 
 // The checkout's words when the card form can't open inside fonkiart.com (Stripe.js didn't load,
 // the server can't offer the form, or Stripe.js refused it): nothing saved, nothing charged. The
@@ -23,13 +28,24 @@ export function readCardOrder() {
     const o = JSON.parse(localStorage.getItem(KEY) || "null");
     const ok = o && REF.test(o.ref) && Array.isArray(o.ids) && o.ids.length > 0 && o.ids.every(Number.isSafeInteger)
       && typeof o.email === "string" && Array.isArray(o.lines) && o.lines.length === o.ids.length;
-    return ok ? o : null;
+    if (!ok) return null;
+    // The details and the coupon as the checkout can use them: the fields as text, nothing else.
+    const { customer, coupon, ...order } = o;
+    return { ...order, ...(customer && typeof customer === "object" ? { customer: details(customer) } : {}), ...(typeof coupon === "string" && coupon ? { coupon } : {}) };
   } catch { return null; }
 }
 
-// Keeps it and hands back what was kept.
-export function saveCardOrder({ ref, ids, email, lines, total, session }) {
-  const order = { ref, ids, email, lines: lines.map(({ title, amount }) => ({ title, amount })), total, session: SESSION.test(session || "") ? session : null };
+// The checkout's own fields only, each as text.
+const details = (customer) => Object.fromEntries(DETAILS.map(k => [k, typeof customer[k] === "string" ? customer[k] : ""]));
+
+// Keeps it and hands back what was kept. customer: the details as typed; coupon: the code the
+// server took for this order. Either left out (an order kept before they were): none kept.
+export function saveCardOrder({ ref, ids, email, lines, total, session, customer, coupon }) {
+  const order = {
+    ref, ids, email, lines: lines.map(({ title, amount }) => ({ title, amount })), total, session: SESSION.test(session || "") ? session : null,
+    ...(customer && typeof customer === "object" ? { customer: details(customer) } : {}),
+    ...(typeof coupon === "string" && coupon ? { coupon } : {}),
+  };
   try { localStorage.setItem(KEY, JSON.stringify(order)); } catch { /* storage blocked: a retry can't be recognised then, and nothing else breaks */ }
   return order;
 }
@@ -57,11 +73,14 @@ export function withoutTitles(items, titles) {
   });
 }
 
-// What the server needs to find the saved order again ("cart-again", "cart-order"). The titles
-// are the cart's own: the server checks them against the order's rows.
+// What the server needs to find the saved order again ("cart-again", "cart-order", "cart-other").
+// The titles are the cart's own: the server checks them against the order's rows. customer: the
+// details as typed last, whose email names the order too (a changed email that reached the rows
+// when its answer never reached this browser: api/_lib/cartCheckout.js savedCart).
 export const cardOrderBody = (order, items) => ({
   ref: order.ref, ids: order.ids, email: order.email, titles: items.map(i => i.title),
   ...(order.session ? { session: order.session } : {}),
+  ...(order.customer ? { customer: order.customer } : {}),
 });
 
 // The way back from Stripe (App.jsx): ?cart=FA-1752&card=cs_... once paid, or &card=cancelled

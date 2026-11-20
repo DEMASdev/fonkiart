@@ -18,6 +18,10 @@
 //     the pieces first. Paid inside the card form, the thank-you shows right there. Continue,
 //     with Credit Card chosen, opens the card form at once: no page in between.
 //  4. Every thank-you in the Cart page opens at its top, wherever the buyer had scrolled to.
+//  5. Leaving and coming back (Andy, 2026-11-19, yes to: "there's no 'saved' message and no order
+//     number until they pay, or tap 'I've Sent the Payment' ... When they come back, the checkout
+//     looks normal, with their name and address already filled in"): no "saved" and no order
+//     number before then, the details filled in again, and still ONE order however it is retried.
 // Nothing is saved, emailed or charged: the server (storeCall), Stripe.js and the browser
 // (storage, the address bar, window.open) are stand-ins that only record what they were asked.
 //
@@ -145,7 +149,11 @@ const isOrderLine = (n) => String(n.props.className || "").includes("checkout-or
 const buttons = (root) => findAll(root.tree, n => n.type === "button" && !isOrderLine(n)).map(n => textOf(n).trim());
 const orderLine = (root) => only(root, "order line", n => n.type === "button" && isOrderLine(n));
 const pics = (root, className) => findAll(root.tree, n => n.type === "img" && n.props.className === className).map(n => n.props.src);
-const fields = (root) => findAll(root.tree, n => n.type === "input").length;
+// The details form as the buyer sees it: each field (by its autocomplete name) and what is in it.
+const filled = (root) => Object.fromEntries(findAll(root.tree, n => n.type === "input" && n.props.autoComplete && n.props.autoComplete !== "off").map(n => [n.props.autoComplete, n.props.value]));
+const FORM = (c) => ({ "given-name": c.firstName, "family-name": c.lastName, email: c.email, tel: c.phone, "street-address": c.address, "address-level2": c.city, "address-level1": c.state, "postal-code": c.zip, "country-name": c.country });
+// Nothing of a saved order said, nor its number, before paying (or before "I've Sent the Payment").
+const NOT_BEFORE = /is saved|saved order|FA-1739|Order Number/;
 function click(node) {
   assert.ok(!node.props.disabled, `"${textOf(node).trim()}" is disabled`);
   node.props.onClick?.({ stopPropagation() {}, preventDefault() {} });
@@ -163,7 +171,11 @@ const ITS_LINK = "https://pay.example.test/one-print";
 const SHOP_LINK = "https://pay.example.test/whole-cart";
 const CARD_SOON = "Card payment is being set up. Please use Zelle or contact Fonkiart directly.";
 const NOT_NOW = "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.";
-const SAVED_BUT = `Your order FA-1739 is saved, but the card payment couldn't open right now. Please try again in a moment, or choose another way to pay.`;
+// The details as details() types them (the rest of the form left empty), and as an earlier card
+// attempt kept them (savedEarlier: the address too).
+const TYPED = { firstName: "Jane", lastName: "Smith", email: "jane@example.com", phone: "", address: "", city: "", state: "", zip: "", country: "" };
+const SAVED_DETAILS = { ...TYPED, phone: "+1 305 000 0000", address: "1 Test St", city: "Testville", state: "FL", zip: "33000", country: "USA" };
+const GONE = "This checkout had to start over. Your details are still filled in: please check them and tap Continue again.";
 const TITLES = ["Test Print Z", "Test Print Y"];
 const page = (n) => `cs_test_page${String(n).padStart(8, "0")}`;
 
@@ -188,7 +200,7 @@ function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
   storage.clear();
   delete window.Stripe;
   const calls = [];
-  const world = { cardOn, pk, stripeJs: true, stripeDown: false, orders: [], pages: new Map(), emails: 0, hold: null, again: null, other: null, cardAnswer: null, orderState: null, paidAnswers: [] };
+  const world = { cardOn, pk, stripeJs: true, stripeDown: false, orders: [], pages: new Map(), emails: 0, hold: null, again: null, other: null, cardAnswer: null, orderState: null, paidAnswers: [], lose: null };
   let made = 0;
   const failed = (status, message) => Object.assign(new Error(message), { status });
   const view = (o) => ({ ref: o.ref, ids: o.ids, lines: o.lines, total: o.total });
@@ -198,32 +210,43 @@ function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
     return { session: id, clientSecret: `${id}_secret_FAKE`, publishableKey: "pk_test_FAKE" };
   };
   const noForm = (p) => p.embedded !== true || !world.pk;
-  // The saved order the browser names: its reference, rows and email, and the cart's own titles.
+  // The saved order the browser names: its reference, rows and email (the one the server last
+  // gave, or the one typed last: savedCart), and the cart's own titles.
   const named = (p) => {
-    const o = world.orders.find(x => x.ref === p.ref && JSON.stringify(x.ids) === JSON.stringify(p.ids) && x.email === p.email
+    const o = world.orders.find(x => x.ref === p.ref && JSON.stringify(x.ids) === JSON.stringify(p.ids) && [p.email, p.customer?.email?.trim()].includes(x.email)
       && JSON.stringify(x.lines.map(l => l.title).sort()) === JSON.stringify([...(p.titles || [])].sort()));
     if (!o || o.gone) throw failed(404, "We couldn't find that order.");
     return o;
   };
-  server = {
+  // The details the checkout sends again go on the order's rows (withDetails).
+  const takeDetails = (o, p) => { if (p.customer) { o.email = p.customer.email.trim(); o.customer = p.customer; } };
+  const self = server = {
     calls, world, failed, view,
     orders: () => calls.filter(c => c.op === "order").map(c => c.payload),
     asked: (op) => calls.filter(c => c.op === op).map(c => c.payload),
     async call(op, payload) {
       calls.push({ op, payload });
       if (world.hold && op !== "next-ref") await world.hold;
+      // lose: the server does all of it, and the answer never reaches the browser.
+      if (world.lose === op) { world.lose = null; await self.answer(op, payload); throw new Error("the answer never arrived"); }
+      return self.answer(op, payload);
+    },
+    async answer(op, payload) {
       if (op === "next-ref") return { ref: "FA-1739" };
       if (op === "order") { if (orderFails) throw new Error("Store 500"); world.emails += 2; return { ok: true }; }
       if (op === "cart-card") {
         if (!world.cardOn) throw failed(409, CARD_SOON);
         if (noForm(payload)) throw failed(409, CARD_FORM_DOWN);
         if (orderFails) throw new Error("Store 500");
-        const lines = payload.items.map(i => ({ title: i.title, amount: PRICES[i.title] }));
-        const o = { ref: "FA-1739", ids: lines.map((_, n) => 5001 + n), email: payload.customer.email.trim(), lines, total: lines.reduce((sum, l) => sum + l.amount, 0), status: "pending" };
+        // A coupon the checkout sends counts (it sends one only once the shop said valid): 15% off each piece.
+        const coupon = payload.couponCode || "";
+        const lines = payload.items.map(i => ({ title: i.title, amount: Math.round(PRICES[i.title] * (coupon ? 0.85 : 1)) }));
+        const o = { ref: "FA-1739", ids: lines.map((_, n) => 5001 + n), email: payload.customer.email.trim(), lines, total: lines.reduce((sum, l) => sum + l.amount, 0), status: "pending", customer: payload.customer };
         world.orders.push(o); // no email: a card order's emails wait until it is paid
+        const took = coupon ? { coupon } : {};
         if (world.cardAnswer) return world.cardAnswer(o);
-        if (world.stripeDown) return { ...view(o), cardError: SAVED_BUT };
-        return { ...view(o), ...newPage(o) };
+        if (world.stripeDown) return { ...view(o), ...took, cardError: NOT_NOW };
+        return { ...view(o), ...took, ...newPage(o) };
       }
       if (op === "cart-again") {
         if (!world.cardOn) throw failed(409, CARD_SOON);
@@ -233,16 +256,19 @@ function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
         if (noForm(payload)) throw failed(409, CARD_FORM_DOWN);
         const last = world.pages.get(payload.session);
         if (last?.status === "open") last.status = "expired";
-        if (world.stripeDown) throw failed(502, NOT_NOW);
-        return { ...view(o), ...newPage(o) };
+        if (world.stripeDown) throw failed(502, NOT_NOW); // no new page: nothing written
+        const made = newPage(o);
+        takeDetails(o, payload); // once the new page is made
+        return { ...view(o), email: o.email, ...made };
       }
       if (op === "cart-other") {
         if (world.other) return world.other(payload);
         const o = named(payload);
         if (o.status === "paid") return { paid: true, ...view(o), name: "Jane" };
+        takeDetails(o, payload);
         const last = world.pages.get(payload.session);
         if (last?.status === "open") last.status = "expired";
-        if (!o.way) { o.way = payload.method; world.emails += 2; } // the "order received" pair, once
+        if (!o.way) { o.way = payload.method; o.mailedTo = o.email; world.emails += 2; } // the "order received" pair, once
         return { ok: true, ref: o.ref };
       }
       if (op === "cart-order") {
@@ -250,7 +276,7 @@ function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
         if (world.orderState === "gone") throw failed(404, "We couldn't find that order.");
         const o = named(payload);
         const state = world.orderState || (o.status === "paid" ? "paid" : "open");
-        return state === "closed" ? { state } : { state, ...view(o), name: "Jane" };
+        return state === "closed" ? { state } : { state, ...view(o), name: "Jane", ...(state === "open" ? { email: o.email } : {}) };
       }
       if (op === "cart-paid") {
         const answer = world.paidAnswers.shift();
@@ -261,16 +287,17 @@ function freshWorld({ orderFails = false, cardOn = true, pk = true } = {}) {
     },
   };
 }
-// An order an earlier card attempt saved: on the server, and kept in this browser with its last page.
-function savedEarlier(cart) {
+// An order an earlier card attempt saved: on the server, and kept in this browser with its last
+// page and the details as typed then. customer: null, an order kept before the details were.
+function savedEarlier(cart, { customer = SAVED_DETAILS } = {}) {
   const lines = cart.map(i => ({ title: i.title, amount: PRICES[i.title] }));
   const o = { ref: "FA-1739", ids: lines.map((_, n) => 5001 + n), email: "jane@example.com", lines, total: lines.reduce((sum, l) => sum + l.amount, 0), status: "pending" };
   server.world.orders.push(o);
   server.world.pages.set(page(0), { id: page(0), status: "open", ref: o.ref });
-  cartOrder.saveCardOrder({ ...o, session: page(0) });
+  cartOrder.saveCardOrder({ ...o, session: page(0), ...(customer ? { customer } : {}) });
   return o;
 }
-const savedBody = (o, session = page(0)) => ({ ref: o.ref, ids: o.ids, email: o.email, titles: TITLES, session });
+const savedBody = (o, session = page(0), customer = SAVED_DETAILS) => ({ ref: o.ref, ids: o.ids, email: o.email, titles: TITLES, session, ...(customer ? { customer } : {}) });
 
 globalThis.window = {
   open: (url, target) => { opened.push({ url, target }); everLeft.push(url); return null; },
@@ -518,7 +545,10 @@ test("Cart page: if the order can't be saved, there's no thank-you, the cart is 
       assert.deepEqual(log.pages, []);
       assert.deepEqual([opened, assigned], [[], []], `${method}: no card page opened`);
       assert.equal(kept(), null, `${method}: nothing kept to pay again`);
-      assert.deepEqual(alerts(root).map(textOf), ["We couldn't save your order. Please email shop@example.com with your order number FA-1739."]);
+      // Zelle: said after "I've Sent the Payment", with the number to write to the shop with. Card:
+      // before paying, so no number (the card form never opened).
+      assert.deepEqual(alerts(root).map(textOf), [pay ? "We couldn't save your order. Please email shop@example.com with your order number FA-1739." : NOT_NOW], method);
+      if (!pay) assert.doesNotMatch(screen(root), NOT_BEFORE, "card: no order number before paying");
     }
   });
 });
@@ -625,7 +655,7 @@ test("NO JUMP: the server can't offer the form, then can (the key fixed): Try Ag
     server.world.pk = true;
     click(button(root, "Try Again")); await settle();
     assert.deepEqual(stripe, [{ init: `${page(1)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(1) }, { mount: "string" }], "kept, then made, then put in its box");
-    assert.match(screen(root), /Your order FA-1739/);
+    assert.doesNotMatch(screen(root), NOT_BEFORE, "the card form, and no order number above it");
     assert.deepEqual(statuses(root), [], "the calm word is gone, and the form is in");
     assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails], [3, 1, 0]);
     assert.deepEqual(assigned, []);
@@ -705,7 +735,8 @@ test("card: closing the checkout while the server saves the order: kept for next
   assert.equal(log.cart.length, 2);
 
   click(button(root, "Checkout →")); await settle();
-  assert.match(screen(root), /Your order FA-1739 is saved/);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "the checkout looks as it always does");
+  assert.deepEqual(filled(root), FORM(TYPED), "the details, filled in as typed");
   await choose(root, "Credit Card");
   assert.deepEqual([server.asked("cart-card").length, server.asked("cart-again").length, server.world.orders.length, server.world.emails], [1, 1, 1, 0], "never a second order");
   assert.equal(server.world.pages.get(page(1)).status, "expired", "the page made as it closed can't take money any more");
@@ -731,7 +762,7 @@ test("STRAIGHT IN: Continue with Credit Card chosen opens the card form at once:
   assert.equal(server.asked("cart-card").length, 1, "ONE order, asked by Continue itself");
   assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"], "the form, in place");
   assert.equal(stripe[0].init, `${page(1)}_secret_FAKE`);
-  assert.match(screen(root), /Your order FA-1739/);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "no order number above the form (it shows on the thank-you)");
   assert.deepEqual(buttons(root), ["✕", "← Choose another way to pay"], "the form and a way back, nothing else");
   assert.deepEqual([assigned, opened, popups], [[], [], []]);
 });
@@ -747,12 +778,13 @@ test("STRAIGHT IN: '← Choose another way to pay' goes back to the ways to pay 
   click(button(root, "← Choose another way to pay")); await settle();
   assert.deepEqual(stripe.at(-1), { destroy: `${page(1)}_secret_FAKE` }, "the form is gone");
   assert.ok(payOption(root, "Zelle") && payOption(root, "Credit Card") && button(root, "Continue →"), "the ways to pay, and Continue");
-  assert.match(screen(root), /Your order FA-1739 is saved/, "the saved order, said");
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "nothing said of a saved order, nor its number");
+  assert.deepEqual(filled(root), FORM(TYPED), "the details still filled in");
   assert.deepEqual([statuses(root), alerts(root)], [[], []], "no calm word, no alarm");
   assert.equal(buttons(root).includes("Try Again"), false);
 
   await choose(root, "Credit Card");
-  assert.deepEqual(server.asked("cart-again"), [{ ...savedBody(server.world.orders[0], page(1)), embedded: true }], "THAT order, naming the page it just left");
+  assert.deepEqual(server.asked("cart-again"), [{ ...savedBody(server.world.orders[0], page(1), TYPED), embedded: true }], "THAT order, naming the page it just left, with the details as on the screen");
   assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount", "destroy", "init", "mount"], "straight into the form again");
   assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails], [1, 1, 0], "never a second pending order");
   assert.deepEqual([...server.world.pages.values()].map(p => [p.id, p.status]), [[page(1), "expired"], [page(2), "open"]], "only the newest page can take money");
@@ -760,7 +792,7 @@ test("STRAIGHT IN: '← Choose another way to pay' goes back to the ways to pay 
   click(button(root, "← Choose another way to pay")); await settle();
   await choose(root, "Zelle");
   click(button(root, "✓ I've Sent the Payment")); await settle();
-  assert.deepEqual(server.asked("cart-other"), [{ ...savedBody(server.world.orders[0], page(2)), method: "zelle" }], "THAT order, paid by Zelle");
+  assert.deepEqual(server.asked("cart-other"), [{ ...savedBody(server.world.orders[0], page(2), TYPED), method: "zelle" }], "THAT order, paid by Zelle");
   assert.deepEqual([server.orders().length, server.world.orders.length, server.world.emails], [0, 1, 2], "no second order; its two emails, now");
   assert.equal(server.world.pages.get(page(2)).status, "expired");
   assert.match(screen(root), /Thank you!/);
@@ -777,7 +809,7 @@ test("card form INSIDE the page: the pieces first, then Stripe's form; leaving i
 
     assert.deepEqual(stripe, [{ init: `${page(1)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(1) }, { mount: "string" }], "kept, then made, then put in its box");
     const text = screen(root);
-    assert.match(text, /Your order FA-1739/);
+    assert.doesNotMatch(text, NOT_BEFORE, "no order number before paying");
     assert.match(text, /Test Print Z\$1,000Test Print Y\$120Total\$1,120/, "the shop's own prices");
     assert.doesNotMatch(text, /Opening the secure card form/, "the form is in");
     assert.deepEqual(pics(root, "pay-art-pic"), [PRINT.image, PRINT2.image]);
@@ -785,9 +817,10 @@ test("card form INSIDE the page: the pieces first, then Stripe's form; leaving i
 
     click(button(root, "← Choose another way to pay")); await settle();
     assert.deepEqual(stripe.at(-1), { destroy: `${page(1)}_secret_FAKE` });
-    assert.match(screen(root), /Your order FA-1739 is saved/, "back at the ways to pay");
+    assert.ok(payOption(root, "Zelle"), "back at the ways to pay");
+    assert.doesNotMatch(screen(root), NOT_BEFORE);
     await choose(root, "Credit Card");
-    assert.deepEqual(server.asked("cart-again").at(-1), { ...savedBody(server.world.orders[0], page(1)), embedded: true });
+    assert.deepEqual(server.asked("cart-again").at(-1), { ...savedBody(server.world.orders[0], page(1), TYPED), embedded: true });
     assert.equal(server.world.pages.get(page(1)).status, "expired");
     assert.deepEqual(stripe.slice(-2), [{ init: `${page(2)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(2) }, { mount: "string" }]);
 
@@ -795,9 +828,9 @@ test("card form INSIDE the page: the pieces first, then Stripe's form; leaving i
     click(button(root, "✕")); await settle();
     assert.deepEqual(stripe.at(-1), { destroy: `${page(2)}_secret_FAKE` });
     click(button(root, "Checkout →")); await settle();
-    assert.match(screen(root), /Your order FA-1739 is saved/);
-    assert.equal(fields(root), 0, "no details to fill in again");
-    assert.deepEqual(server.asked("cart-order"), [savedBody(server.world.orders[0], page(2))]);
+    assert.doesNotMatch(screen(root), NOT_BEFORE, "the checkout looks as it always does");
+    assert.deepEqual(filled(root), FORM(TYPED), "the details filled in: nothing to type again");
+    assert.deepEqual(server.asked("cart-order"), [savedBody(server.world.orders[0], page(2), TYPED)]);
     await choose(root, "Credit Card");
     assert.equal(server.asked("cart-again").at(-1).session, page(2));
     assert.deepEqual(stripe.slice(-2), [{ init: `${page(3)}_secret_FAKE`, pk: "pk_test_FAKE", kept: page(3) }, { mount: "string" }]);
@@ -819,7 +852,7 @@ test("card form couldn't be made after the order was saved: kept, a calm word (n
     click(button(root, "Checkout →")); await settle();
     await fillIn(root, "Credit Card");
 
-    assert.deepEqual(statuses(root), [SAVED_BUT]);
+    assert.deepEqual(statuses(root), [NOT_NOW], "said calmly, with no 'saved' and no number");
     assert.deepEqual(alerts(root), [], "not said as an error");
     assert.equal(kept().session, null, "kept, with no page to name yet");
     assert.ok(button(root, "Try Again"));
@@ -848,14 +881,15 @@ test("card page couldn't open: 'Choose Another Way to Pay' pays THAT order by Ze
   await fillIn(root, "Credit Card");
   assert.deepEqual([server.world.orders.length, server.world.emails], [1, 0], "saved, and no email: it isn't paid");
   click(button(root, "Choose Another Way to Pay")); await settle();
-  assert.match(screen(root), /Your order FA-1739 is saved/);
-  assert.equal(fields(root), 0);
+  assert.doesNotMatch(screen(root), NOT_BEFORE);
+  assert.deepEqual(filled(root), FORM(TYPED));
   await choose(root, "Zelle");
   assert.match(screen(root), /Send \$1,120 to shop-zelle@example\.com/, "the saved order's own total");
-  assert.match(screen(root), /Order NumberFA-1739/);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "no order number before 'I've Sent the Payment'");
+  assert.match(screen(root), /3\. Memo: write Test Print Z \+ 1 more in your Zelle memo\/note/, "the memo names the pieces instead");
   click(button(root, "✓ I've Sent the Payment")); await settle();
   const o = server.world.orders[0];
-  assert.deepEqual(server.asked("cart-other"), [{ ref: "FA-1739", ids: o.ids, email: "jane@example.com", titles: TITLES, method: "zelle" }], "THAT order (no page to name), paid by Zelle");
+  assert.deepEqual(server.asked("cart-other"), [{ ref: "FA-1739", ids: o.ids, email: "jane@example.com", titles: TITLES, customer: TYPED, method: "zelle" }], "THAT order (no page to name), paid by Zelle");
   assert.deepEqual([server.orders().length, server.world.orders.length, server.world.emails], [0, 1, 2], "no second order; its two emails, now");
   assert.match(screen(root), /Thank you!/);
   assert.match(screen(root), /FA-1739/);
@@ -904,8 +938,9 @@ test("paying a saved card order another way: paid by card after all: the paid th
     await choose(gone.root, "Zelle");
     server.world.orders[0].gone = true;
     click(button(gone.root, "✓ I've Sent the Payment")); await settle();
-    assert.match(screen(gone.root), /We couldn't find your saved order\. Please enter your details again\./);
-    assert.equal(fields(gone.root) > 0, true, "the details form is back");
+    assert.ok(screen(gone.root).includes(GONE), "said, with no 'saved' and no number");
+    assert.doesNotMatch(screen(gone.root), NOT_BEFORE);
+    assert.deepEqual(filled(gone.root), FORM(SAVED_DETAILS), "the details still filled in");
     assert.deepEqual([kept(), gone.log.cart.length], [null, 2]);
     assert.doesNotMatch(screen(gone.root), /Thank you/);
 
@@ -947,7 +982,8 @@ test("checkout opened again with a saved order: the server is asked once (cart-o
   server.world.hold = new Promise(r => { answer = r; });
   const { root } = openShop([PRINT, PRINT2]);
   click(button(root, "Checkout →")); await settle();
-  assert.match(screen(root), /Your order FA-1739 is saved/);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "the checkout looks as it always does");
+  assert.deepEqual(filled(root), FORM(SAVED_DETAILS), "with the details as typed then, address too");
   await choose(root, "Credit Card");
   assert.deepEqual([server.asked("cart-again"), stripe, buttons(root).includes("Continue →")], [[], [], true], "Continue waited: still on the ways to pay, nothing asked");
   answer(); server.world.hold = null; await settle();
@@ -998,7 +1034,8 @@ test("checkout opened again: the server out of reach: the saved order stands, an
     const stripe = fakeStripeJs();
     const { root } = openShop([PRINT, PRINT2]);
     click(button(root, "Checkout →")); await settle();
-    assert.match(screen(root), /Your order FA-1739 is saved/);
+    assert.doesNotMatch(screen(root), NOT_BEFORE);
+    assert.deepEqual(filled(root), FORM(SAVED_DETAILS));
     server.world.orderState = null;
     await choose(root, "Credit Card");
     assert.deepEqual([server.asked("cart-again").length, server.asked("cart-card").length, assigned.length], [1, 0, 0]);
@@ -1025,8 +1062,9 @@ test("paying again: paid in the meantime: the thank-you and the cart empties; go
     await pick(gone.root, "Credit Card");
     server.world.orders[0].gone = true;
     click(button(gone.root, "Continue →")); await settle();
-    assert.match(screen(gone.root), /We couldn't find your saved order\. Please enter your details again\./);
-    assert.equal(fields(gone.root) > 0, true, "the details form is back");
+    assert.ok(screen(gone.root).includes(GONE));
+    assert.doesNotMatch(screen(gone.root), NOT_BEFORE);
+    assert.deepEqual(filled(gone.root), FORM(SAVED_DETAILS), "the details still filled in");
     assert.equal(kept(), null);
 
     freshWorld();
@@ -1095,7 +1133,7 @@ test("back from Stripe's own page without paying (an order started there before)
   const { root, log } = openShop([PRINT, PRINT2], { cancelledRef: "FA-1739" });
   await settle();
   assert.deepEqual(server.asked("cart-order"), [savedBody(o)]);
-  assert.deepEqual(statuses(root), ["No payment was takenYour order FA-1739 is saved, and your cart is just as you left it. Tap Checkout to pay by card again, or with Zelle, Venmo or Cash App."]);
+  assert.deepEqual(statuses(root), ["No payment was takenYour cart is just as you left it. Tap Checkout to pay by card again, or with Zelle, Venmo or Cash App."], "no 'saved' and no number");
   assert.match(screen(root), /Your Cart \(2\)/);
   assert.deepEqual(alerts(root), []);
   const stripe = fakeStripeJs();
@@ -1177,7 +1215,8 @@ test("back after paying: not paid yet: said calmly, the cart untouched, and Chec
   const { root, log } = openReturn([UNPAID, PAID]);
   await settle();
   assert.match(screen(root), /We haven't received this payment yet/);
-  assert.match(screen(root), /Your order FA-1739 is saved, and your cart is just as you left it\./);
+  assert.match(screen(root), /If you just paid, give it a moment and check again\. Your cart is just as you left it\./);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "not paid: no 'saved', no number");
   assert.deepEqual(log.paid, []);
   click(button(root, "Check Again")); await settle();
   assert.equal(server.asked("cart-paid").length, 2);
@@ -1199,6 +1238,7 @@ test("back after paying: a payment the shop can't find, or a server out of reach
     const away = openReturn([500, PAID]);
     await settle();
     assert.match(screen(away.root), /We couldn't check your payment right now/);
+    assert.doesNotMatch(screen(away.root), NOT_BEFORE);
     assert.deepEqual(away.log.paid, []);
     click(button(away.root, "Check Again")); await settle();
     assert.deepEqual(away.log.paid, [TITLES]);
@@ -1234,7 +1274,7 @@ test("card form INSIDE the page, paid: the form goes, the server checks, and the
   assert.deepEqual(statuses(root), ["Confirming your payment…"]);
   assert.deepEqual(checkoutButtons(root), [], "no card button, no way back, no other way to pay");
   assert.match(screen(root), /Your OrderTest Print Z\$1,000Test Print Y\$120Total\$1,120/, "the order stays on the screen");
-  assert.match(screen(root), /Your order FA-1739/);
+  assert.doesNotMatch(screen(root), NOT_BEFORE, "the number waits for the thank-you");
   assert.deepEqual([log.paid, log.cart.length, kept()?.session], [[], 2, page(1)], "the cart and the saved order stay until the server says paid");
   assert.deepEqual(scrolls, [], "the page stays put while it checks");
   release(); server.world.hold = null; await settle();
@@ -1254,12 +1294,14 @@ test("card form INSIDE the page, paid but not confirmed yet, or the server out o
   await quiet(async () => {
     const { root, log, stripe } = await payInsideTheForm([UNPAID, 502, PAID]);
     stripe.pay(); await settle();
-    assert.match(screen(root), /We haven't received this payment yet\. Please give it a moment, then check again\. Your order FA-1739 is saved\./);
+    assert.ok(statuses(root).includes("We haven't received this payment yet. Please give it a moment, then check again."));
+    assert.doesNotMatch(screen(root), NOT_BEFORE);
     assert.deepEqual([alerts(root), checkoutButtons(root)], [[], ["Check Again"]], "no alarm, and nothing else to choose");
     assert.deepEqual([log.paid, log.cart.length, kept()?.session], [[], 2, page(1)], "the cart and the saved order stand");
 
     click(button(root, "Check Again")); await settle();
-    assert.match(screen(root), /We couldn't check your payment right now\. Please check again in a moment\. Your order FA-1739 is saved\./);
+    assert.ok(statuses(root).includes("We couldn't check your payment right now. Please check again in a moment."));
+    assert.doesNotMatch(screen(root), NOT_BEFORE);
     assert.deepEqual([log.paid, checkoutButtons(root), scrolls], [[], ["Check Again"], []]);
 
     click(button(root, "Check Again")); await settle();
@@ -1346,6 +1388,184 @@ test("COUNTER: one piece: its one line names it; a coupon shows on the piece, an
   click(button(root, "Apply")); await settle();
   assert.match(textOf(orderLine(root)), /^Test Print Z\$944▾$/, "15% off 1,111, rounded as the checkout always has");
   assert.match(screen(root), /Your OrderTest Print Z\$944✓ 15% offTotal\$944/);
+});
+
+// ── leaving and coming back ─────────────────────────────────
+// Andy, 2026-11-19, yes to: "there's no 'saved' message and no order number until they pay, or tap
+// 'I've Sent the Payment' for Zelle, Venmo or Cash App. When they come back, the checkout looks
+// normal, with their name and address already filled in. Behind the scenes it's still one order
+// per cart, so trying again never makes a second order."
+async function typeAll(root, c) {
+  for (const [name, value] of Object.entries(FORM(c))) typeIn(field(root, name), value);
+  await settle();
+}
+const couponField = (root) => only(root, "coupon field", n => n.type === "input" && n.props.placeholder === "FK-XXXX-XXXX");
+// The shop says any coupon is valid (the "coupon" op), for the tests that apply one.
+function couponsValid() {
+  const call = server.call;
+  server.call = async (op, payload) => op === "coupon" ? (server.calls.push({ op, payload }), { status: "valid" }) : call(op, payload);
+}
+
+test("COMING BACK: the card form opened, the tab closed, Checkout again: no 'saved', no number, every detail filled in as typed; changed, they go with card again to THAT order; then Zelle: still ONE order, its emails once, to the email given last", async () => {
+  await quiet(async () => {
+    freshWorld();
+    const stripe = fakeStripeJs();
+    const first = openShop([PRINT, PRINT2]);
+    click(button(first.root, "Checkout →")); await settle();
+    await typeAll(first.root, SAVED_DETAILS);
+    await choose(first.root, "Credit Card");
+    assert.deepEqual(stripe.at(-1), { mount: "string" }, "the card form, in place");
+    assert.doesNotMatch(screen(first.root), NOT_BEFORE);
+    click(button(first.root, "✕")); await settle();
+
+    // The tab closed and opened again: a new page, with only what this browser kept.
+    const back = openShop([PRINT, PRINT2]);
+    click(button(back.root, "Checkout →")); await settle();
+    assert.doesNotMatch(screen(back.root), NOT_BEFORE, "the checkout looks as it always does");
+    assert.match(screen(back.root), /Your Information/);
+    assert.deepEqual(filled(back.root), FORM(SAVED_DETAILS), "every detail filled in, the address too");
+
+    // A new street and email, then card again: THAT order, with the details as on the screen.
+    typeIn(field(back.root, "street-address"), "2 New St");
+    typeIn(field(back.root, "email"), "jane.new@example.com");
+    await settle();
+    await choose(back.root, "Credit Card");
+    const now = { ...SAVED_DETAILS, address: "2 New St", email: "jane.new@example.com" };
+    const o = server.world.orders[0];
+    assert.deepEqual(server.asked("cart-again"), [{ ...savedBody(o, page(1), now), email: "jane@example.com", embedded: true }], "named by the email the server gave, with the details as on the screen");
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails], [1, 1, 0], "ONE order, and no email yet");
+    assert.deepEqual([o.email, o.customer], ["jane.new@example.com", now], "the order's own rows take the new details");
+    assert.deepEqual([kept().email, kept().customer, kept().session], ["jane.new@example.com", now, page(2)], "kept: the email the order has now, the details as typed, the newest page");
+    assert.deepEqual(stripe.at(-1), { mount: "string" });
+    assert.doesNotMatch(screen(back.root), NOT_BEFORE);
+    click(button(back.root, "✕")); await settle();
+
+    // Once more, paid with Zelle this time: still THAT order; its emails go now, once.
+    const again = openShop([PRINT, PRINT2]);
+    click(button(again.root, "Checkout →")); await settle();
+    assert.equal(server.asked("cart-order").at(-1).email, "jane.new@example.com");
+    assert.deepEqual(filled(again.root), FORM(now));
+    await choose(again.root, "Zelle");
+    assert.doesNotMatch(screen(again.root), NOT_BEFORE, "no number before 'I've Sent the Payment'");
+    click(button(again.root, "✓ I've Sent the Payment")); await settle();
+    assert.match(screen(again.root), /Thank you!/);
+    assert.match(screen(again.root), /Order Reference\s*FA-1739/, "the number, on the thank-you");
+    assert.deepEqual([server.orders().length, server.asked("cart-card").length, server.world.orders.length, server.world.emails, o.mailedTo], [0, 1, 1, 2, "jane.new@example.com"], "never a second order; the 'order received' pair once, to the email given last");
+    assert.deepEqual([again.log.cart.length, kept(), assigned, popups], [0, null, [], []]);
+  });
+});
+
+test("COMING BACK, a retry never makes a second order: a changed email reached the order but its answer never came back; Try Again finds THAT order, and so does the checkout opened again", async () => {
+  await quiet(async () => {
+    freshWorld();
+    const stripe = fakeStripeJs();
+    const o = savedEarlier([PRINT, PRINT2]);
+    const { root } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    typeIn(field(root, "email"), "jane.new@example.com"); await settle();
+    server.world.lose = "cart-again";
+    await choose(root, "Credit Card");
+    assert.equal(o.email, "jane.new@example.com", "the server took the new email");
+    assert.deepEqual(statuses(root), [NOT_NOW], "a calm word: the card payment couldn't open");
+    assert.deepEqual([kept().email, kept().customer.email], ["jane@example.com", "jane.new@example.com"], "kept: the email the server last gave, and the one sent with the try");
+    // Control: named only by the email the server last gave, the order is not found any more.
+    await assert.rejects(server.answer("cart-order", savedBody(o, page(0), null) && { ...savedBody(o, page(0), null), email: "jane@example.com" }), { status: 404 });
+
+    click(button(root, "Try Again")); await settle();
+    assert.deepEqual(stripe.at(-1), { mount: "string" }, "Try Again: the card form, for THAT order");
+    assert.deepEqual([server.asked("cart-card").length, server.asked("cart-again").length, server.world.orders.length, kept().email], [0, 2, 1, "jane.new@example.com"]);
+    click(button(root, "✕")); await settle();
+
+    // The same, then the tab closed before trying again: opened again, the checkout still finds THAT order.
+    freshWorld();
+    const stripe2 = fakeStripeJs();
+    const o2 = savedEarlier([PRINT, PRINT2]);
+    const left = openShop([PRINT, PRINT2]);
+    click(button(left.root, "Checkout →")); await settle();
+    typeIn(field(left.root, "email"), "jane.new@example.com"); await settle();
+    server.world.lose = "cart-again";
+    await choose(left.root, "Credit Card");
+    click(button(left.root, "✕")); await settle();
+    const back = openShop([PRINT, PRINT2]);
+    click(button(back.root, "Checkout →")); await settle();
+    const asked = server.asked("cart-order").at(-1);
+    assert.deepEqual([asked.email, asked.customer.email], ["jane@example.com", "jane.new@example.com"], "named by both");
+    assert.equal(kept().email, "jane.new@example.com", "the email the order has, from the server's answer");
+    assert.deepEqual(filled(back.root), FORM({ ...SAVED_DETAILS, email: "jane.new@example.com" }));
+    assert.doesNotMatch(screen(back.root), NOT_BEFORE);
+    await choose(back.root, "Credit Card");
+    assert.deepEqual(stripe2.at(-1), { mount: "string" });
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length, server.world.emails, o2.email], [0, 1, 0, "jane.new@example.com"], "still THAT order, never a second one");
+  });
+});
+
+test("COMING BACK: Zelle, Venmo and Cash App show no order number before 'I've Sent the Payment' (the memo names the piece instead); the thank-you shows it", async () => {
+  for (const [method, memo] of [["Zelle", /3\. Memo: write Test Print Z in your Zelle memo\/note/], ["Venmo", /3\. Note: write Test Print Z in the Venmo note/], ["Cash App", /3\. Note: write Test Print Z in the Cash App note/]]) {
+    freshWorld();
+    const { root } = openShop([PRINT]);
+    click(button(root, "Checkout →")); await settle();
+    await fillIn(root, method);
+    assert.doesNotMatch(screen(root), NOT_BEFORE, `${method}: no order number yet`);
+    assert.match(screen(root), memo, `${method}: the memo names the piece`);
+    click(button(root, "✓ I've Sent the Payment")); await settle();
+    assert.match(screen(root), /Order Reference\s*FA-1739\s*Also in your confirmation email/, `${method}: the number, on the thank-you`);
+  }
+});
+
+test("COMING BACK with a coupon: shown applied as it was, and kept (no Remove: it is in the order's price); a coupon tried once a card payment started without one: said plainly, nothing taken off", async () => {
+  await quiet(async () => {
+    freshWorld();
+    couponsValid();
+    fakeStripeJs();
+    const first = openShop([PRINT, PRINT2]);
+    click(button(first.root, "Checkout →")); await settle();
+    await details(first.root);
+    typeIn(couponField(first.root), "FK-TEST-0001"); await settle();
+    click(button(first.root, "Apply")); await settle();
+    await choose(first.root, "Credit Card");
+    assert.equal(server.asked("cart-card")[0].couponCode, "FK-TEST-0001");
+    assert.equal(kept().coupon, "FK-TEST-0001", "kept: the coupon the server took");
+    click(button(first.root, "✕")); await settle();
+
+    const back = openShop([PRINT, PRINT2]);
+    click(button(back.root, "Checkout →")); await settle();
+    assert.deepEqual([couponField(back.root).props.value, couponField(back.root).props.disabled], ["FK-TEST-0001", true], "the coupon, as it was");
+    assert.match(screen(back.root), /✓ 15% discount applied/);
+    assert.doesNotMatch(screen(back.root), /you save/, "no sum of the browser's own: the saving is in the server's prices");
+    assert.equal(buttons(back.root).includes("Remove"), false, "kept: it is part of the order's price");
+    assert.match(textOf(orderLine(back.root)), /^2 pieces\$952▾$/, "the order's own total, the coupon in it");
+    assert.match(screen(back.root), /Your OrderTest Print Z\$850✓ 15% offTest Print Y\$102✓ 15% offTotal\$952✓ 15% off/);
+    assert.doesNotMatch(screen(back.root), NOT_BEFORE);
+
+    freshWorld();
+    couponsValid();
+    savedEarlier([PRINT, PRINT2]);
+    const late = openShop([PRINT, PRINT2]);
+    click(button(late.root, "Checkout →")); await settle();
+    typeIn(couponField(late.root), "FK-TEST-0002"); await settle();
+    click(button(late.root, "Apply")); await settle();
+    assert.match(screen(late.root), /A coupon can't be added now: the card payment already started at this price\. Please contact Fonkiart to use it\./);
+    assert.match(textOf(orderLine(late.root)), /^2 pieces\$1,120▾$/, "the price stays the order's own");
+    assert.doesNotMatch(screen(late.root), /discount applied|% off/);
+  });
+});
+
+test("COMING BACK: an order kept before the details were (its email only): the email filled in, the rest asked again; paying finds THAT order", async () => {
+  freshWorld();
+  const stripe = fakeStripeJs();
+  const o = savedEarlier([PRINT, PRINT2], { customer: null });
+  const { root } = openShop([PRINT, PRINT2]);
+  click(button(root, "Checkout →")); await settle();
+  assert.doesNotMatch(screen(root), NOT_BEFORE);
+  assert.deepEqual(filled(root), FORM({ ...TYPED, firstName: "", lastName: "" }), "the email it was saved with; the rest to fill in");
+  await choose(root, "Credit Card");
+  assert.equal(server.asked("cart-again").length, 0, "Continue asks for the name first");
+  assert.match(screen(root), /Please enter your first and last name\./);
+  await details(root);
+  await choose(root, "Credit Card");
+  assert.deepEqual(server.asked("cart-again"), [{ ...savedBody(o, page(0), null), customer: TYPED, embedded: true }]);
+  assert.deepEqual([server.asked("cart-card").length, server.world.orders.length], [0, 1], "THAT order");
+  assert.deepEqual(stripe.at(-1), { mount: "string" });
 });
 
 test("control: the Collectors Room's checkout (no onSuccess) still shows its own thank-you screen, and Close closes it", async () => {

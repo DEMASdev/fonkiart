@@ -46,7 +46,7 @@ export default function CardReturnPage({ orderRef, session, artworks = [], onPai
         {state === "unpaid" && (
           <>
             <p className="pay-return-title">We haven&apos;t received this payment yet</p>
-            <p className="pay-return-text">If you just paid, give it a moment and check again. Your order <strong>{orderRef}</strong> is saved, and your cart is just as you left it.</p>
+            <p className="pay-return-text">If you just paid, give it a moment and check again. Your cart is just as you left it.</p>
             <div className="pay-return-actions">
               <button type="button" className="tap confirm-btn pay-return-btn" onClick={checkAgain}>Check Again</button>
               {toCart}
@@ -65,7 +65,7 @@ export default function CardReturnPage({ orderRef, session, artworks = [], onPai
         {state === "error" && (
           <>
             <p className="pay-return-title">We couldn&apos;t check your payment right now</p>
-            <p className="pay-return-text">Please check again in a moment. Your order <strong>{orderRef}</strong> is saved, and your cart is just as you left it.</p>
+            <p className="pay-return-text">Please check again in a moment. Your cart is just as you left it.</p>
             <div className="pay-return-actions">
               <button type="button" className="tap confirm-btn pay-return-btn" onClick={checkAgain}>Check Again</button>
               {toCart}
