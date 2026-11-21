@@ -74,10 +74,10 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
             ) : (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(min(260px,100%),1fr))", gap:24 }}>
                 {exclusiveWorks.map(item => (
-                  <div key={item.id} onClick={() => setSelected(item)} style={{ background:CR.card, border:`1px solid ${CR.border}`, cursor:"pointer", transition:"border-color .2s" }}
-                    {...mouseHover({ borderColor:CR.gold }, { borderColor:CR.border })}>
+                  <div key={item.id} onClick={() => setSelected(item)} style={{ background:CR.card, border:`1px solid ${CR.border}`, cursor:"pointer", transition:"border-color .2s, transform .2s, box-shadow .2s" }}
+                    {...mouseHover({ borderColor:CR.gold, transform:"translateY(-3px)", boxShadow:"0 10px 26px rgba(0,0,0,.5)" }, { borderColor:CR.border, transform:"none", boxShadow:"none" })}>
                     <div style={{ aspectRatio:"4/3", overflow:"hidden", background:"#0a0908" }}>
-                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover", transition:"transform .4s" }} {...mouseHover({ transform:"scale(1.04)" }, { transform:"scale(1)" })} />}
+                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"contain" }} />}
                     </div>
                     <div style={{ padding:"18px 20px" }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, marginBottom:4 }}>{item.title}</div>
@@ -112,7 +112,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                   <div key={item.id} style={{ background:CR.card, border:`1px solid ${CR.gold}`, cursor:"pointer" }} onClick={() => setCheckout(item)}>
                     <div style={{ background:CR.gold, color:"#fff", padding:"6px 16px", fontSize:16, letterSpacing:".14em", textTransform:"uppercase", textAlign:"center" }}>Early Access · Collectors Only</div>
                     <div style={{ aspectRatio:"4/3", overflow:"hidden", background:"#0a0908" }}>
-                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />}
+                      {item.image && <Pic src={item.image} w={640} alt={item.title} style={{ width:"100%", height:"100%", objectFit:"contain" }} />}
                     </div>
                     <div style={{ padding:"18px 20px" }}>
                       <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, marginBottom:4 }}>{item.title}</div>

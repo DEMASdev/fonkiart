@@ -92,7 +92,7 @@ export default function ItemForm({ data, updateData, addArtwork, editArtwork, ed
         <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
           {form.images.map((url, i) => (
             <div key={i} className="photo-tile" style={{position:"relative",width:220,height:220,flexShrink:0,cursor:"zoom-in"}} onClick={() => setPreviewImg(url)}>
-              <Pic src={url} w={640} style={{width:"100%",height:"100%",objectFit:"cover",border:"2px solid var(--border)",display:"block",transition:"border-color .2s"}}
+              <Pic src={url} w={640} style={{width:"100%",height:"100%",objectFit:"contain",background:"#f4f4f4",border:"2px solid var(--border)",display:"block",transition:"border-color .2s"}}
                 {...mouseHover({ borderColor:"var(--gold)" }, { borderColor:"var(--border)" })}
                 alt={`photo ${i+1}`} />
               <button className="photo-remove" aria-label="Remove photo" onClick={e => { e.stopPropagation(); handleRemovePhoto(i); }} style={{
