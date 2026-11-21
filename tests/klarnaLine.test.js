@@ -559,13 +559,15 @@ test("asked for only once a piece's page opens: never by the home page or the sh
   for (const f of withModal) assert.match(read(f), /\{\s*(selected|deepModal)\b[^{}]*?&&\s*\(?\s*<ArtworkModal\b/, `${f}: a piece's page only once a piece is chosen`);
 });
 
-test("the line looks like the site: DM Sans, the site's muted text colour, 17px and nothing under 16px, on white, with Klarna's own pink badge; no cream or sand", () => {
+test("the line looks like the picture Andy approved: DM Sans, dark plum-grey #5b4a5c, 17px and nothing under 16px, on white, with Klarna's own pink badge; no cream or sand", () => {
   const k = need();
   const v = k.LINE_LOOK.variables;
-  const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
-  const muted = css.match(/--muted:\s*(#[0-9a-fA-F]{3,8})\s*;/)?.[1]?.toLowerCase();
-  assert.ok(muted, "--muted is in src/index.css");
-  assert.equal(v.colorText.toLowerCase(), muted, "Klarna's words in the site's muted colour");
+  // The words' colour, measured off the approved picture (fonkiart-previews/2026-11-20/klarna-under-the-price.png).
+  const muted = "#5b4a5c";
+  assert.equal(v.colorText.toLowerCase(), muted, "Klarna's words in the approved dark plum-grey");
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = (hex) => { const n = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16))); return 0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2]; };
+  assert.ok(1.05 / (lum(v.colorText.toLowerCase()) + 0.05) >= 4.5, "easy to read on white (at least 4.5:1)");
   assert.equal(v.colorBackground.toLowerCase(), "#ffffff", "on white");
   // Only those two colours: no cream, sand, beige or ivory (Andy, 2026-11-21).
   const colours = Object.entries(v).filter(([name]) => name.startsWith("color")).map(([, c]) => c.toLowerCase());

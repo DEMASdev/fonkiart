@@ -18,13 +18,14 @@
 export const KLARNA_LINE = { currency: "USD", paymentMethodTypes: ["klarna"], countryCode: "US", logoColor: "color" };
 
 // The site's look inside Stripe's frame, which can't read the page's own CSS: DM Sans (from Google
-// Fonts, as the page has it), the site's muted text colour (--muted in src/index.css; the test keeps
-// the two the same), 17px like the page's text and nothing under 16px (Andy's floor), on white.
+// Fonts, as the page has it), the dark plum-grey #5b4a5c of the picture Andy approved (2026-11-20,
+// "Yes, add it"; 8.1:1 on white, where the lighter --muted #9e7fa0 is only 3.5:1), 17px like the
+// page's text and nothing under 16px (Andy's floor), on white.
 export const LINE_FONTS = [{ cssSrc: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" }];
 export const LINE_LOOK = {
   variables: {
     fontFamily: "DM Sans, sans-serif",
-    colorText: "#9e7fa0",
+    colorText: "#5b4a5c",
     colorBackground: "#ffffff",
     fontSizeBase: "17px",
     fontSizeSm: "17px",
