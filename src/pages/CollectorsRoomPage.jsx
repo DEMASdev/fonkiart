@@ -32,7 +32,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
     } catch(e) { console.warn("Commission request:", e); }
   };
 
-  const CR = { bg:"#0f0e0c", card:"#1a1816", border:"#2e2a24", gold:"#c9a96e", muted:"#7a6f63", text:"#f0ebe3" };
+  const CR = { bg:"#0f0e0c", card:"#1a1816", border:"#2e2a24", gold:"#c9a96e", muted:"#7a6f63", text:"#f2f2f2" };
 
   return (
     <div style={{ minHeight:"100vh", background:CR.bg, color:CR.text, fontFamily:"'DM Sans',sans-serif" }}>

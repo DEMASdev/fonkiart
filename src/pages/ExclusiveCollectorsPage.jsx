@@ -21,7 +21,7 @@ export default function ExclusiveCollectorsPage({ client, onLogout, artworks }) 
         {available.length > 0 ? (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(min(240px,100%),1fr))", gap:3 }}>
             {available.map(a => (
-              <div key={a.id} style={{ position:"relative", aspectRatio:"1", overflow:"hidden", background:"#e8e2d9" }}>
+              <div key={a.id} style={{ position:"relative", aspectRatio:"1", overflow:"hidden", background:"#f4f4f4" }}>
                 {a.image && <Pic src={a.image} w={640} alt={a.title} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />}
                 <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(to top,rgba(10,8,6,.88) 0%,transparent 65%)", padding:"20px 14px 14px" }}>
                   <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:16, color:"#fff", marginBottom:3 }}>{a.title}</div>
