@@ -8,9 +8,11 @@ import { SHIP_FIELDS, SHIP_AUTOFILL, hasShipAddress, shipLines, shipForm, shipFi
 import Pic from "../components/Pic";
 import CopyButton from "../components/CopyButton";
 import CardCheckout from "../components/CardCheckout";
+import PayRows from "../components/PayRows";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import { stripeJsReady } from "../lib/stripeJs";
 import { CARD_FORM_DOWN } from "../lib/cartOrder";
+import { payRows, isStripe, serverWays } from "../lib/payWays";
 
 // The shipping address fields that take a whole line of the form.
 const SHIP_WIDE = new Set(["ship_name", "ship_address", "ship_phone"]);
@@ -55,6 +57,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const lastPage = useRef(null);
   const cardTop = useRef(null);
   const waysTop = useRef(null);
+  // The way to pay the client tapped (the rows, src/components/PayRows.jsx), and which of Stripe's
+  // ways the server can open right now (op "card-setup", src/lib/payWays.js): null until it says,
+  // or when it says nothing (an older server), and then cards and Klarna.
+  const [payWay, setPayWay] = useState(null);
+  const [ways, setWays] = useState(null);
   // The shipping address form (null while closed), whether it is saving, and what the last save said.
   const [shipDraft, setShipDraft] = useState(null);
   const [shipSaving, setShipSaving] = useState(false);
@@ -89,6 +96,13 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     };
     load();
   }, [token, shopView]);
+  // Asked once card payments are on for this invoice's shop: which of Stripe's ways it can open.
+  useEffect(() => {
+    if (!cardReady) return undefined;
+    let gone = false;
+    storeCall("card-setup").then((r) => { const can = serverWays(r); if (!gone && can) setWays(can); }).catch(e => console.warn("Card setup:", e));
+    return () => { gone = true; };
+  }, [cardReady]);
 
   // Paid: the paid invoice is its own thank-you, shown from its TOP. The server's own copy of the
   // order when it answers (it knows how it was paid); if not, Paid as the server just said.
@@ -108,14 +122,15 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   // comes first (src/lib/stripeJs.js); if it can't load, or the server can't offer the form
   // (409 CARD_FORM_DOWN), the calm word, with Try Again and the other ways to pay above. The card
   // page this tab opened before goes with it (last), so only one page can ever take the money.
-  const handleCard = async () => {
+  // way: the row tapped, "card", "klarna" or "bank" (the server is told which).
+  const handleCard = async (way = "card") => {
     if (shopView || cardBusy.current) return;
     cardBusy.current = true;
     setPaying(true); setCalm(""); setRetry(false); setCardMsg("");
     try {
       if (!(await stripeJsReady())) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
       const last = lastPage.current || readLast(token);
-      const r = await storeCall("card-checkout", { token, embedded: true, ...(last ? { last } : {}) });
+      const r = await storeCall("card-checkout", { token, embedded: true, way, ...(last ? { last } : {}) });
       if (r?.paid) { await paidNow(null); return; }
       if (!r?.clientSecret) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
       lastPage.current = r.session;
@@ -219,6 +234,38 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const firstName = order.client_name ? order.client_name.split(" ")[0] : "there";
   const invNum  = invoiceNumber(order);
   const art     = findArtwork(artworks, order.item_title);
+  // The pay choices: a row for each way this invoice offers (one alone is chosen already). Under the
+  // chosen row: where to send it and what to write in the memo or note, or Stripe's button.
+  const payChoices = payRows({ zelle: !!payZelle, venmo: !!payVenmo, cashApp: !!payCashApp, card: payCard, ways });
+  const chosenWay = payChoices.length === 1 ? payChoices[0].id : payChoices.some(w => w.id === payWay) ? payWay : null;
+  const chooseWay = (id) => {
+    setPayWay(id); setCalm(""); setRetry(false); setCardMsg("");
+    if (isStripe(id) && !shopView) stripeJsReady(); // the form opens sooner when tapped
+  };
+  const sendTo = (value, where) => (
+    <>
+      <div className="invoice-pay-value">{value}</div>
+      <p className="pay-row-note">Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the {where}.</p>
+      <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
+    </>
+  );
+  const stripeGo = { card: `Pay ${amountText} by card →`, klarna: `Pay ${amountText} with Klarna →`, bank: `Pay ${amountText} by bank transfer →` };
+  const payDetail = (id) => id === "zelle" ? sendTo(payZelle, "memo")
+    : id === "venmo" ? sendTo(payVenmo, "note")
+    : id === "cashapp" ? sendTo(payCashApp, "note")
+    : (
+      <>
+        {calm && <p className="pay-calm" role="status">{calm}</p>}
+        <button type="button" className="tap confirm-btn pay-row-go" onClick={() => handleCard(id)} disabled={paying || shopView}>
+          {paying ? (id === "card" ? "Opening the secure card form…" : "Opening the secure payment form…") : retry ? "Try Again" : stripeGo[id]}
+        </button>
+        <p className="pay-row-note">Secure {id === "card" ? "card" : "payment"} form by Stripe, right here on this page. The amount is already filled in.</p>
+        {retry && !paying && (payZelle || payVenmo || payCashApp) && (
+          <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay&nbsp;↑</button>
+        )}
+        {cardMsg && <p role="alert" className="pay-row-err">{cardMsg}</p>}
+      </>
+    );
   const clientRow = order.client_name && (
     <div className="invoice-row">
       <span className="invoice-label">Client</span>
@@ -363,61 +410,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           {hasAnyPayment && !pay && (
             <div ref={waysTop} style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
               <p style={{fontSize:"var(--inv-small)",letterSpacing:".12em",textTransform:"uppercase",color:"#4a8c6a",marginBottom:14}}>Send Payment To</p>
-
-              {/* Zelle */}
-              {payZelle && (
-                <div className="invoice-pay-option" style={{background:"#e8f5ee",border:"1px solid #a3d4b3",marginBottom:12}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                    <span style={{fontSize:18}}>💚</span>
-                    <div className="invoice-pay-title">Zelle</div>
-                  </div>
-                  <div className="invoice-pay-value">{payZelle}</div>
-                  <p style={{fontSize:"var(--inv-text)",color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the memo.</p>
-                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
-                </div>
-              )}
-
-              {/* Venmo */}
-              {payVenmo && (
-                <div className="invoice-pay-option" style={{background:"#eef4ff",border:"1px solid #b3c9f0",marginBottom:12}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                    <span style={{fontSize:18}}>🔵</span>
-                    <div className="invoice-pay-title">Venmo</div>
-                  </div>
-                  <div className="invoice-pay-value">{payVenmo}</div>
-                  <p style={{fontSize:"var(--inv-text)",color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the note.</p>
-                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
-                </div>
-              )}
-
-              {/* Cash App */}
-              {payCashApp && (
-                <div className="invoice-pay-option" style={{background:"#f0faf0",border:"1px solid #a3d4a3",marginBottom:12}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                    <span style={{fontSize:18}}>💵</span>
-                    <div className="invoice-pay-title">Cash App</div>
-                  </div>
-                  <div className="invoice-pay-value">{payCashApp}</div>
-                  <p style={{fontSize:"var(--inv-text)",color:"var(--muted)",marginTop:6,lineHeight:1.5}}>Include "{order.item_title}" or <span style={{whiteSpace:"nowrap"}}>"{invNum}"</span> in the note.</p>
-                  <CopyButton text={invNum} size={13} caption="Tap here to copy to your clipboard" />
-                </div>
-              )}
-
-              {/* Card: Stripe's card form, with this invoice's exact amount, opens right here. */}
-              {payCard && (
-                <div style={{textAlign:"center",marginTop:4}}>
-                  {calm && <p className="pay-calm" role="status" style={{textAlign:"left"}}>{calm}</p>}
-                  <button type="button" className="tap" onClick={handleCard} disabled={paying || shopView}
-                    style={{display:"inline-block",background:"#635bff",color:"#fff",border:"none",padding:"13px 32px",fontSize:"var(--inv-text)",letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",cursor:paying||shopView?"default":"pointer",opacity:paying?0.7:1}}>
-                    {paying ? "Opening the secure card form…" : retry ? "Try Again" : `💳 Pay ${amountText} by card →`}
-                  </button>
-                  <p style={{fontSize:"var(--inv-small)",color:"var(--muted)",marginTop:8,lineHeight:1.5}}>Secure card form by Stripe, right here on this page. The amount is already filled in.</p>
-                  {retry && !paying && (payZelle || payVenmo || payCashApp) && (
-                    <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay&nbsp;↑</button>
-                  )}
-                  {cardMsg && <p role="alert" style={{fontSize:"var(--inv-text)",color:"#c0392b",lineHeight:1.6,marginTop:10}}>{cardMsg}</p>}
-                </div>
-              )}
+              {/* The ways to pay as rows, the same as the Cart's checkout (src/components/PayRows.jsx).
+                  Tapped, a row opens right under it: where to send it (Zelle, Venmo, Cash App), or the
+                  button that opens Stripe's form right here on this page, with the exact amount (Card,
+                  Klarna, a bank transfer: only the ways the server can open now, src/lib/payWays.js). */}
+              <PayRows rows={payChoices} value={chosenWay} onChoose={chooseWay} detail={payDetail} />
             </div>
           )}
         </div>

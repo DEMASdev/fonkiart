@@ -21,8 +21,8 @@ const forms = { turn: Promise.resolve() };
 // (the Cart: no number above the form, it shows on the thank-you once paid; Andy, 2026-11-19,
 // yes to: "no order number until they pay") or "invoice" ("Your invoice FA-..." above the form);
 // totalLabel: the line above the total.
-// art: the pieces above the form (PayArt). The Cart's checkout passes false: its order is already
-// on the screen, beside the form on a computer and one line above it on a phone (CheckoutModal).
+// art: the pieces above the form (PayArt). The Cart's checkout passes false: its art is already
+// on the screen, beside the form on a computer and above it on a phone (CheckoutModal).
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
 // onFail: the form couldn't open here; the checkout says so calmly, with Try Again and another
 // way to pay (never Stripe's own page).

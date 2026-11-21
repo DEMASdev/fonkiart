@@ -1256,48 +1256,127 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .pay-art-title { font-size:21px; }
   .cart-notice { padding:14px 16px;margin-top:-14px; }
 }
-/* The checkout as a shop counter (src/components/CheckoutModal.jsx; Andy, 2026-11-19, yes to: "one
-   wide page with two sides ... Your art stays on the left: pictures, titles and total, always in
-   view. The steps go on the right ... On a phone it stays one column, but tighter. The order
-   shrinks to one line at the top that you tap to see the pieces"). The order (.checkout-order) is
-   drawn once: a computer shows its pieces as the left side, sticky while the steps scroll; a phone
-   (and a tablet) shows its one line, and the pieces only once it is tapped. tests/checkout-layout.test.js
-   holds these rules. */
-.checkout-step-label { font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:22px 0 12px; }
-.checkout-order { margin:10px 0 22px; }
-.checkout-order-head { font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:2px; }
-.checkout-order-off { font-size:16px;color:#2d6a4f;margin-top:4px; }
-.checkout-order-total-off { text-align:right;margin-top:0; }
-.checkout-order-line { display:none; }
-.checkout-order-thumbs { display:flex;flex:none; }
-.checkout-order-thumb { display:block;width:40px;height:40px;object-fit:cover;background:#e8e2d9;border:2px solid #fff;box-shadow:0 0 0 1px var(--border); }
-.checkout-order-thumb + .checkout-order-thumb { margin-left:-18px; }
-.checkout-order-what { flex:1;min-width:0;font-size:17px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.checkout-order-sum { flex:none;font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;font-variant-numeric:lining-nums;color:var(--gold); }
-.checkout-order-chev { flex:none;font-size:16px;color:var(--muted); }
-@media (max-width:959px) {
-  /* The title is as tall as the 44px ✕ beside it (top 18px), so the ✕ never sits on the order line below. */
-  .checkout-counter > h2 { min-height:46px;display:flex;align-items:center;margin-bottom:0; }
-  .checkout-order { border:1px solid var(--border);margin:8px 0 16px; }
-  .checkout-order-line { display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:8px 12px;background:none;border:0;cursor:pointer;text-align:left;font-family:'DM Sans',sans-serif; }
-  .checkout-order-pieces { display:none;padding:0 12px 12px;border-top:1px solid var(--border); }
-  .checkout-order.is-open .checkout-order-pieces { display:block; }
-  .checkout-order-head { display:none; }
-  .checkout-buy .pay-opts { grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px; }
-  .checkout-buy .pay-opt { padding:12px 8px; }
-  .checkout-buy .pay-opt-icon { font-size:22px;margin-bottom:4px; }
+/* The checkout as a gallery wall (src/components/CheckoutModal.jsx; Andy, 2026-11-21: "rethink that
+   page if you haven't , make it nicer simpler more intuitive and artsy without making the art the
+   person is buying small and 2nd page/hand"). The Cart's checkout page and the Collectors Room's
+   Purchase window alike: the art being bought is the biggest thing on the screen at every step,
+   framed as it would hang in a gallery, its label under it (the title in the Fonkiart serif, what it
+   is, the price); the steps ask one thing each, with few boxes and lines.
+   - Computer (900px and up): two halves. The wall on the left (one piece stays in view while the
+     steps scroll; several stack, each big), a thin gold line, the steps on the right.
+   - Phone and tablet (under 900px): the art first, full width (several pieces side by side, to
+     swipe), then a thin gold line and the steps. On a phone the Purchase window is the whole screen
+     and the Cart's checkout runs edge to edge.
+   Text 16px and up (normal 17px); money in Cormorant Garamond 600 with lining figures.
+   White, a thin gold line and the site's pink, never cream or sand (Andy, 2026-11-21: "i do not
+   like the sand , creme colors !! do not use any of those colors"); the quiet words a neutral
+   grey, 5.3:1 on white. tests/checkout-layout.test.js holds these rules. */
+.checkout.checkout-gallery { --wall:#fff;--line:rgba(184,146,63,.4);--quiet:#6b6b6b;padding:0;max-width:640px; }
+/* The Cart's checkout is a page: never a box with its own scroll (a pop-up's 90vh would cut the wall short). */
+.checkout-gallery.checkout-fullpage { max-height:none;overflow:visible; }
+.checkout-gallery > .checkout-x { position:absolute;top:12px;right:12px;z-index:3;margin:0; }
+.checkout-wall { background:var(--wall);padding:58px 20px 28px; }
+.checkout-wall-list { list-style:none;margin:0;padding:0; }
+.checkout-piece { display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0; }
+.checkout-frame { max-width:100%;padding:12px;background:#fff;border:1px solid var(--border);box-shadow:0 2px 6px rgba(28,26,24,.06),0 20px 40px -16px rgba(28,26,24,.36); }
+.checkout-piece-pic { display:block;width:auto;height:auto;max-width:100%;max-height:44vh;margin:0 auto; }
+.checkout-piece-label { margin-top:22px;max-width:100%; }
+.checkout-piece-label::before { content:"";display:block;width:40px;height:1px;background:var(--gold);margin:0 auto 14px; }
+.checkout-piece-title { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:500;line-height:1.2;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance; }
+.checkout-piece-meta { font-size:16px;line-height:1.5;color:var(--quiet);margin-top:4px; }
+.checkout-piece-price { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums;margin-top:6px; }
+.checkout-off { font-size:16px;color:#2d6a4f;margin-top:2px; }
+.checkout-wall-total { display:flex;justify-content:center;align-items:baseline;gap:14px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line); }
+.checkout-wall-total-label { font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet); }
+.checkout-wall-total-sum { font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums; }
+.checkout-wall-total-off { text-align:center; }
+.checkout-steps { padding:28px 20px 36px;border-top:1px solid var(--line); }
+.checkout-eyebrow { font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0 0 6px; }
+.checkout-gallery .checkout-q { font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:400;line-height:1.15;color:var(--ink);margin:0 0 22px;text-wrap:balance; }
+.checkout-back { display:inline-flex;align-items:center;min-height:44px;margin:-8px 0 4px;padding:0;background:none;border:0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--quiet); }
+.checkout-back:hover { color:var(--ink); }
+.checkout-two { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 18px; }
+/* The fields: a line to write on, not a box. */
+.checkout-gallery .fld { margin-bottom:18px; }
+.checkout-gallery .fld label { font-size:16px;letter-spacing:.1em;color:var(--quiet);margin-bottom:2px; }
+.checkout-gallery .fld input, .checkout-coupon-input { -webkit-appearance:none;appearance:none;width:100%;min-width:0;font-family:'DM Sans',sans-serif;font-size:17px;color:var(--ink);padding:8px 0 9px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;outline:none;transition:border-color .2s,box-shadow .2s; }
+.checkout-gallery .fld input:focus, .checkout-coupon-input:focus { border-bottom-color:var(--gold);box-shadow:0 1px 0 var(--gold); }
+.checkout-coupon { margin:6px 0 0; }
+.checkout-coupon-label { font-size:16px;letter-spacing:.1em;text-transform:uppercase;color:var(--quiet);margin-bottom:4px; }
+.checkout-coupon-label span { text-transform:none;letter-spacing:0; }
+.checkout-coupon-row { display:flex;align-items:flex-end;gap:12px; }
+.checkout-coupon-input { flex:1;letter-spacing:.06em; }
+.checkout-gallery .checkout-go { margin-top:26px;min-height:54px; }
+/* The payment: the amount large, the steps quiet, and no box around them. */
+.checkout-gallery .pay-detail { background:none;border:0;padding:0;margin:0 0 24px; }
+.checkout-gallery .zelle-amount { font-size:46px;line-height:1.05;margin:0 0 16px; }
+.checkout-gallery .zelle-contact { font-size:20px;overflow-wrap:anywhere; }
+.checkout-gallery .zelle-steps { font-size:17px;line-height:1.9;color:var(--quiet);padding-top:14px;border-top:1px solid var(--line); }
+.checkout-gallery .zelle-steps strong { color:var(--ink);font-weight:500; }
+@media (max-width:899px) {
+  /* Several pieces: side by side, each nearly the width of the screen, to swipe. */
+  .checkout-wall.is-many .checkout-wall-list { display:grid;grid-auto-flow:column;grid-auto-columns:84%;gap:16px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;margin:0 -20px;padding:0 20px 6px;scroll-padding:0 20px;scrollbar-width:none; }
+  .checkout-wall.is-many .checkout-wall-list::-webkit-scrollbar { display:none; }
+  .checkout-wall.is-many .checkout-piece { scroll-snap-align:start; }
+  .checkout-wall.is-many .checkout-piece-pic { max-height:40vh; }
 }
-@media (min-width:960px) {
-  .checkout-counter.checkout-fullpage { max-width:1100px;padding:0;overflow:visible;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);grid-template-rows:auto 1fr;grid-template-areas:"order title" "order steps";
-    background:linear-gradient(90deg, #fbf8f3 calc(100% * 5 / 11), var(--border) calc(100% * 5 / 11), var(--border) calc(100% * 5 / 11 + 1px), #fff calc(100% * 5 / 11 + 1px)); }
-  .checkout-counter.checkout-fullpage > h2 { grid-area:title;padding:36px 52px 0 48px; }
-  .checkout-counter.checkout-fullpage > .checkout-steps { grid-area:steps;min-width:0;padding:6px 48px 44px; }
-  .checkout-counter.checkout-fullpage > .checkout-order { grid-area:order;align-self:start;position:sticky;top:calc(var(--marquee) + var(--topbar) + 16px);margin:0;padding:36px 40px 32px;
-    max-height:calc(100vh - var(--marquee) - var(--topbar) - 32px);overflow-y:auto; }
-  .checkout-counter.checkout-fullpage .checkout-order-head { margin-bottom:8px; }
-  .checkout-counter.checkout-fullpage .pay-art-pic { width:150px;height:150px;background:#fff; }
-  .checkout-counter.checkout-fullpage .checkout-steps > :first-child { margin-top:0; }
+@media (max-width:640px) {
+  .checkout-gallery-bg { padding:0; }
+  .checkout-gallery-bg > .checkout-gallery { max-width:none;min-height:100%;max-height:none;overflow:visible;margin:0;animation:none; }
+  .checkout-gallery-bg > .checkout-gallery > .checkout-x { position:fixed;top:max(10px, env(safe-area-inset-top, 0px));right:10px;box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  .checkout-gallery-page { padding:0; }
+  .checkout-gallery.checkout-fullpage { border:0;box-shadow:none; }
+  .checkout-gallery .checkout-q { font-size:29px; }
 }
+@media (min-width:900px) {
+  .checkout.checkout-gallery { max-width:1100px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;
+    background:linear-gradient(90deg, var(--wall) 50%, var(--line) 50%, var(--line) calc(50% + 1px), #fff calc(50% + 1px)); }
+  .checkout-wall { position:sticky;top:0;background:none;padding:52px 52px 44px; }
+  .checkout-gallery.checkout-fullpage .checkout-wall { top:calc(var(--marquee) + var(--topbar) + 16px); }
+  .checkout-wall.is-many { position:static; }
+  .checkout-frame { padding:16px; }
+  .checkout-piece-pic { max-height:min(calc(90vh - 300px), 560px); }
+  .checkout-gallery.checkout-fullpage .checkout-piece-pic { max-height:min(calc(100vh - var(--marquee) - var(--topbar) - 320px), 560px); }
+  .checkout-wall.is-many .checkout-piece + .checkout-piece { margin-top:48px; }
+  .checkout-wall.is-many .checkout-piece-pic { max-height:min(46vh, 440px); }
+  .checkout-piece-title { font-size:30px; }
+  .checkout-piece-price { font-size:29px; }
+  .checkout-steps { border-top:0;padding:48px 56px 52px; }
+  /* The steps' column stays in view beside the art, never hiding its own button: in the pop-up at
+     the top of its box, on the Cart's page under the shop's bars, while it fits; taller than that,
+     it scrolls with the page until its end is in view, then holds 16px above the bottom. Its
+     height (--steps-h) is measured by CheckoutModal.jsx; until then it simply scrolls. */
+  .checkout-steps.is-measured { position:sticky;top:min(0px, calc(90dvh - var(--steps-h) - 16px)); }
+  .checkout-gallery.checkout-fullpage .checkout-steps.is-measured { top:min(calc(var(--marquee) + var(--topbar) + 16px), calc(100vh - var(--steps-h) - 16px)); }
+  .checkout-gallery > .checkout-x { top:16px;right:18px; }
+  .checkout-gallery .checkout-q { font-size:34px; }
+}
+/* The ways to pay, as rows (src/components/PayRows.jsx), on the Cart's checkout (step 2) and the
+   invoice page alike. The words first (no emoji), a quiet line under them, the way's own small
+   mark beside its name (the footer's), quiet gold lines between. The one chosen: a pale pink (the
+   site's pink, #ffcdf4, lightened) and a gold bar; under it, on the invoice page, where to send
+   the money, or Stripe's button. Never cream or sand. Text 16px and up, the grey 4.8:1 or more on
+   the pink and 5.3:1 on white. tests/checkout-layout.test.js holds these rules. */
+.pay-rows { --quiet:#6b6b6b;--line:rgba(184,146,63,.4);display:flex;flex-direction:column;margin:0;border-top:1px solid var(--line);background:#fff;text-align:left; }
+.pay-row { display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"dot label marks" "dot sub sub";align-items:center;column-gap:14px;row-gap:2px;width:100%;min-height:68px;padding:12px 14px 12px 12px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);text-align:left;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background .15s; }
+.pay-row:hover { background:#fff7fd; }
+.pay-row.sel { background:#fff0fb;color:var(--ink);box-shadow:inset 3px 0 0 var(--gold); }
+.pay-row:focus-visible { outline:2px solid var(--gold);outline-offset:-2px; }
+.pay-row-dot { grid-area:dot;width:22px;height:22px;border-radius:50%;border:1.5px solid #8f8f8f;position:relative;background:#fff; }
+.pay-row.sel .pay-row-dot { border-color:var(--gold); }
+.pay-row.sel .pay-row-dot::after { content:"";position:absolute;inset:4px;border-radius:50%;background:var(--gold); }
+.pay-row-label { grid-area:label;align-self:end;font-size:18px;font-weight:500;letter-spacing:.02em;line-height:1.3; }
+.pay-row-sub { grid-area:sub;align-self:start;font-size:16px;line-height:1.4;color:var(--quiet); }
+.pay-row-marks { grid-area:marks;align-self:end;display:flex;gap:5px; }
+.pay-row-marks svg { display:block;width:35px;height:22px; }
+/* Under the chosen row (the invoice page): what to do next, in line with the name above it. */
+.pay-row-more { padding:2px 16px 20px 48px;border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--gold);text-align:left; }
+.pay-row.sel:has(+ .pay-row-more) { border-bottom-color:transparent; }
+.pay-row-more .invoice-pay-value { overflow-wrap:anywhere; }
+.pay-row-note { font-size:16px;line-height:1.55;color:var(--quiet);margin:8px 0 10px; }
+.pay-row-go { margin-top:8px;font-size:17px;letter-spacing:.04em;text-transform:none; }
+.pay-row-err { font-size:17px;line-height:1.6;color:#c0392b;margin-top:10px; }
+@media (max-width:480px) { .pay-row-more { padding:2px 14px 18px 16px; } }
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }

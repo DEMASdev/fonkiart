@@ -227,7 +227,9 @@ test("the invoice page gets the order's address from the server", async () => {
 test("the checkout's own text sizes are all 16px or more", () => {
   const sizes = (src) => [...src.matchAll(/fontSize\s*:\s*["']?(\d+(?:\.\d+)?)/g)].map(m => Number(m[1]));
   const found = sizes(readFileSync(new URL("../src/components/CheckoutModal.jsx", import.meta.url), "utf8"));
-  assert.ok(found.length >= 20, `found ${found.length} sizes`);
+  // Since 2026-11-21 most of the checkout's sizes are in src/index.css (the gallery wall), and
+  // tests/checkout-layout.test.js holds those to 16px too; these are the ones still written inline.
+  assert.ok(found.length >= 12, `found ${found.length} sizes`);
   assert.deepEqual(found.filter(s => s < 16), []);
   assert.deepEqual(sizes(`<p style={{ fontSize:11 }}>x</p><p style={{fontSize: "13"}}>`), [11, 13], "control: the check sees small sizes when there are some");
 });
