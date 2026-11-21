@@ -9,7 +9,7 @@ import { cardPicture, markSoldForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, cardSetup, createCheckout, expireCheckout, getCheckout, paidFor, paidWith, isSessionId, StripeError } from "./stripe.js";
+import { cardReady, cardSetup, createCheckout, expireCheckout, getCheckout, paidFor, paidWith, isSessionId, publishableKey, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 
@@ -515,6 +515,12 @@ export const STORE_OPS = {
   "cart-other": (db, req, mail) => opCartOther(db, req.body || {}, mail, orderReceived),
   // Is the card form ready to open inside fonkiart.com, and if not, why (stripe.js). Never a key.
   "card-setup": () => cardSetup(),
+  // Klarna's "pay in 4" line under the price on a piece's page (src/lib/klarnaLine.js): the shop's
+  // PUBLIC key, which Stripe.js needs to show it, only while the card form can open (stripe.js
+  // publishableKey: card payments on, a right key of the same mode), else null and no line shows.
+  // Public by design, like the key the card form gets (cart-card, card-checkout). Never logged.
+  // card-setup above stays key-free.
+  "klarna-line": () => ({ publishableKey: publishableKey() }),
   "track": (db, req) => opTrack(db, req.body || {}),
   "legacy-login": (db, req) => opLegacyLogin(db, req.body || {}),
   "buyer": (db, req) => opBuyer(db, req),
