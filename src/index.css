@@ -93,9 +93,10 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   transition:color .2s,background .2s,border-color .2s;
 }
 .social-icon:hover { color:#fff;background:var(--gold);border-color:var(--gold); }
+/* "Shop Now": a deeper rose on the same pink, so the words can be read (contrast 4.66; it was 1.79). */
 .topbar-tag {
   font-size:16px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--label);background:var(--pink);
+  color:#9c3a76;background:var(--pink);
   padding:5px 14px;border-radius:20px;
 }
 .hamburger {
@@ -342,16 +343,17 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .admin-wrap .fld input, .admin-wrap .fld textarea, .admin-wrap .fld select, .login-wrap .fld input { font-size:16px; }
 .admin-wrap .btn-p, .admin-wrap .btn-s, .admin-wrap .btn-d, .login-wrap .btn-p { font-size:16px; }
 .admin-wrap .warn-msg, .admin-wrap .err, .login-wrap .err { font-size:16px; }
+/* Every Admin pink button: a deeper rose under the white words (contrast 4.75; it was 2.52), deeper still on hover. */
 .admin-wrap .btn-p,
 .admin-wrap .btn-s {
-  background:var(--sidebar-bg);
+  background:#b0528a;
   color:#fff;
   border:2px solid #fff;
   border-radius:2px;
 }
 .admin-wrap .btn-p:hover,
 .admin-wrap .btn-s:hover {
-  background:var(--label);
+  background:#9c3a76;
   color:#fff;
   border-color:#fff;
 }
@@ -588,7 +590,8 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 
 /* ── COLLECTORS CLUB ── */
 .collectors-section { background:var(--pink);padding:32px 48px;display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;border-top:1px solid var(--label);border-bottom:1px solid var(--label); }
-.collectors-badge { display:inline-block;font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,46px);font-weight:600;letter-spacing:.08em;color:var(--sidebar-bg);margin-bottom:8px;line-height:1; }
+/* The "Collectors Club" heading: the same deeper rose as "Shop Now" (contrast 4.66; it was 1.83). The Join button keeps its pink. */
+.collectors-badge { display:inline-block;font-family:'Cormorant Garamond',serif;font-size:clamp(28px,3.5vw,46px);font-weight:600;letter-spacing:.08em;color:#9c3a76;margin-bottom:8px;line-height:1; }
 .collectors-title { font-family:'Cormorant Garamond',serif;font-size:clamp(21px,1.9vw,26px);font-weight:300;line-height:1.3;color:var(--ink);margin-bottom:8px;opacity:.8; }
 .collectors-sub { font-size:17px;color:var(--ink);opacity:.55;line-height:1.6;max-width:420px; }
 .collectors-form { display:flex;flex-direction:column;gap:8px;max-width:380px; }
