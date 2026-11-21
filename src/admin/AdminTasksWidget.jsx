@@ -52,7 +52,7 @@ export default function AdminTasksWidget({ goToTab, goToSettings }) {
       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
         {shown.map(t => (
           <div key={t.id} style={{ position:"relative" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", background:done[t.id]?"#f5f9f5":"#fdfcf8", border:`1px solid ${done[t.id]?"#c3ddc9":"var(--border)"}`, cursor:"pointer", transition:"all .15s" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", background:done[t.id]?"#f5f9f5":"#fafafa", border:`1px solid ${done[t.id]?"#c3ddc9":"var(--border)"}`, cursor:"pointer", transition:"all .15s" }}>
               <div onClick={() => toggle(t.id)} style={{ width:18, height:18, border:`2px solid ${done[t.id]?"#2d6a4f":"var(--border)"}`, borderRadius:3, background:done[t.id]?"#2d6a4f":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s" }}>
                 {done[t.id] && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </div>

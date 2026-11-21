@@ -33,7 +33,7 @@ export default function AuthModal({ user, onClose, artworks = [] }) {
             const art = previewImgs[i];
             return (
               <div key={i} className="wg-item">
-                {art ? <Pic src={art.image} w={640} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)",width:"100%",height:"100%" }} />}
+                {art ? <Pic src={art.image} w={640} alt={art.title} /> : <div style={{ background:"linear-gradient(135deg,#eeeeee,#dddddd)",width:"100%",height:"100%" }} />}
               </div>
             );
           })}

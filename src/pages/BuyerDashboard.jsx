@@ -12,11 +12,11 @@ function OrderSteps({ step }) {
       <div className="acct-steps-in">
         <div style={{ display:"flex", alignItems:"center" }} aria-hidden="true">
           {ORDER_STATUSES.map(([s], i) => {
-            const dot = i <= step ? statusLook(s).dot : "#e0dbd5";
+            const dot = i <= step ? statusLook(s).dot : "#dddddd";
             return (
               <div key={s} style={{ display:"flex", alignItems:"center", flex: i < last ? 1 : "none" }}>
                 <div style={{ width:10, height:10, borderRadius:"50%", background:dot, flexShrink:0, border:`2px solid ${dot}` }} />
-                {i < last && <div style={{ flex:1, height:2, background:i < step?"var(--border)":"#e0dbd5", margin:"0 2px" }} />}
+                {i < last && <div style={{ flex:1, height:2, background:i < step?"var(--border)":"#dddddd", margin:"0 2px" }} />}
               </div>
             );
           })}

@@ -114,7 +114,7 @@ export default function ClientsTab() {
                 </tr>
                 {expandedClientId===c.id && (
                   <tr className="crm-detail">
-                    <td colSpan={6} style={{background:"#fffbf5",padding:"12px 14px 16px",borderTop:"none"}}>
+                    <td colSpan={6} style={{background:"#fafafa",padding:"12px 14px 16px",borderTop:"none"}}>
                       <p style={{letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)",marginBottom:10}}>Order History</p>
                       {!clientOrders[c.id]
                         ? <p style={{color:"var(--muted)"}}>Loading…</p>

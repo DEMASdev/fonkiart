@@ -19,7 +19,7 @@ export default function CollectionsPage({ data, goToCategory }) {
                   <div key={cat} className="card" onClick={() => goToCategory(cat)}>
                     {preview
                       ? <Pic src={preview.image} w={640} alt={cat} loading="lazy" />
-                      : <div style={{ width:"100%", aspectRatio:"1/1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
+                      : <div style={{ width:"100%", aspectRatio:"1/1", background:"linear-gradient(135deg,#eeeeee,#dddddd)" }} />
                     }
                     <div className="card-over" style={{ opacity:1, background:"linear-gradient(to top,rgba(10,8,6,.75) 0%,transparent 60%)" }}>
                       <div className="card-title">{cat}</div>

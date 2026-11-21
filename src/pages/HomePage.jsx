@@ -24,7 +24,7 @@ export default function HomePage({ setPage, data }) {
         </div>
         <div className="hero-right">
           {slides.length === 0
-            ? <div style={{ gridColumn:"1/-1", background:"linear-gradient(135deg,#e8e2d9,#d4cdc4)" }} />
+            ? <div style={{ gridColumn:"1/-1", background:"linear-gradient(135deg,#eeeeee,#dddddd)" }} />
             : slides.map((item) => (
                 <div key={item.id} className="hero-panel">
                   <Pic src={item.image} w={1080} alt={item.title} />
@@ -44,7 +44,7 @@ export default function HomePage({ setPage, data }) {
         ].map((c, i) => (
           <div key={c.label} onClick={() => setPage(c.page)} className="quicklink-item"
             style={{ borderLeft: i > 0 ? "1px solid var(--border)" : "none" }}
-            {...mouseHover({ background:"#fdf9f4" }, { background:"transparent" })}
+            {...mouseHover({ background:"#f7f7f7" }, { background:"transparent" })}
           >
             <div className="quicklink-label">{c.label}</div>
             <div className="quicklink-desc">{c.desc}</div>
