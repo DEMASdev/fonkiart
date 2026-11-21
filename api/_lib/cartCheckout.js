@@ -41,7 +41,7 @@
 
 import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, markSoldForOrder, PAID_STATUSES } from "./artworks.js";
-import { cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, publishableKey, StripeError, toCents } from "./stripe.js";
+import { cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, paidWith, publishableKey, StripeError, toCents } from "./stripe.js";
 import { cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
@@ -148,7 +148,13 @@ export function cartPaidFor(session, rows) {
     && session.amount_total === rows.reduce((sum, r) => sum + cents(r.amount), 0);
 }
 
-// Stripe's page for a Cart order -> its rows -> Paid, SOLD and the two emails, once.
+// The thank-you's "Paid by ..." (src/components/PaidThanks.jsx): only a Klarna payment names its
+// way in the answer, so a card's answer stays exactly as before ("Paid by card").
+const saidHow = (method) => (method === "klarna" ? { method } : {});
+
+// Stripe's page for a Cart order -> its rows -> Paid, SOLD and the two emails, once. The rows keep
+// the way Stripe says it was paid (stripe.js paidWith: "klarna", else "card"), and the emails and
+// the thank-you say it.
 // The update only matches rows still Pending or Confirmed, so whoever gets there first (the
 // buyer coming back, Stripe's message, a second tab, a replay) sends the two emails, and
 // everyone after sends none. If the database refuses the change:
@@ -165,10 +171,11 @@ async function settleCart(db, session, mail, via) {
     return { paid: false, why: "unknown order" };
   }
   const view = cartView(ref, rows);
-  if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...view };
+  if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...view, ...saidHow(rows[0].paid_method) };
   if (!cartPaidFor(session, rows)) return { paid: false, why: "not paid", ...view };
 
-  const { data: flipped, error: flipErr } = await db.from("Orders").update({ status: "paid", paid_method: "card" })
+  const method = await paidWith(session);
+  const { data: flipped, error: flipErr } = await db.from("Orders").update({ status: "paid", paid_method: method })
     .in("id", ids).in("status", NOT_PAID).select("id");
   if (flipErr) {
     console.error(`store cart (${via}): could not mark order ${ref} Paid:`, flipErr.message);
@@ -177,14 +184,15 @@ async function settleCart(db, session, mail, via) {
   if (flipErr || flipped?.length) {
     const email = rows[0].client_email;
     const who = rows[0].ship_name || email || "The customer";
+    const paid = { ...view, method };
     await Promise.allSettled([
-      mail.send({ to: mail.sender, subject: cartPaidSubject(view), htmlContent: cartPaidShop({ ...view, who, email, saved: !flipErr }) }),
-      mail.send({ to: email, subject: cartReceivedSubject(view), htmlContent: cartReceived(view) }),
+      mail.send({ to: mail.sender, subject: cartPaidSubject(paid), htmlContent: cartPaidShop({ ...paid, who, email, saved: !flipErr }) }),
+      mail.send({ to: email, subject: cartReceivedSubject(view), htmlContent: cartReceived(paid) }),
     ]);
   }
   // The pieces are SOLD (artworks.js: never a print, never twice).
   for (const row of rows) await markSoldForOrder(db, { ...row, status: "paid" });
-  return { paid: true, ...view };
+  return { paid: true, ...view, ...saidHow(method) };
 }
 
 // The buyer is back from paying (?cart=FA-...&card=cs_...). Stripe's answer decides; the

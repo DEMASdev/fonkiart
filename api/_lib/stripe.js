@@ -304,6 +304,32 @@ export async function checkoutPaidFor({ sessionId, order }) {
   return paidFor(await getCheckout(sessionId), order);
 }
 
+// How a paid page was paid, as the order keeps it (Orders.paid_method): "klarna" for Klarna, else
+// "card" (Apple Pay and Google Pay are cards), exactly as before Klarna. Read from Stripe's own
+// record, never from a browser: the page's payment (its PaymentIntent), asked for with the payment
+// method it used, says that method's type. Asked only once a page is found paid, and never throws:
+// if Stripe can't answer this one question, the order is still recorded Paid, as a card, as before.
+const PAID_WITH = new Map([["klarna", "klarna"]]);
+export async function paidWith(session) {
+  let payment = session?.payment_intent;
+  try {
+    if (typeof payment === "string") {
+      if (!/^pi_[A-Za-z0-9]{10,250}$/.test(payment)) return "card";
+      payment = await stripe(`/payment_intents/${payment}?expand%5B%5D=payment_method`);
+    }
+    return PAID_WITH.get(payment?.payment_method?.type) ?? "card";
+  } catch (e) {
+    console.warn("stripe: could not learn how a paid page was paid, so it is recorded as a card:", e?.code || "", e?.message || e);
+    return "card";
+  }
+}
+
+// That way in words, as the emails say it (emails.js for invoices, cartEmails.js for the Cart):
+// Klarna when the order says so, else a card, word for word as before Klarna.
+export const paidWords = (method) => (method === "klarna"
+  ? { by: "by Klarna", how: "with Klarna", name: "Klarna" }
+  : { by: "by card", how: "by card", name: "Card" });
+
 // Admin -> Settings -> Stripe: can this key take card payments?
 //  - Quick (when the panel opens): a read. Proves Stripe accepts the key, NOT that it may
 //    make payment pages.

@@ -20,12 +20,15 @@ export const isPaid = (status) => status === "paid" || status === "shipped" || s
 export const canMarkPaid = (status) => !status || status === "pending" || status === "confirmed";
 
 // How the client paid, saved on the order as paid_method; the paid invoice says "Paid by ..."
-// (Andy, 2026-11-17). Only these six: the server refuses anything else (api/_lib/adminOps.js).
+// (Andy, 2026-11-17). Only these: the server refuses anything else (api/_lib/adminOps.js).
+// Klarna is saved only by the website, when Stripe says so (api/_lib/stripe.js paidWith); it is
+// never a "Mark paid" button (markPaidChoices), but an order paid with it keeps it (knownPaidMethod).
 export const PAID_METHODS = [
   ["zelle", "Zelle"],
   ["venmo", "Venmo"],
   ["cashapp", "Cash App"],
   ["card", "Card"],
+  ["klarna", "Klarna"],
   ["cash", "Cash"],
   ["other", "Other"],
 ];

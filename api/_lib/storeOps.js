@@ -9,7 +9,7 @@ import { cardPicture, markSoldForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, cardSetup, createCheckout, checkoutPaidFor, expireCheckout, getCheckout, paidFor, isSessionId, StripeError } from "./stripe.js";
+import { cardReady, cardSetup, createCheckout, expireCheckout, getCheckout, paidFor, paidWith, isSessionId, StripeError } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 
@@ -329,31 +329,34 @@ async function paidBefore(db, page, order, mail) {
     console.warn("store card-checkout: a finished card page that isn't this invoice's exact amount", page.id);
     throw new InputError("This invoice already has a card payment. Please contact Fonkiart.", 409);
   }
-  await markCardPaid(db, order, mail, "redirect");
+  await markCardPaid(db, order, mail, "redirect", page);
   await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
   return { paid: true };
 }
 
-// Stripe says this invoice is paid: mark the order Paid, by card (the paid invoice says "Paid by
-// Card"), then email the shop and the client. Klarna, paid in the same Stripe form, is recorded
-// the same way.
+// Stripe says this invoice is paid (page: Stripe's record of the paid page): mark the order Paid,
+// with the way Stripe says it was paid (stripe.js paidWith: "klarna", else "card"; the paid
+// invoice then says "Paid by Klarna" or "Paid by card"), then email the shop and the client in
+// the same words.
 // The update only matches an order that is still Pending or Confirmed, so whoever gets there
 // first (the client coming back, Stripe's webhook, a second tab, a replay) sends the two
 // emails, and everyone after them sends none.
 // If the database refuses the change:
 //  - via "redirect" (the client coming back): email anyway, telling the shop to mark it by hand;
 //  - via "webhook" (Stripe's message): email nobody and answer 500, so Stripe sends it again later.
-async function markCardPaid(db, order, mail, via) {
-  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true, paid_method: "card" })
+async function markCardPaid(db, order, mail, via, page) {
+  const method = await paidWith(page);
+  const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true, paid_method: method })
     .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
   if (error) {
     console.error(`store card-paid (${via}): could not mark the order Paid:`, error.message);
     if (via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
   } else if (!flipped?.length) return; // someone else got there first, and sent the emails
   const invNum = invoiceNumber(order);
+  const paid = { ...order, paid_method: method };
   await Promise.allSettled([
-    mail.send({ to: mail.sender, subject: T.cardPaidSubject(order), htmlContent: T.cardPaidShop({ order, invNum, saved: !error }) }),
-    mail.send({ to: order.client_email, subject: T.paymentReceivedSubject(order), htmlContent: T.paymentReceived({ order, invNum }) }),
+    mail.send({ to: mail.sender, subject: T.cardPaidSubject(paid), htmlContent: T.cardPaidShop({ order: paid, invNum, saved: !error }) }),
+    mail.send({ to: order.client_email, subject: T.paymentReceivedSubject(order), htmlContent: T.paymentReceived({ order: paid, invNum }) }),
   ]);
 }
 
@@ -365,16 +368,16 @@ export async function opCardPaid(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
   if (PAID_STATUSES.includes(order.status)) return { paid: true };
   const sessionId = text(body.session, 300, "payment reference", { required: true });
-  let paid;
+  let page;
   try {
-    paid = await checkoutPaidFor({ sessionId, order });
+    page = await getCheckout(sessionId);
   } catch (e) {
     if (!(e instanceof StripeError)) throw e;
     console.error("store card-paid:", e.code, e.message);
     throw new InputError("Couldn't check the card payment right now", 502);
   }
-  if (!paid) return { paid: false };
-  await markCardPaid(db, order, mail, "redirect");
+  if (!paidFor(page, order)) return { paid: false };
+  await markCardPaid(db, order, mail, "redirect", page);
   await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
   return { paid: true };
 }
@@ -424,7 +427,7 @@ export async function opStripeEvent(db, event, mail) {
   }
   if (PAID_STATUSES.includes(order.status)) return { received: true, paid: true };
   if (!paidFor(session, order)) return { received: true, ignored: "not paid" };
-  await markCardPaid(db, order, mail, "webhook");
+  await markCardPaid(db, order, mail, "webhook", session);
   await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
   return { received: true, paid: true };
 }

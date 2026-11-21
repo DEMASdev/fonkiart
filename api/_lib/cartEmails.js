@@ -1,12 +1,14 @@
 import { adminFrame } from "./emails.js";
 import { escapeHtml as e } from "./brevo.js";
+import { paidWords } from "./stripe.js";
 
-// The two emails of a Cart order paid by card (cartCheckout.js): ONE to the buyer and ONE to
-// the shop for the whole cart, however many pieces it holds. The same look and words as an
-// invoice paid by card (emails.js paymentReceived / cardPaidShop): the frame comes from emails.js,
+// The two emails of a Cart order paid in the card form (cartCheckout.js): ONE to the buyer and ONE
+// to the shop for the whole cart, however many pieces it holds. The same look and words as an
+// invoice paid there (emails.js paymentReceived / cardPaidShop): the frame comes from emails.js,
 // with the order's own pieces at the top (never another one: emailArt.js), and the small parts
 // below copy its styles.
-// view: { ref, lines: [{ title, amount }], total, name }. Titles are escaped like everything else.
+// view: { ref, lines: [{ title, amount }], total, name, method }. Titles are escaped like
+// everything else. method: how Stripe says it was paid ("klarna", else a card: stripe.js paidWords).
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const C = { muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a" };
@@ -24,14 +26,15 @@ const pieces = ({ lines }) => lines.map(l => `<p style="margin:0 0 4px;font-size
 
 // To the shop: the website already turned every piece of the order Paid.
 export function cartPaidSubject(view) {
-  return `Paid by card ✓ — ${view.ref}: ${what(view)} · $${money(view.total)}`;
+  return `Paid ${paidWords(view.method).by} ✓ — ${view.ref}: ${what(view)} · $${money(view.total)}`;
 }
 export function cartPaidShop({ who, email, saved = true, ...view }) {
   const amount = `$${money(view.total)}`;
   const one = view.lines.length === 1;
-  return adminFrame("Paid by card",
-    p(`<strong>${e(who)}</strong>${email && email !== who ? ` (${link(`mailto:${email}`, e(email))})` : ""} paid <strong>${amount}</strong> by card for order <strong>${e(view.ref)}</strong>.`)
-    + panel("Paid", pieces(view) + field("Order reference", e(view.ref)) + field("Amount", amount) + field("Paid with", "Card (Stripe)"))
+  const way = paidWords(view.method);
+  return adminFrame(`Paid ${way.by}`,
+    p(`<strong>${e(who)}</strong>${email && email !== who ? ` (${link(`mailto:${email}`, e(email))})` : ""} paid <strong>${amount}</strong> ${way.how} for order <strong>${e(view.ref)}</strong>.`)
+    + panel("Paid", pieces(view) + field("Order reference", e(view.ref)) + field("Amount", amount) + field("Paid with", `${way.name} (Stripe)`))
     + (saved
       ? p(`The website already marked ${one ? "the order" : `all ${view.lines.length} pieces`} <strong>Paid</strong>. Ship ${one ? "it" : "them"}, then set ${one ? "it" : "each one"} to <strong>Shipped</strong> in Admin → Orders.`)
       : p(`⚠ The website could not mark the order Paid. Please tap <strong>✓ Mark paid</strong> on ${one ? "it" : `each of its ${view.lines.length} pieces`} in Admin → Orders, then ship ${one ? "it" : "them"}.`))
@@ -49,7 +52,7 @@ export function cartReceived(view) {
   return adminFrame("Payment received",
     p(`Hi ${e(view.name || "there")},`)
     + p(`Thank you! We received your payment of <strong>${amount}</strong> for ${one ? `<strong>${e(view.lines[0].title)}</strong>` : `your ${view.lines.length} pieces`}.`)
-    + panel("Receipt", pieces(view) + field("Order reference", e(view.ref)) + field("Amount paid", amount) + field("Paid with", "Card"))
+    + panel("Receipt", pieces(view) + field("Order reference", e(view.ref)) + field("Amount paid", amount) + field("Paid with", paidWords(view.method).name))
     // Andy's tracking sentence, the same as the paid invoice and its email.
     + p(`We will be sending you a tracking number or delivery updates if shipping is needed.`)
     + footnote, view.lines.map(l => l.title));

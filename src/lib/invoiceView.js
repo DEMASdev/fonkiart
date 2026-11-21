@@ -70,9 +70,10 @@ export function paidCongrats(status) {
 
 // How a paid invoice was paid, in words for "Paid by <label> ✓" (Andy, 2026-11-17: "should say
 // Thank you for your payment ! then under Paid by ... and the method used"). The order's
-// paid_method holds one of: card, zelle, venmo, cashapp, cash, other. "other", empty (older
-// orders) or a word not on this list: null, and the page says just "Paid ✓".
-const PAID_BY = new Map([["card", "card"], ["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"], ["cash", "cash"]]);
+// paid_method holds one of: card, klarna (only Stripe records it: api/_lib/stripe.js paidWith),
+// zelle, venmo, cashapp, cash, other. "other", empty (older orders) or a word not on this list:
+// null, and the page says just "Paid ✓".
+const PAID_BY = new Map([["card", "card"], ["klarna", "Klarna"], ["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"], ["cash", "cash"]]);
 export function paidByLabel(method) {
   return PAID_BY.get(String(method ?? "").trim().toLowerCase()) ?? null;
 }

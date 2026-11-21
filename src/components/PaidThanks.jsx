@@ -6,7 +6,8 @@ import { paidCongrats } from "../lib/invoiceView";
 // congratulations, then the pieces first (pictures, titles, prices), the total paid, the Order
 // Reference and the thanks. The same everywhere a card payment is found paid: back from Stripe
 // (src/pages/CardReturnPage.jsx), the cart (src/pages/CartPage.jsx) and the checkout
-// (src/components/CheckoutModal.jsx). view: the server's answer, { ref, lines, total, name }.
+// (src/components/CheckoutModal.jsx). view: the server's answer, { ref, lines, total, name }, and
+// method "klarna" when Stripe says it was paid with Klarna (a card's answer has no method).
 // action: the button under it.
 export default function PaidThanks({ view, artworks, action }) {
   const congrats = paidCongrats("paid");
@@ -29,7 +30,7 @@ export default function PaidThanks({ view, artworks, action }) {
       </div>
       <div className="invoice-approved-banner">
         <p className="pay-return-thanks">Thank you for your payment!</p>
-        <p className="pay-return-by">Paid by card ✓</p>
+        <p className="pay-return-by">{view.method === "klarna" ? "Paid by Klarna ✓" : "Paid by card ✓"}</p>
         <p className="pay-return-note">We will be sending you a tracking number or delivery updates if shipping is needed.</p>
       </div>
       {action}

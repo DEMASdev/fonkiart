@@ -14,9 +14,10 @@ const PATH_RE = /^(?!.*\.\.)(?!\/)[A-Za-z0-9/_.-]{1,200}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // How an order was paid: the paid invoice says "Paid by ...". Orders.paid_method holds only
-// these (Andy, 2026-11-17). The admin's "Mark paid" saves one; a card payment saves "card" by
-// itself (storeOps.js). Browser copy, with the button labels: src/lib/orderStatus.js.
-export const PAID_METHODS = new Set(["card", "zelle", "venmo", "cashapp", "cash", "other"]);
+// these (Andy, 2026-11-17). The admin's "Mark paid" saves one; a payment in the card form saves
+// "card", or "klarna" when Stripe says it was Klarna, by itself (stripe.js paidWith). Browser
+// copy, with the button labels: src/lib/orderStatus.js.
+export const PAID_METHODS = new Set(["card", "klarna", "zelle", "venmo", "cashapp", "cash", "other"]);
 const WRITES = new Set(["insert", "update", "upsert"]);
 
 // Tracking, saved when an order goes out with a carrier (Andy, 2026-11-17). The link made from
@@ -54,7 +55,7 @@ export function validateChain(table, chain) {
     if (!step || typeof step.m !== "string" || !Array.isArray(step.a ?? [])) throw new InputError("Bad query");
     if (!(i === 0 ? ACTIONS : MODIFIERS).has(step.m)) throw new InputError(`Not allowed: ${step.m}`);
   });
-  // A write that sets paid_method must use one of the six, one that sets tracking must follow
+  // A write that sets paid_method must use one of PAID_METHODS, one that sets tracking must follow
   // TRACKING_RULES, and a shipping address field must be text no longer than the checkout
   // allows (SHIP_LIMITS); anything else is refused (400) before the database is touched, so
   // nothing is saved. null clears any of them.
