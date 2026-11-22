@@ -57,6 +57,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const box = useRef(null);                            // the checkout's own box (a pop-up scrolls in it)
   const stepsBox = useRef(null);                       // the steps' column (its height is measured)
   const [stepsH, setStepsH] = useState(0);
+  const wallBox = useRef(null);                        // the art's column (measured too: a phone keeps it in view)
+  const [wallH, setWallH] = useState(0);
   // Set the moment a pay button is tapped and cleared once the server has answered, so a double
   // tap counts once and two card calls never race (each would close the page before and open
   // its own, leaving one open that nobody pays).
@@ -386,6 +388,20 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     watch.observe(el);
     return () => watch.disconnect();
   }, [done]);
+  // On a phone the art sits beside the step and stays in view the same way (src/index.css, "A
+  // phone"): under the shop's bars while it fits the screen; taller, it scrolls with the page until
+  // its end is in view, then holds, so no piece is ever hidden (on the Cart's page, where the
+  // phone's browser can clip the page without making it a box of its own: overflow clip). Its
+  // height (--wall-h), measured here.
+  useLayoutEffect(() => {
+    const el = wallBox.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => setWallH(el.offsetHeight);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [done]);
 
   // Paid by card (in the card form, or found paid): the same thank-you as on the way back from
   // Stripe's own page, the pieces first, right where the form was.
@@ -426,14 +442,15 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // as it would hang, with its label under it: the title, what it is, and the price the buyer pays
   // (the saved order's, the server's, once there is one; else the shop's less a valid coupon). On
   // a computer it is the left half, in view while the steps scroll (several pieces stack, each
-  // big); on a phone it comes first, full width (several pieces side by side, to swipe), then the
-  // steps. The steps ask one thing each: where to send it, how to pay, then the payment. The card
-  // form repeats no pictures (CardCheckout art={false}). src/index.css ("The checkout as a gallery
-  // wall") draws it; tests/checkout-layout.test.js holds it.
+  // big); on a phone it is the left column beside the step (several pieces one above the other,
+  // each whole), except beside Stripe's own form, where it comes first, full width, as on a tablet
+  // (several pieces side by side, to swipe). The steps ask one thing each: where to send it, how to
+  // pay, then the payment. The card form repeats no pictures (CardCheckout art={false}).
+  // src/index.css ("The checkout as a gallery wall") draws it; tests/checkout-layout.test.js holds it.
   const pieceOff = (i) => couponOn && itemPrice(i) !== itemEffective(i);
   const many = items.length > 1;
   const wall = (
-    <section className={`checkout-wall${many ? " is-many" : ""}`} aria-label="Your order">
+    <section ref={wallBox} className={`checkout-wall${many ? " is-many" : ""}${wallH ? " is-measured" : ""}`} style={wallH ? { "--wall-h": `${wallH}px` } : undefined} aria-label="Your order">
       <ul className="checkout-wall-list">
         {items.map(i => (
           <li key={i.id} className="checkout-piece">
@@ -463,6 +480,11 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const stripeQ = { card: "Pay by Card", klarna: "Pay with Klarna", bank: "Pay by Bank Transfer" }[method];
   const opening = method === "card" ? "Opening the secure card form…" : "Opening the secure payment form…";
   const back = (to) => <button type="button" className="tap checkout-back" onClick={() => setStep(to)}>← Back</button>;
+  // On a phone the art sits on the left and the step on the right (Andy, 2026-11-22: "i would like
+  // the image to the left and the options to the right"), at every step but Stripe's own form: that
+  // keeps the phone's whole width, the art above it, as before. Beside the art it would get only
+  // 199px of a 375 phone, too tight to trust a payment to. src/index.css ("A phone") draws it.
+  const side = !(step === 3 && isStripe(method));
   const sendVia = (name, to, how) => (
     <div className="pay-detail">
       <h2 className="checkout-q">Send via {name}</h2>
@@ -475,7 +497,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
 
   return (
     <div className={fullPage ? "checkout-page-bg checkout-gallery-page" : "modal-bg checkout-gallery-bg"} onClick={fullPage ? undefined : onClose}>
-      <div ref={box} className={`checkout checkout-buy checkout-gallery${fullPage ? " checkout-fullpage" : ""}`} onClick={e => e.stopPropagation()}>
+      <div ref={box} className={`checkout checkout-buy checkout-gallery${fullPage ? " checkout-fullpage" : ""}${side ? " checkout-side" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close checkout-x" aria-label="Close" onClick={onClose}>✕</button>
         {wall}
         <div ref={stepsBox} className={`checkout-steps${stepsH ? " is-measured" : ""}`} style={stepsH ? { "--steps-h": `${stepsH}px` } : undefined}>

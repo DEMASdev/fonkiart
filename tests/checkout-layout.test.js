@@ -3,11 +3,13 @@
 // if you haven't , make it nicer simpler more intuitive and artsy without making the art the person is
 // buying small and 2nd page/hand". The art being bought is the biggest thing on the screen at every
 // step, framed, with its label; on a computer it is the left half and the steps the right; on a phone
-// it comes first, full width, then the steps, which ask one thing each.
+// the left column beside the step (Stripe's own form keeps the whole width, the art above it, as on a
+// tablet); the steps ask one thing each.
 // What is drawn is checked in tests/checkout-flow.test.js ("GALLERY"); WHERE it sits is CSS, pinned
 // here. Measured in a browser at 375 and 1280 wide when it was made. Each test but the first fails
 // on the checkout before (7587d64: the shop counter, the order one tapped line on a phone) and on the
-// live one (8d85f29: a small picture beside the title, four boxed tiles with emoji).
+// live one (8d85f29: a small picture beside the title, four boxed tiles with emoji). The phone's art
+// on the left (2026-11-22) fails on 3d36fc7, the checkout before it, where a phone stacked them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -74,7 +76,7 @@ test("a computer (900px and wider): two halves, the art on the left (one piece k
   assert.match(rule(wide, ".checkout-wall.is-many .checkout-piece-pic") || "", /max-height:min\(46vh, 440px\);/, "several: each still big");
 });
 
-test("a phone (under 900px): the art first, full width; several pieces side by side, to swipe; on a phone the Purchase window is the whole screen", () => {
+test("a tablet (under 900px), and a phone beside Stripe's own form: the art first, full width; several pieces side by side, to swipe; on a phone the Purchase window is the whole screen", () => {
   assert.match(rule(gallery, ".checkout-wall") || "", /background:var\(--wall\);padding:58px 20px 28px;/, "the art first, on the wall, with room above it for the ✕");
   assert.match(rule(gallery, ".checkout-piece-pic") || "", /max-width:100%;max-height:44vh;/, "full width, never more than about half the screen tall");
   assert.match(rule(gallery, ".checkout-steps") || "", /border-top:1px solid var\(--line\);/, "a thin gold line, then the steps");
@@ -91,6 +93,31 @@ test("a phone (under 900px): the art first, full width; several pieces side by s
   assert.match(rule(phone, ".checkout-gallery-bg > .checkout-gallery > .checkout-x") || "", /position:fixed;/, "its ✕ stays in the corner");
   assert.match(rule(phone, ".checkout-gallery-page") || "", /padding:0;/, "the Cart's checkout: edge to edge");
   assert.doesNotMatch(css, /checkout-order-line/, "no one tapped line in place of the art");
+});
+
+test("a phone (640px and under): the art on the left, the step on the right, at every step but Stripe's own form; several pieces one above the other, each whole; the art kept in view (never sticky until measured)", () => {
+  // Andy, 2026-11-22: "i would like the image to the left and the options to the right".
+  const phone = media("(max-width:640px)");
+  assert.ok(phone, "the small phone's block is in src/index.css");
+  const box = rule(phone, ".checkout.checkout-gallery.checkout-side") || "";
+  assert.match(box, /display:grid;grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\);align-items:start;/, "two fifths for the art, three for the step");
+  assert.match(box, /background:linear-gradient\(90deg, var\(--wall\) 40%, var\(--line\) 40%, var\(--line\) calc\(40% \+ 1px\), #fff calc\(40% \+ 1px\)\);/, "a thin gold line between them");
+  assert.match(rule(phone, ".checkout-side .checkout-wall.is-many .checkout-wall-list") || "", /^display:block;overflow:visible;margin:0;padding:0; $/, "several pieces: one above the other, none to swipe, none cut");
+  assert.doesNotMatch(rule(phone, ".checkout-side .checkout-wall") || "", /position:sticky/, "not measured yet: it never sticks, so it can never be trapped");
+  assert.match(rule(phone, ".checkout-side .checkout-wall.is-measured") || "", /^position:sticky;top:min\(0px, calc\(100dvh - var\(--wall-h\) - 16px\)\); $/, "the Purchase window: at its top, or held with its end 16px above the screen's bottom");
+  assert.match(rule(phone, ".checkout-gallery.checkout-fullpage.checkout-side .checkout-wall.is-measured") || "", /^position:static; $/, "the Cart's page, on a phone too old for overflow clip: in the page's own flow");
+  const clip = phone.slice(phone.indexOf("@supports (overflow:clip) {"));
+  assert.ok(phone.includes("@supports (overflow:clip) {"), "the Cart's page keeps the art in view only where the page can be clipped without a box of its own");
+  assert.match(rule(clip, ".content:has(.checkout-fullpage.checkout-side)") || "", /^overflow-x:clip; $/, "the shop's overflow-x hidden would make the page a box, and the art would sit lower by its whole top");
+  assert.match(rule(clip, ".checkout-gallery.checkout-fullpage.checkout-side .checkout-wall.is-measured") || "", /^position:sticky;top:min\(calc\(var\(--marquee\) \+ var\(--topbar\)\), calc\(100dvh - var\(--wall-h\) - 80px - env\(safe-area-inset-bottom, 0px\)\)\); $/, "the Cart's page: under the shop's bars, or held with its end above the bottom bar");
+  assert.match(rule(phone, ".checkout-side .checkout-two") || "", /^grid-template-columns:minmax\(0,1fr\); $/, "in the narrow column, one field to a line");
+  assert.match(rule(phone, ".checkout-side .pay-row") || "", /grid-template-areas:"dot label" "dot sub" "dot marks";/, "each way's marks under its words");
+  assert.match(rule(phone, ".checkout-side .checkout-piece-title, .checkout-side .checkout-piece-meta") || "", /^text-wrap:balance; $/, "a piece's label in even lines (\"canvas ·\" then \"20 × 40 in\", never a lone \"in\")");
+  const modal = read("src/components/CheckoutModal.jsx");
+  assert.match(modal, /const side = !\(step === 3 && isStripe\(method\)\);/, "beside the art at every step but Stripe's own form");
+  assert.match(modal, /className=\{`checkout checkout-buy checkout-gallery\$\{fullPage \? " checkout-fullpage" : ""\}\$\{side \? " checkout-side" : ""\}`\}/);
+  assert.match(modal, /const measure = \(\) => setWallH\(el\.offsetHeight\);/, "the art's own height, measured");
+  assert.match(modal, /className=\{`checkout-wall\$\{many \? " is-many" : ""\}\$\{wallH \? " is-measured" : ""\}`\} style=\{wallH \? \{ "--wall-h": `\$\{wallH\}px` \} : undefined\}/, "sticky only once measured, with its height");
 });
 
 test("the art's label and the money: titles in Cormorant Garamond, prices in Cormorant Garamond 600 with lining figures; all text 16px or more, the fields 17px", () => {

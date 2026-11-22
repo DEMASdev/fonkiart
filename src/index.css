@@ -1284,9 +1284,10 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
    is, the price); the steps ask one thing each, with few boxes and lines.
    - Computer (900px and up): two halves. The wall on the left (one piece stays in view while the
      steps scroll; several stack, each big), a thin gold line, the steps on the right.
-   - Phone and tablet (under 900px): the art first, full width (several pieces side by side, to
-     swipe), then a thin gold line and the steps. On a phone the Purchase window is the whole screen
-     and the Cart's checkout runs edge to edge.
+   - Tablet (641px to 899px), and a phone beside Stripe's own form: the art first, full width
+     (several pieces side by side, to swipe), then a thin gold line and the steps.
+   - Phone (640px and under): the art on the left, the step on the right ("A phone", below). The
+     Purchase window is the whole screen and the Cart's checkout runs edge to edge.
    Text 16px and up (normal 17px); money in Cormorant Garamond 600 with lining figures.
    White, a thin gold line and the site's pink, never cream or sand (Andy, 2026-11-21: "i do not
    like the sand , creme colors !! do not use any of those colors"); the quiet words a neutral
@@ -1347,6 +1348,43 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .checkout-gallery-page { padding:0; }
   .checkout-gallery.checkout-fullpage { border:0;box-shadow:none; }
   .checkout-gallery .checkout-q { font-size:29px; }
+  /* A phone: the art on the left, the step on the right (Andy, 2026-11-22: "i would like the image
+     to the left and the options to the right"), at every step but Stripe's own form, which keeps
+     the whole width (checkout-side, CheckoutModal.jsx). Two fifths for the art, three for the step,
+     a thin gold line between. Several pieces stack down the left, each whole at its own shape. The
+     art stays in view while the step scrolls: under the shop's bars while it fits the screen;
+     taller, it scrolls until its end shows, then holds (its height, --wall-h, measured by
+     CheckoutModal.jsx; never sticky until measured). On the Cart's page that needs the page clipped
+     sideways WITHOUT becoming a box of its own (overflow clip: the shop's overflow-x hidden on
+     .content makes one, and a sticky art inside it would sit lower by its whole top), so a phone
+     too old for clip keeps the art in the page's own flow. In the narrow column the fields are one
+     to a line, each way's marks sit under its words, and a piece's label breaks into even lines. */
+  .checkout.checkout-gallery.checkout-side { display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);align-items:start;
+    background:linear-gradient(90deg, var(--wall) 40%, var(--line) 40%, var(--line) calc(40% + 1px), #fff calc(40% + 1px)); }
+  .checkout-side .checkout-wall { background:none;padding:58px 8px 24px 14px; }
+  .checkout-side .checkout-wall.is-measured { position:sticky;top:min(0px, calc(100dvh - var(--wall-h) - 16px)); }
+  .checkout-gallery.checkout-fullpage.checkout-side .checkout-wall.is-measured { position:static; }
+  @supports (overflow:clip) {
+    .content:has(.checkout-fullpage.checkout-side) { overflow-x:clip; }
+    .checkout-gallery.checkout-fullpage.checkout-side .checkout-wall.is-measured { position:sticky;top:min(calc(var(--marquee) + var(--topbar)), calc(100dvh - var(--wall-h) - 80px - env(safe-area-inset-bottom, 0px))); }
+  }
+  .checkout-side .checkout-wall.is-many .checkout-wall-list { display:block;overflow:visible;margin:0;padding:0; }
+  .checkout-side .checkout-wall.is-many .checkout-piece + .checkout-piece { margin-top:28px; }
+  .checkout-side .checkout-frame { padding:6px; }
+  .checkout-side .checkout-piece-pic, .checkout-side .checkout-wall.is-many .checkout-piece-pic { max-height:46vh; }
+  .checkout-side .checkout-piece-label { margin-top:14px; }
+  .checkout-side .checkout-piece-title { font-size:20px; }
+  .checkout-side .checkout-piece-title, .checkout-side .checkout-piece-meta { text-wrap:balance; }
+  .checkout-side .checkout-piece-price { font-size:22px; }
+  .checkout-side .checkout-wall-total { flex-direction:column;align-items:center;gap:2px;margin-top:20px; }
+  .checkout-side .checkout-wall-total-sum { font-size:26px; }
+  .checkout-side .checkout-steps { border-top:0;padding:58px 14px 32px 12px; }
+  .checkout-side .checkout-q { font-size:24px; }
+  .checkout-side .checkout-two { grid-template-columns:minmax(0,1fr); }
+  .checkout-side .checkout-coupon-row { flex-wrap:wrap; }
+  .checkout-side .checkout-coupon-input { flex:1 1 100%; }
+  .checkout-side .pay-row { grid-template-columns:22px minmax(0,1fr);grid-template-areas:"dot label" "dot sub" "dot marks";column-gap:10px;padding:12px 8px; }
+  .checkout-side .pay-row-marks { margin-top:6px; }
 }
 @media (min-width:900px) {
   .checkout.checkout-gallery { max-width:1100px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;
