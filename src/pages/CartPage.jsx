@@ -119,7 +119,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
           <div className="cart-page-summary">
             <div className="cart-page-subtotal">
               <span>Subtotal</span>
-              <span>${subtotal.toLocaleString()}</span>
+              <span className="cart-page-subtotal-value">${subtotal.toLocaleString()}</span>
             </div>
             <p className="cart-page-tax-note">Taxes and shipping calculated at checkout</p>
             <button className="confirm-btn" style={{ width:"100%" }} onClick={() => setCheckout(true)}>Checkout →</button>

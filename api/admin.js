@@ -41,7 +41,8 @@ export default async function handler(req, res) {
     if (body.kind === "request-reply") return res.status(200).json(await adminReply(db, body, { sender: senderAddress(), send }));
     if (body.kind === "inbound-setup") return res.status(200).json(await adminInboundSetup());
     if (body.kind === "reminder-now") return res.status(200).json(await adminReminderNow(db, { send }));
-    // deep: "Check again" makes a $0.50 payment page and cancels it at once (see cardCheck).
+    // deep: "Check again" makes a real $0.50 payment page on Stripe's own site, cards only (not
+    // the card form inside fonkiart.com), and cancels it at once (see cardCheck).
     if (body.kind === "card-check") return res.status(200).json(await cardCheck({ deep: body.deep === true, site: siteUrl() }));
     return res.status(400).json({ error: { message: "Unknown request" } });
   } catch (e) {

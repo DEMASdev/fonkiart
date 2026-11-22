@@ -70,9 +70,9 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
                     {item.salePrice
                       ? <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
                           <span className="card-price" style={{marginBottom:0,color:"var(--gold)"}}>${Number(item.salePrice).toLocaleString()}</span>
-                          {item.price && <span style={{fontSize:16,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</span>}
+                          {item.price && <span className="card-price-was">${Number(item.price).toLocaleString()}</span>}
                         </div>
-                      : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span style={{fontSize:16,letterSpacing:".06em",opacity:.75}}>Price on request</span>}</div>
+                      : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span className="card-price-ask">Price on request</span>}</div>
                     }
                     {item.isSold
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>

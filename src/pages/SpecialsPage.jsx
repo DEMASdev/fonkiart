@@ -28,7 +28,7 @@ export default function SpecialsPage({ data, addToCart, cart }) {
                     <div className="card-title">{item.title}</div>
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                       <div className="card-price" style={{color:"var(--gold)"}}>${Number(item.salePrice).toLocaleString()}</div>
-                      {item.price && <div style={{fontSize:16,color:"rgba(255,255,255,.5)",textDecoration:"line-through"}}>${Number(item.price).toLocaleString()}</div>}
+                      {item.price && <div className="card-price-was">${Number(item.price).toLocaleString()}</div>}
                     </div>
                     {item.isSold
                       ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>

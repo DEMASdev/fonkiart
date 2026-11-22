@@ -189,7 +189,13 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .card:hover .card-over { opacity:1; }
 .card-cat { font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8);margin-bottom:4px; }
 .card-title { font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;color:#fff;margin-bottom:4px;line-height:1.15; }
-.card-price { font-size:17px;color:var(--gold);font-weight:500;margin-bottom:14px; }
+/* The shop's price tags (Catalog, New, Specials, and the same cards on the Cart and Sold pages):
+   money in Cormorant Garamond 600 with lining figures, as everywhere else, so a 1 reads as a 1
+   (Andy, 2026-11-17: "the number 1 can't be read well in that font"). The old price beside a
+   sale price too; words in the price's place ("Price on request") stay in the site font. */
+.card-price { font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums;margin-bottom:14px; }
+.card-price-was { font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;letter-spacing:.02em;color:rgba(255,255,255,.5);font-variant-numeric:lining-nums;text-decoration:line-through; }
+.card-price-ask { font-family:'DM Sans',sans-serif;font-size:16px;font-weight:400;letter-spacing:.06em;opacity:.75; }
 .card-btn { background:var(--sidebar-bg);color:#fff;border:none;padding:12px 0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;width:100%;transition:background .2s;border-radius:4px; }
 .card-btn:hover { background:var(--gold); }
 .card-children { position:absolute;top:12px;right:12px;background:#e74c3c;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none; }
@@ -494,7 +500,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   /* Cards — always show info overlay on touch screens */
   .card-over { opacity:1;background:linear-gradient(to top,rgba(10,8,6,.86) 0%,rgba(10,8,6,.62) 22%,rgba(10,8,6,.3) 38%,transparent 55%);padding:14px; }
   .card-title { font-size:21px; }
-  .card-price { font-size:17px;margin-bottom:10px; }
+  .card-price { font-size:20px;margin-bottom:10px; }
   .card-btn { padding:10px 0;font-size:16px; }
 
   /* Modal */
@@ -563,18 +569,19 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 /* ── CART PAGE ── */
 .cart-page { max-width:1100px;margin:0 auto;padding:32px 24px 64px; }
 .cart-page-return { background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--gold);padding:0;margin-bottom:20px; }
-.cart-page-title { font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:300;margin-bottom:28px; }
+.cart-page-title { font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:300;margin-bottom:28px;font-variant-numeric:lining-nums; } /* the (1) in lining figures */
 .cart-page-layout { display:grid;grid-template-columns:1fr 320px;gap:40px;align-items:start; }
 .cart-page-items { display:flex;flex-direction:column; }
 .cart-page-item { display:grid;grid-template-columns:120px 1fr auto;gap:20px;align-items:center;padding:20px 0;border-bottom:1px solid var(--border); }
 .cart-page-item img { width:120px;height:120px;object-fit:contain;background:#fff;cursor:pointer; }
 .cart-page-item-cat { font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:4px; }
 .cart-page-item-title { font-size:20px;font-weight:500;margin-bottom:6px;cursor:pointer; }
-.cart-page-item-price { font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--ink);font-variant-numeric:lining-nums; }
+.cart-page-item-price { font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;letter-spacing:.02em;color:var(--ink);font-variant-numeric:lining-nums; }
 .cart-page-item-remove { background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:0;transition:color .2s; }
 .cart-page-item-remove:hover { color:#c0392b; }
 .cart-page-summary { background:var(--cream);border:1px solid var(--border);padding:24px;position:sticky;top:24px; }
 .cart-page-subtotal { display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:600;margin-bottom:8px; }
+.cart-page-subtotal-value { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;letter-spacing:.02em;color:var(--ink);font-variant-numeric:lining-nums; } /* money */
 .cart-page-tax-note { font-size:16px;color:var(--muted);margin-bottom:20px; }
 .cart-suggestions { margin-top:64px;border-top:1px solid var(--border);padding-top:40px; }
 .cart-suggestions-title { font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;margin-bottom:22px;text-align:center; }

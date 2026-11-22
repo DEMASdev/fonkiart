@@ -3,12 +3,15 @@ import { adminAction } from "../lib/adminDb";
 
 // Admin -> Settings -> Stripe (Andy, 2026-11-17: "why do i need to put a new link ? is it
 // needed ?"). No link to paste any more: when a client taps "Pay by card", the website asks
-// Stripe for a payment page with that invoice's exact amount. This box shows whether that
-// works, checked by the server with Stripe itself:
+// Stripe for a payment page with that invoice's exact amount. This box shows whether Stripe
+// lets the shop's secret key do that, checked by the server with Stripe itself (cardCheck,
+// api/_lib/stripe.js):
 //  - when it opens: a quick read, which proves Stripe accepts the key;
-//  - "Check again": the full check. A real $0.50 payment page is made and cancelled at once
-//    (nobody can pay it, nothing is charged), which proves the key may make payment pages.
-//    If Stripe says no, its own message is shown: it names what the key is missing.
+//  - "Check again" (deep): the full check. It makes a real $0.50 payment page on Stripe's own
+//    site, cards only (NOT the card form the Cart and invoices open inside fonkiart.com), and
+//    cancels it at once (nobody can pay it, nothing is charged), which proves the key may make
+//    payment pages. If Stripe says no, its own message is shown: it names what the key is missing.
+//  Neither looks at the publishable key the card form also needs (store op "card-setup" does).
 export default function CardStatus() {
   const [status, setStatus] = useState(null); // null = checking
   const [round, setRound] = useState(0);      // 0 = the quick check on open; 1+ = "Check again"

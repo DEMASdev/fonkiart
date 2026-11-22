@@ -68,3 +68,34 @@ test("the ticker at the top stays at 11px (Andy's pick, 11-18)", () => {
   assert.match(r, /font-size:11px;/, ".marquee-item: 11px");
   assert.match(r, /letter-spacing:\.14em;/, ".marquee-item: the spacing he saw in the picture");
 });
+
+// The Cart and the shop's price tags, the last group (built with the checkout redesign): money in
+// Cormorant Garamond 600 with lining figures, the "(1)" of "Your Cart (1)" in lining figures, and
+// the ways to pay in the site font like the other buttons. The money checks fail on the code before
+// it: the price tags in DM Sans 500, the Cart's prices at weight 400, its subtotal in no font of its
+// own. The ways to pay (rows) and "← Back" have had the site font since the gallery checkout; they
+// are held here with the rest.
+test("the shop's price tags and the Cart's money: Cormorant Garamond 600, lining figures; Your Cart (1) too; the ways to pay in the site font", () => {
+  for (const sel of [".card-price", ".card-price-was", ".cart-page-item-price", ".cart-page-subtotal-value"]) {
+    const r = rule(sel);
+    assert.ok(r, `${sel} is in src/index.css`);
+    assert.match(r, /font-family:'Cormorant Garamond'/, `${sel}: Cormorant Garamond`);
+    assert.match(r, /font-weight:600/, `${sel}: weight 600`);
+    assert.match(r, /font-variant-numeric:lining-nums/, `${sel}: lining figures`);
+    const px = Number((r.match(/font-size:(\d+)px/) || [])[1]);
+    assert.ok(px >= 16, `${sel}: ${px}px`);
+  }
+  assert.match(css, /\n {2}\.card-price \{ font-size:20px;margin-bottom:10px; \}/, "a price tag on a phone: 20px");
+  assert.match(rule(".cart-page-title") || "", /font-variant-numeric:lining-nums/, "Your Cart (1): the 1 reads as a 1");
+  assert.match(rule(".card-price-ask") || "", /font-family:'DM Sans',sans-serif;font-size:16px;font-weight:400;/, "Price on request: words, so the site font");
+  assert.match(rule(".pay-row") || "", /font-family:'DM Sans',sans-serif;/, "the ways to pay (rows, on the checkout and the invoice page): the site font, like the other buttons");
+  assert.match(rule(".checkout-back") || "", /font-family:'DM Sans',sans-serif;font-size:16px;/, "and ← Back above them");
+  assert.match(read("src/pages/CartPage.jsx"), /<span className="cart-page-subtotal-value">\$\{subtotal\.toLocaleString\(\)\}<\/span>/, "the Cart's subtotal");
+  for (const f of ["CatalogPage", "NewCollectionsPage", "SpecialsPage"]) {
+    const page = read(`src/pages/${f}.jsx`);
+    assert.match(page, /className="card-price"/, `${f}: its price tags`);
+    assert.match(page, /className="card-price-was">\$\{Number\(item\.price\)\.toLocaleString\(\)\}/, `${f}: the old price beside a sale price`);
+    assert.doesNotMatch(page, /textDecoration:"line-through"/, `${f}: no old price left in the site font`);
+    if (f !== "SpecialsPage") assert.match(page, /<span className="card-price-ask">Price on request<\/span>/, `${f}: Price on request`);
+  }
+});
