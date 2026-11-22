@@ -6,8 +6,9 @@ import PaidThanks from "../components/PaidThanks";
 // or on Stripe's own page from before the card form (?cart=FA-...&card=cs_..., App.jsx). A card
 // paid in the form never comes here: it is heard in the form (CardCheckout.jsx, onComplete).
 // The server asks Stripe itself whether that payment page was paid ("cart-paid",
-// api/_lib/cartCheckout.js). Only once it says paid do those pieces leave the cart (onPaid) and
-// the thank-you show (src/components/PaidThanks.jsx). Until then the cart stays exactly as it was.
+// api/_lib/cartCheckout.js). Only once it says paid, or a bank payment made and clearing, do those
+// pieces leave the cart (onPaid) and the thank-you show (src/components/PaidThanks.jsx). Until
+// then the cart stays exactly as it was.
 export default function CardReturnPage({ orderRef, session, artworks = [], onPaid, setPage }) {
   const [state, setState] = useState("checking"); // checking · paid · unpaid · missing · error
   const [view, setView] = useState(null);
@@ -19,8 +20,11 @@ export default function CardReturnPage({ orderRef, session, artworks = [], onPai
       .then((order) => {
         if (gone) return;
         setView(order);
-        if (order.paid) paid(order);
-        setState(order.paid ? "paid" : "unpaid");
+        // A bank payment made, still clearing (processing): the thank-you says so (PaidThanks),
+        // and those pieces leave the cart all the same: the shop holds them now.
+        const done = order.paid || order.processing === true;
+        if (done) paid(order);
+        setState(done ? "paid" : "unpaid");
       })
       .catch((e) => { console.warn("Card check:", e); if (!gone) setState(e.status === 404 ? "missing" : "error"); });
     return () => { gone = true; };

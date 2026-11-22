@@ -1498,6 +1498,244 @@ test("WAYS: a way chosen before the server answers, that it then says it can't o
   });
 });
 
+// ── a way Stripe won't open, and a bank payment still clearing ──
+// Klarna or a bank payment, chosen, that Stripe won't open for this order (its amount, or the way
+// not switched on for the shop): the server answers one calm line (api/_lib/stripe.js wayRefused),
+// as cart-card's `refused` with its cardError (the order saved all the same), or as a 409 from
+// cart-again and from the invoice's card-checkout. The buyer stays on the ways to pay, reads the
+// line, gets no Try Again, and paying another way never makes a second order. A bank payment made,
+// still clearing (cart-paid's or card-paid's `processing`, cart-order's state "processing", an
+// invoice in status "processing"): "Payment processing" in the words of src/lib/invoiceView.js
+// (BANK_CLEARING); the Cart's pieces leave the cart, and an invoice offers no way to pay.
+const KLARNA_NO = "Klarna isn't available for this amount. Please choose another way.";
+const BANK_NO = "Paying by bank (ACH) isn't available right now. Please choose another way.";
+const ALL_ROWS = [...SHOP_WAYS, "Card or Link", "Klarna", "Bank transfer (ACH)"];
+const CLEARING = { ...PAID, paid: false, processing: true };
+const FAKE_PK = ["pk", "test", "FAKE"].join("_");
+// The thank-you while a bank payment clears (PaidThanks): the pieces, what happens next, never "Paid".
+function assertClearingThanks(root) {
+  const text = screen(root);
+  assert.match(text, /Thank you!We're holding your order while your bank payment clears\.Hi Jane, here is your order from Fonkiart\./);
+  assert.match(text, /Test Print Z\$1,000Test Print Y\$120Total\$1,120/, "the pieces, then the total");
+  assert.match(text, /Order ReferenceFA-1739Also in the email we send once it clears/);
+  assert.match(text, /Payment processingA bank payment can take up to 4 business days to clear\. We'll email you as soon as yours does\./);
+  assert.doesNotMatch(text, /Paid by|Total Paid|Congratulations|Thank you for your payment/, "nothing says paid before the bank does");
+  assert.deepEqual(pics(root, "pay-art-pic"), [PRINT.image, PRINT2.image], "each piece's picture");
+}
+
+test("REFUSED: Klarna that Stripe won't open for this order: back on the ways to pay with its one line, nothing chosen, no Try Again; the next way pays THAT order, never a second", async () => {
+  await quiet(async () => {
+    const { root, stripe } = await atWays(ALL_WAYS);
+    server.world.cardAnswer = (o) => ({ ...server.view(o), refused: "klarna", cardError: KLARNA_NO });
+    click(payOption(root, "Klarna")); await settle();
+    click(button(root, "Continue →")); await settle();
+    const step = textOf(steps(root));
+    assert.ok(step.startsWith(`Purchase · Step 2 of 3← BackHow would you like to pay?${KLARNA_NO}Zelle`), `the ways to pay, its line above them:\n${step}`);
+    assert.deepEqual([statuses(root), alerts(root)], [[KLARNA_NO], []], "said calmly, once");
+    assert.deepEqual(rowLabels(root), ALL_ROWS, "every way still offered");
+    assert.deepEqual(payOptions(root).map(n => n.props["aria-checked"]), ALL_ROWS.map(() => false), "Klarna no longer chosen");
+    assert.deepEqual(buttons(root).filter(b => /Try Again|Another Way/.test(b)), [], "no Try Again");
+    assert.deepEqual([server.asked("cart-card").map(p => p.way), server.world.orders.length, stripe.length], [["klarna"], 1, 0], "one order saved, no form");
+    assert.equal(kept().ref, "FA-1739", "kept, so the next way pays THAT order");
+    assert.doesNotMatch(screen(root), NOT_BEFORE, "still no number before paying");
+
+    click(payOption(root, "Card or Link")); await settle();
+    click(button(root, "Continue →")); await settle();
+    assert.deepEqual(server.asked("cart-again").map(p => [p.ref, p.way]), [["FA-1739", "card"]], "THAT order, by card");
+    assert.deepEqual([server.asked("cart-card").length, server.world.orders.length], [1, 1], "never a second order");
+    assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"], "the card form, in place");
+    assert.doesNotMatch(screen(root), /isn't available/, "the line went with Continue");
+  });
+});
+
+test("REFUSED again: a bank payment for an order already saved (cart-again answers a 409): its line on the ways to pay, no Try Again; then Zelle pays THAT order, its emails once", async () => {
+  await quiet(async () => {
+    freshWorld();
+    server.world.setup = ALL_WAYS;
+    savedEarlier([PRINT, PRINT2]);
+    server.world.again = () => { throw server.failed(409, BANK_NO); };
+    const stripe = fakeStripeJs();
+    const { root, log } = openShop([PRINT, PRINT2]);
+    click(button(root, "Checkout →")); await settle();
+    await choose(root, "Bank transfer (ACH)");
+    assert.ok(textOf(steps(root)).startsWith(`Purchase · Step 2 of 3← BackHow would you like to pay?${BANK_NO}Zelle`), textOf(steps(root)));
+    assert.deepEqual([statuses(root), alerts(root)], [[BANK_NO], []]);
+    assert.deepEqual(payOptions(root).map(n => n.props["aria-checked"]), ALL_ROWS.map(() => false));
+    assert.deepEqual(buttons(root).filter(b => /Try Again|Another Way/.test(b)), []);
+    assert.deepEqual([server.asked("cart-again").map(p => p.way), server.asked("cart-card").length, server.world.orders.length, stripe.length], [["bank"], 0, 1, 0]);
+    assert.deepEqual([kept().ref, log.cart.length], ["FA-1739", 2], "the order and the cart, as they were");
+
+    server.world.again = null;
+    await choose(root, "Zelle");
+    click(button(root, "✓ I've Sent the Payment")); await settle();
+    assert.deepEqual(server.asked("cart-other").map(p => [p.ref, p.method]), [["FA-1739", "zelle"]], "THAT order");
+    assert.deepEqual([server.world.orders.length, server.world.emails], [1, 2], "one order, its 'order received' pair once");
+    assert.match(screen(root), /Thank you!/);
+  });
+});
+
+test("STILL CLEARING: paying again an order whose bank payment is still clearing (cart-again and cart-other answer a 409): the server's line exactly as written, whichever way is chosen", async () => {
+  await quiet(async () => {
+    const STILL = "This order's bank payment is still clearing. We'll email you as soon as it does.";
+    for (const [way, role] of [["Card", "alert"], ["Klarna", "status"], ["Zelle", "alert"]]) {
+      freshWorld();
+      savedEarlier([PRINT, PRINT2]);
+      server.world.again = () => { throw server.failed(409, STILL); };
+      server.world.other = () => { throw server.failed(409, STILL); };
+      fakeStripeJs();
+      const { root, log } = openShop([PRINT, PRINT2]);
+      click(button(root, "Checkout →")); await settle();
+      await choose(root, way);
+      if (way === "Zelle") { click(button(root, "✓ I've Sent the Payment")); await settle(); }
+      assert.deepEqual(role === "alert" ? alerts(root).map(textOf) : statuses(root), [STILL], `${way}: said as the server wrote it`);
+      assert.deepEqual([server.world.orders.length, log.cart.length, kept().ref], [1, 2, "FA-1739"], `${way}: nothing saved again, the cart as it was`);
+    }
+  });
+});
+
+test("BANK CLEARING: a bank payment made in the form: the thank-you says 'Payment processing' and what happens next, never 'Paid'; those pieces leave the cart, once", async () => {
+  freshWorld();
+  server.world.setup = ALL_WAYS;
+  const stripe = fakeStripeJs();
+  const { root, log } = openShop([PRINT, PRINT2]);
+  click(button(root, "Checkout →")); await settle();
+  await fillIn(root, "Bank transfer (ACH)");
+  assert.deepEqual([server.asked("cart-card").map(p => p.way), stripe.map(e => Object.keys(e)[0])], [["bank"], ["init", "mount"]]);
+  server.world.paidAnswers = [CLEARING];
+  stripe.pay(); await settle();
+  assert.deepEqual(server.asked("cart-paid"), [{ ref: "FA-1739", session: page(1) }]);
+  assertClearingThanks(root);
+  assert.deepEqual([log.paid, log.cart.length, kept()], [[TITLES], 0, null], "the shop holds those pieces now");
+  assert.deepEqual([server.world.orders.length, assigned, opened, popups], [1, [], [], []]);
+});
+
+test("BANK CLEARING, coming back: the saved order paid by bank and still clearing (cart-order 'processing'): the same thank-you, from the checkout or the Cart page, and the cart empties", async () => {
+  freshWorld();
+  savedEarlier([PRINT, PRINT2]);
+  server.world.orderState = "processing";
+  const shop = openShop([PRINT, PRINT2]);
+  click(button(shop.root, "Checkout →")); await settle();
+  assertClearingThanks(shop.root);
+  assert.deepEqual([shop.log.paid, shop.log.cart, kept()], [[TITLES], [], null]);
+  assert.deepEqual([server.asked("cart-again").length, server.asked("cart-card").length], [0, 0], "nothing asked of Stripe again");
+
+  freshWorld();
+  savedEarlier([PRINT, PRINT2]);
+  server.world.orderState = "processing";
+  const back = openShop([PRINT, PRINT2], { cancelledRef: "FA-1739", artworks: [PRINT, PRINT2] });
+  await settle();
+  assertClearingThanks(back.root);
+  assert.deepEqual([back.log.paid, back.log.cart, kept()], [[TITLES], [], null]);
+  click(button(back.root, "Continue Shopping →")); await settle();
+  assert.deepEqual(back.log.pages, ["catalog"]);
+});
+
+test("BANK CLEARING, back on fonkiart.com from paying away from it: 'Payment processing', and the pieces leave the cart once", async () => {
+  freshWorld();
+  const { root, log } = openReturn([CLEARING]);
+  await settle();
+  assertClearingThanks(root);
+  await settle();
+  assert.deepEqual(log.paid, [TITLES], "once, however often the page draws");
+  click(button(root, "Continue Shopping →"));
+  assert.deepEqual(log.pages, ["catalog"]);
+});
+
+// The invoice page (src/pages/InvoicePage.jsx) on the same stand-ins: an approved invoice for
+// Test Print Z, $1,000, offering Zelle and Stripe's three ways. invoiceWorld: how the server
+// answers it (refuse: the way Stripe won't open; clearingAtCheckout: paid by bank already, in
+// another tab; paidAnswers: card-paid's answers, in turn).
+const InvoicePage = await load("pages/InvoicePage.jsx", {
+  react: React, "react/jsx-runtime": runtime,
+  "../lib/supabase": { BREVO_SENDER: "shop@example.com" }, "../lib/store": store, "../lib/invoiceView": invoiceView,
+  "../lib/orderStatus": await import("../src/lib/orderStatus.js"), "../lib/tracking": await import("../src/lib/tracking.js"),
+  "../lib/shipAddress": await import("../src/lib/shipAddress.js"), "../lib/invoiceNumber": await import("../src/lib/invoiceNumber.js"),
+  "../components/Pic": { default: Pic }, "../components/CopyButton": { default: function CopyButton() { return null; } },
+  "../components/CardCheckout": { default: CardCheckout }, "../components/PayRows": { default: PayRows },
+  "../lib/stripeJs": stripeJs, "../lib/cartOrder": cartOrder, "../lib/payWays": payWays,
+});
+globalThis.requestAnimationFrame ??= (fn) => { fn(0); return 0; };
+const INV_ORDER = { id: 30, invoice_token: "c-inv-token-30", client_name: "Jane Smith", client_email: "jane@example.com", item_title: "Test Print Z", amount: 1000,
+  status: "confirmed", invoice_approved: true, payment_methods: "zelle,stripe", zelle_contact: "", created_at: "2026-11-20T15:00:00Z", due_date: null, notes: "" };
+function invoiceWorld({ status = "confirmed", refuse = null, clearingAtCheckout = false, paidAnswers = [] } = {}) {
+  freshWorld();
+  const { world, failed } = server;
+  world.order = { ...INV_ORDER, status };
+  let made = 0;
+  server.answer = async (op, payload) => {
+    if (op === "invoice") return { order: { ...world.order }, settings: NO_LINK, cardReady: true };
+    if (op === "card-setup") return ALL_WAYS;
+    if (op === "card-checkout") {
+      if (clearingAtCheckout) { world.order.status = "processing"; return { paid: false, processing: true }; }
+      if (payload.way === refuse) throw failed(409, refuse === "bank" ? BANK_NO : KLARNA_NO);
+      const id = page(++made);
+      return { ref: "FA-20261120100000000", lines: [{ title: INV_ORDER.item_title, amount: INV_ORDER.amount }], total: INV_ORDER.amount, session: id, clientSecret: `${id}_secret_FAKE`, publishableKey: FAKE_PK };
+    }
+    if (op === "card-paid") {
+      const answer = paidAnswers.shift();
+      if (answer?.processing) world.order.status = "processing"; // as the server records it
+      return answer;
+    }
+    throw new Error(`the invoice page asked the server for "${op}"`);
+  };
+}
+const openInvoice = () => createRoot(function Invoice() { return element(InvoicePage, { token: INV_ORDER.invoice_token, artworks: [PRINT] }); });
+const INV_ROWS = ["Zelle", "Card or Link", "Klarna", "Bank transfer (ACH)"];
+// An invoice whose bank payment clears: "Payment processing" in place of the ways to pay.
+function assertInvoiceClearing(root) {
+  const text = screen(root);
+  assert.match(text, /Payment processingA bank payment can take up to 4 business days to clear\. We'll email you as soon as yours does\./);
+  assert.deepEqual(payOptions(root), [], "no way to pay offered");
+  assert.doesNotMatch(text, /Send Payment To|Order Confirmed|Total Due|Total Paid|Paid by|Thank you for your payment|Confirm order/);
+  assert.match(text, /Total\$1,000/, "the total, neither due nor paid");
+}
+
+test("INVOICE, REFUSED: Klarna that Stripe won't open for this invoice: its one line under the row, in place of its button: no Try Again; the other ways stay, and card opens as usual", async () => {
+  await quiet(async () => {
+    invoiceWorld({ refuse: "klarna" });
+    const stripe = fakeStripeJs();
+    const root = openInvoice(); await settle();
+    assert.deepEqual(rowLabels(root), INV_ROWS, "control: the approved invoice offers its ways");
+    click(payOption(root, "Klarna")); await settle();
+    click(button(root, "Pay $1,000 with Klarna →")); await settle();
+    assert.deepEqual(server.asked("card-checkout").map(p => p.way), ["klarna"]);
+    assert.deepEqual([statuses(root), alerts(root)], [[KLARNA_NO], []], "said calmly, once");
+    assert.deepEqual(buttons(root).filter(b => /Try Again|with Klarna|Another Way/.test(b)), [], "no Try Again, and no Klarna button to be refused again");
+    assert.doesNotMatch(screen(root), /Secure payment form by Stripe/, "nor the word about a form that won't open");
+    assert.deepEqual([rowLabels(root), stripe.length], [INV_ROWS, 0], "every way still there, no form");
+
+    click(payOption(root, "Card or Link")); await settle();
+    assert.doesNotMatch(screen(root), /isn't available/, "another way: the line goes");
+    click(button(root, "Pay $1,000 by card →")); await settle();
+    assert.deepEqual(server.asked("card-checkout").map(p => p.way), ["klarna", "card"]);
+    assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"]);
+  });
+});
+
+test("INVOICE, BANK CLEARING: paid by bank in the form, already in another tab, or opened again later: 'Payment processing' in place of the ways to pay; never 'Paid', nor 'Total Due'", async () => {
+  await quiet(async () => {
+    invoiceWorld({ paidAnswers: [{ paid: false, processing: true }] });
+    const stripe = fakeStripeJs();
+    const root = openInvoice(); await settle();
+    click(payOption(root, "Bank transfer (ACH)")); await settle();
+    click(button(root, "Pay $1,000 by bank transfer →")); await settle();
+    assert.deepEqual([server.asked("card-checkout").map(p => p.way), stripe.map(e => Object.keys(e)[0])], [["bank"], ["init", "mount"]]);
+    stripe.pay(); await settle();
+    assert.deepEqual(server.asked("card-paid"), [{ token: INV_ORDER.invoice_token, session: page(1) }]);
+    assertInvoiceClearing(root);
+    const later = openInvoice(); await settle();
+    assertInvoiceClearing(later);
+
+    invoiceWorld({ clearingAtCheckout: true });
+    const other = fakeStripeJs();
+    const tab = openInvoice(); await settle();
+    click(payOption(tab, "Card or Link")); await settle();
+    click(button(tab, "Pay $1,000 by card →")); await settle();
+    assertInvoiceClearing(tab);
+    assert.equal(other.length, 0, "no form for an invoice already paid by bank");
+  });
+});
+
 // ── leaving and coming back ─────────────────────────────────
 // Andy, 2026-11-19, yes to: "there's no 'saved' message and no order number until they pay, or tap
 // 'I've Sent the Payment' for Zelle, Venmo or Cash App. When they come back, the checkout looks

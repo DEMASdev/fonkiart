@@ -47,6 +47,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [cardCheck, setCardCheck] = useState(null);    // paid in the card form: "checking" · "unpaid" · "error"
   const [calm, setCalm] = useState("");                // the card form didn't open: said calmly
   const [retry, setRetry] = useState(false);           // ...with "Try Again" and another way to pay
+  // Klarna or a bank payment, chosen, that Stripe won't open for this order (its amount, or the way
+  // not switched on): the server's one line (api/_lib/stripe.js wayRefused), shown on the ways to
+  // pay, with that way no longer chosen and no Try Again.
+  const [refused, setRefused] = useState("");
   // The ways Stripe's form can open right now, as the server says (op "card-setup", src/lib/payWays.js);
   // null until it says, or when it says nothing (an older server): then cards and Klarna.
   const [ways, setWays] = useState(null);
@@ -117,7 +121,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     if (!method) { setCheckoutError("Please select a payment method."); return; }
     const missing = detailsMissing();
     if (missing) { setCheckoutError(missing); setStep(1); return; }
-    setCheckoutError("");
+    setCheckoutError(""); setRefused("");
     setStep(3);
     // Card, Klarna or a bank transfer: Stripe's form opens at once, with no page in between (Andy:
     // "jumps into another useless page ... instead of just going into the CC page"). The buyer sees
@@ -195,8 +199,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const handleConfirmVenmo   = confirmPaid;
   const handleConfirmCashApp = confirmPaid;
 
-  // The card payment is in: the saved order is done with, the thank-you shows, and the Cart page
-  // empties those pieces.
+  // The card payment is in (or a bank payment made, still clearing: order.processing): the saved
+  // order is done with, the thank-you shows, and the Cart page empties those pieces.
   const paidNow = (order) => {
     dropCardOrder();
     setSaved(null); setPay(null); setPaidView(order); setDone(true);
@@ -209,6 +213,13 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     dropCardOrder();
     if (saved?.coupon) setCouponStatus(null);
     setSaved(null); setPay(null); setRetry(false); setCalm(""); setStep(1);
+  };
+  // Klarna or a bank payment that Stripe won't open for this order: back to the ways to pay, with
+  // the server's line, that way no longer chosen, and no Try Again (it would only be refused
+  // again). An order already saved stays saved, so another way pays THAT order, never a second.
+  const refuseWay = (line) => {
+    setPay(null); setCalm(""); setRetry(false);
+    setMethod(null); setRefused(line); setStep(2);
   };
 
   // Paying by card: Continue with Card, Klarna or a bank transfer chosen (and "Try Again" after a
@@ -252,6 +263,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
       // A coupon the server didn't take (used elsewhere a moment ago) is not shown as applied.
       if (!kept.coupon && couponStatus === "valid") setCouponStatus(null);
       if (order.clientSecret) { setPay(order); return; }
+      // Saved, but Stripe won't open Klarna or a bank payment for it (cart-card's `refused`): kept
+      // above all the same, so the next try is THIS order (cart-again, cart-other).
+      if (order.refused) { refuseWay(order.cardError); return; }
       // Saved, but no card form to open (Stripe failed as the order was saved): the calm word, and
       // Try Again re-opens THAT order (cart-again). Whatever the answer, this tab never leaves.
       setRetry(true);
@@ -265,6 +279,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
       } else if (e.status === 409 && e.message === CARD_FORM_DOWN) {
         // The server can't offer the card form here: nothing was saved or sent.
         setRetry(true); setCalm(e.message);
+      } else if (e.status === 409 && method !== "card") {
+        // Klarna or a bank payment, refused for the order already saved (cart-again answers a 409):
+        // the same line, back on the ways to pay; nothing was saved again.
+        refuseWay(e.message);
       } else if (e.status === 409 || e.status === 400) setCheckoutError(e.message);
       else if (e.status === 502 || saved) {
         // The order is safe; only the card page didn't open.
@@ -289,7 +307,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     setCardCheck("checking"); setCalm(""); setCheckoutError("");
     try {
       const order = await storeCall("cart-paid", { ref: page.ref, session: page.session });
-      if (order.paid) { paidNow(order); return; }
+      // A bank payment made in the form, still clearing (processing): the same thank-you, saying
+      // "Payment processing" (PaidThanks), and those pieces leave the cart: the shop holds them now.
+      if (order.paid || order.processing === true) { paidNow(order); return; }
       setCardCheck("unpaid");
     } catch (e) {
       console.warn("Card check:", e);
@@ -314,6 +334,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     setChecked(true);
     if (order === undefined) return;
     if (order?.state === "paid") { paidNow(order); return; }
+    // Paid by bank, still clearing: the thank-you that says so, as when paid in the form.
+    if (order?.state === "processing") { paidNow({ ...order, processing: true }); return; }
     if (order?.state === "open") {
       const kept = readCardOrder();
       if (kept && kept.ref === order.ref) setSaved(saveCardOrder({ ...kept, email: order.email || kept.email, lines: order.lines, total: order.total }));
@@ -506,6 +528,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
             <>
               {back(1)}
               <h2 className="checkout-q">How would you like to pay?</h2>
+              {refused && <p className="pay-calm" role="status">{refused}</p>}
               <PayRows rows={rows} value={method} onChoose={(id) => { setMethod(id); if (isStripe(id)) stripeJsReady(); }} />
               <button className="confirm-btn checkout-go" style={{ background:canNext?"var(--gold)":"var(--border)" }} onClick={handleContinue}>Continue →</button>
               {checkoutError && <p style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}

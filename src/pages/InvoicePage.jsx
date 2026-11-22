@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
-import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats, paidByLabel } from "../lib/invoiceView";
-import { isPaid } from "../lib/orderStatus";
+import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats, paidByLabel, BANK_CLEARING } from "../lib/invoiceView";
+import { isPaid, PROCESSING } from "../lib/orderStatus";
 import { orderTracking, orderTrackingLink, carrierLabel, isPickup, PICKUP_LABEL } from "../lib/tracking";
 import { SHIP_FIELDS, SHIP_AUTOFILL, hasShipAddress, shipLines, shipForm, shipFields } from "../lib/shipAddress";
 import Pic from "../components/Pic";
@@ -116,6 +116,17 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     setPay(null); setCardCheck(null); setCalm(""); setRetry(false); setCardMsg("");
     requestAnimationFrame(() => cardTop.current?.scrollIntoView({ block: "start" }));
   };
+  // A bank payment made (in the form, or already, in another tab), still clearing: the invoice
+  // says "Payment processing" (BANK_CLEARING) in place of its ways to pay, from its TOP. The
+  // server's own copy of the order when it answers; if not, as the server just said. The page it
+  // was paid on stays named (lastPage): should that payment fail, the server asks Stripe about it.
+  const clearingNow = async () => {
+    let fresh = null;
+    try { fresh = (await storeCall("invoice", { token }))?.order || null; } catch { /* clearing all the same */ }
+    setOrder(o => (fresh && (fresh.status === PROCESSING || isPaid(fresh.status)) ? fresh : { ...o, status: PROCESSING }));
+    setPay(null); setCardCheck(null); setCalm(""); setRetry(false); setCardMsg("");
+    requestAnimationFrame(() => cardTop.current?.scrollIntoView({ block: "start" }));
+  };
 
   // "Pay by card": Stripe's card form, with this invoice's exact amount, opens RIGHT HERE in place
   // of the ways to pay, or not at all: the client is never sent to Stripe's own page. Stripe.js
@@ -132,6 +143,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       const last = lastPage.current || readLast(token);
       const r = await storeCall("card-checkout", { token, embedded: true, way, ...(last ? { last } : {}) });
       if (r?.paid) { await paidNow(null); return; }
+      if (r?.processing) { await clearingNow(); return; }
       if (!r?.clientSecret) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
       lastPage.current = r.session;
       keepLast(token, r.session);
@@ -155,6 +167,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     try {
       const r = await storeCall("card-paid", { token, session: page.session });
       if (r?.paid) { await paidNow("card"); return; }
+      if (r?.processing) { await clearingNow(); return; }
       setCardCheck("unpaid");
     } catch (e) {
       console.warn("Card check:", e);
@@ -214,6 +227,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
 
   const { zelle: payZelle, venmo: payVenmo, cashApp: payCashApp, card: payCard, any: hasAnyPayment } = paymentOptions(order, settings, { cardReady });
   const paid = isPaid(order.status);
+  // Paid by bank (ACH), not cleared yet: "Payment processing" in place of the ways to pay.
+  const clearing = order.status === PROCESSING;
   const congrats = paidCongrats(order.status);
   // Gone out by pickup / hand delivery (Andy, 2026-11-17): no tracking link; the page says so,
   // and a Shipped one says it is ready, like its email (src/lib/adminEmails.js).
@@ -253,6 +268,11 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const payDetail = (id) => id === "zelle" ? sendTo(payZelle, "memo")
     : id === "venmo" ? sendTo(payVenmo, "note")
     : id === "cashapp" ? sendTo(payCashApp, "note")
+    // The server's own word (a 409): Klarna or a bank payment Stripe won't open for this invoice
+    // ("... isn't available for this amount. Please choose another way."), or why it can't be paid
+    // by card here. Said calmly under the row, in place of its button: no Try Again, which would
+    // only be refused again. Another row, or this one tapped again, starts afresh (chooseWay).
+    : cardMsg ? <p className="pay-calm" role="status">{cardMsg}</p>
     : (
       <>
         {calm && <p className="pay-calm" role="status">{calm}</p>}
@@ -263,7 +283,6 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
         {retry && !paying && (payZelle || payVenmo || payCashApp) && (
           <button type="button" className="tap pay-other" onClick={() => waysTop.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Choose Another Way to Pay&nbsp;↑</button>
         )}
-        {cardMsg && <p role="alert" className="pay-row-err">{cardMsg}</p>}
       </>
     );
   const clientRow = order.client_name && (
@@ -285,7 +304,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
       <span className="invoice-value">{order.item_title}</span>
     </div>
   );
-  const totalLabel = paid ? "Total Paid" : "Total Due";
+  // Clearing: neither paid nor due (as PaidThanks says it for the Cart).
+  const totalLabel = clearing ? "Total" : paid ? "Total Paid" : "Total Due";
   // The order in one strip (the phone's top line): the piece, its title and the total. With a
   // picture it is a button that opens the whole picture under it.
   const stripText = (
@@ -391,6 +411,13 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
             </div>
           )}
           {pickup && <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginTop:14}}>{PICKUP_LABEL}</p>}
+        </div>
+      ) : clearing ? (
+        // A bank payment made, still clearing: never asked for money again, nor offered another
+        // way to pay; the same words as the Cart's thank-you (src/lib/invoiceView.js BANK_CLEARING).
+        <div className="invoice-approved-banner">
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:6,textWrap:"balance"}}>{BANK_CLEARING.title}</p>
+          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6}}>{BANK_CLEARING.note}</p>
         </div>
       ) : approved ? (<>
         <div className="invoice-approved-banner">

@@ -29,6 +29,8 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
   });
   const heard = useEffectEvent((order) => {
     if (order?.state === "paid") { onPaid?.(order.lines.map(l => l.title)); setBack({ state: "paid", view: order }); return; }
+    // Paid by bank, still clearing: the same thank-you, saying "Payment processing" (PaidThanks).
+    if (order?.state === "processing") { onPaid?.(order.lines.map(l => l.title)); setBack({ state: "paid", view: { ...order, processing: true } }); return; }
     if (order === undefined || order.state === "open") { setBack({ state: "open" }); return; } // undefined: couldn't ask; Checkout asks again
     dropCardOrder();
     setBack({ state: "plain" });
