@@ -155,11 +155,12 @@ export function customerReset({ link: href, minutes }) {
     + signoff);
 }
 
-export function welcomeCoupon({ code, discount }) {
+export function welcomeCoupon({ code, discount, verifyLink }) {
   return frame("Welcome to Fonkiart",
     p("Thank you for joining. Here is your exclusive welcome coupon:")
     + codeBox(e(code), `${e(discount)}% off your first purchase`)
     + small("Enter this code at checkout. Valid on original art and prints. One use per customer.")
+    + (verifyLink ? button(verifyLink, "Verify my email") + small("Tapping it confirms your email and signs you in to your Fonkiart account. No password needed.") : "")
     + signoff);
 }
 

@@ -16,7 +16,7 @@ const PER_PAGE = 200;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 
-async function findAuthUser(db, email) {
+export async function findAuthUser(db, email) {
   for (let page = 1; page <= 20; page++) {
     const { data, error } = await db.auth.admin.listUsers({ page, perPage: PER_PAGE });
     if (error) throw new Error(`auth users: ${error.message}`);

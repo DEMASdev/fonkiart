@@ -13,7 +13,8 @@ import Pic from "../components/Pic";
 // and Checkout then pays that SAME order (src/components/CheckoutModal.jsx), by card again or
 // another way. Paid after all: the thank-you. Closed by the shop, or unknown to it: forgotten,
 // so Checkout starts afresh.
-export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage, onPaid, cancelledRef }) {
+// savedFor: the line saying whose email this cart is saved with (App.jsx, CartRemembered), under the title.
+export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage, onPaid, cancelledRef, savedFor }) {
   const [checkout, setCheckout] = useState(false);
   // The items of the order just placed. The cart itself is emptied the moment the order is
   // saved, so closing the tab on the thank-you screen leaves no paid cart behind; that screen
@@ -83,6 +84,7 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
     <div className="cart-page">
       <button className="cart-page-return" onClick={() => setPage("catalog")}>← Return to Shop</button>
       <h1 className="cart-page-title">Your Cart{cart.length > 0 ? ` (${cart.length})` : ""}</h1>
+      {savedFor}
       {(back?.state === "open" || back?.state === "plain") && (
         <div className="cart-notice" role="status">
           <p className="cart-notice-title">No payment was taken</p>

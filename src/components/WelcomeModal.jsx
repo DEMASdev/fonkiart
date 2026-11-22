@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { storeCall } from "../lib/store";
+import { remember } from "../lib/cartMemory";
 import Pic from "./Pic";
 
 export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) {
@@ -17,6 +18,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
     setLoading(true);
     try {
       const r = await storeCall("welcome", { email });
+      remember(email); // from now on the cart is saved with this email (src/lib/cartMemory.js)
       setGeneratedCode(r.code);
       setReturning(!!r.returning);
       setAlreadyUsed(!!r.used);
@@ -68,7 +70,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [] }) 
                 <button className="btn-p" style={{ width:"100%", background:"var(--gold)", marginBottom:10, padding:"14px", fontSize:16 }} onClick={handleSubmit} disabled={loading}>
                   {loading ? "Sending…" : "Get My Coupon →"}
                 </button>
-                <p style={{ fontSize:16, color:"var(--muted)", textAlign:"center" }}>No spam. Unsubscribe anytime.</p>
+                <p style={{ fontSize:16, color:"var(--muted)", textAlign:"center" }}>No spam. Unsubscribe anytime. We&apos;ll remember your cart with your email.</p>
               </>
             ) : (
               <>

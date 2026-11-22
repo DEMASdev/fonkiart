@@ -13,6 +13,8 @@ import { bankState, cardReady, cardSetup, clearingFor, createCheckout, expireChe
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } from "./cartEmails.js";
+import { buyerSignInLink } from "./verifyLink.js";
+import { opRememberCart } from "./cartMemory.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -78,7 +80,9 @@ export async function opWelcome(db, body, mail) {
   const { error: writeErr } = await write;
   if (writeErr) throw writeErr;
   const discount = await couponDiscount(db);
-  await mail.send({ to: email, subject: `Your ${discount}% Welcome Coupon — Fonkiart`, htmlContent: T.welcomeCoupon({ code, discount }) });
+  // "Verify my email" beside the code: it signs them in as a buyer (verifyLink.js), or is null.
+  const verifyLink = await buyerSignInLink(db, email);
+  await mail.send({ to: email, subject: `Your ${discount}% Welcome Coupon — Fonkiart`, htmlContent: T.welcomeCoupon({ code, discount, verifyLink }) });
   return { returning: false, code };
 }
 
@@ -617,6 +621,8 @@ export async function opBuyer(db, req) {
 
 export const STORE_OPS = {
   "welcome": (db, req, mail) => opWelcome(db, req.body || {}, mail),
+  // The cart of someone who gave their email, or of a signed-in buyer (cartMemory.js).
+  "remember-cart": (db, req) => opRememberCart(db, req),
   "collectors": (db, req) => opCollectors(db, req.body || {}),
   "request": (db, req, mail) => opRequest(db, req.body || {}, mail),
   "next-ref": (db) => opNextRef(db),

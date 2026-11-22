@@ -15,6 +15,8 @@ import SocialIcons from "./components/SocialIcons";
 import FloatingCart from "./components/FloatingCart";
 import MobileBottomNav from "./components/MobileBottomNav";
 import WelcomeModal from "./components/WelcomeModal";
+import CartMemory from "./components/CartMemory";
+import CartRemembered from "./components/CartRemembered";
 import AuthModal from "./components/AuthModal";
 import ArtworkModal from "./components/ArtworkModal";
 import PriceInquiryModal from "./components/PriceInquiryModal";
@@ -392,6 +394,7 @@ export default function App() {
 
         {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} />}
         {authModal && <AuthModal user={user} onClose={() => setAuthModal(false)} artworks={mergedData.items} />}
+        <CartMemory cart={cart} user={user} settings={mergedData.settings} quiet={LINK_PAGES.has(page)} />
         {trackModal && <TrackOrderModal onClose={() => setTrackModal(false)} />}
         {resetLink?.admin && <NewPasswordModal title="New Admin Password" subtitle="Choose the password you'll use to sign in to the admin."
           submitLabel="Save and open the admin →" onSubmit={(pw) => setAdminPassword(resetLink.token, pw)} onClose={() => setResetLink(null)}
@@ -408,7 +411,7 @@ export default function App() {
         {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
         {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory="Art Prints" key="artprints" />}
         {page === "collections" && <CollectionsPage data={mergedData} setPage={goToPage} goToCategory={goToCategory} />}
-        {(page === "cart" || (page === "card-return" && !cardReturn?.session)) && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} onPaid={paidCart} cancelledRef={page === "card-return" ? cardReturn?.ref : undefined} />}
+        {(page === "cart" || (page === "card-return" && !cardReturn?.session)) && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} onPaid={paidCart} cancelledRef={page === "card-return" ? cardReturn?.ref : undefined} savedFor={<CartRemembered count={cart.length} user={user} />} />}
         {page === "card-return" && cardReturn?.session && <CardReturnPage orderRef={cardReturn.ref} session={cardReturn.session} artworks={mergedData.items} onPaid={paidCart} setPage={goToPage} />}
         {page === "special"  && <SpecialOrdersPage setPage={goToPage} />}
         {page === "auctions" && <AuctionsPage />}
