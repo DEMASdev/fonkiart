@@ -11,7 +11,7 @@ import ShipAddressDialog from "./ShipAddressDialog";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
 import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave, withNumber } from "../lib/tracking";
 import { hasShipAddress, shipLines } from "../lib/shipAddress";
-import { needsAddress, shipShort, shipPrefill, orderRef, approvalNote } from "../lib/orderRow";
+import { needsAddress, shipShort, shipPrefill, orderRef, approvalNote, unfinishedCard, unfinishedThisWeek } from "../lib/orderRow";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
 export default function OrdersTab({ data, action, onActionHandled }) {
@@ -538,23 +538,85 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const [expanded, setExpanded] = useState({});
   const toggleExpand = (id) => setExpanded(prev => ({...prev,[id]:!prev[id]}));
   const clientName = (email) => clients.find(c => c.email === email)?.name;
-  const filtered = orders.filter(o =>
-    (statusFilter === "all" || o.status === statusFilter) &&
-    (o.client_email?.toLowerCase().includes(search.toLowerCase()) ||
-     o.item_title?.toLowerCase().includes(search.toLowerCase()) ||
-     clientName(o.client_email)?.toLowerCase().includes(search.toLowerCase()))
-  );
-  const statusCounts = { all:orders.length, ...Object.fromEntries(ORDER_STATUSES.map(([v]) => [v, 0])) };
-  orders.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
+  const matches = (o) => o.client_email?.toLowerCase().includes(search.toLowerCase()) ||
+    o.item_title?.toLowerCase().includes(search.toLowerCase()) ||
+    clientName(o.client_email)?.toLowerCase().includes(search.toLowerCase());
+  // "Didn't finish paying" (Andy, 2026-11-20, "2am"): a Cart card checkout the buyer started and
+  // never paid (unfinishedCard, src/lib/orderRow.js) is not in the main list, its counts or its
+  // chips. It has its own small list under it for a week, so Andy can follow up with the buyer;
+  // after that it shows in neither. Hidden only: nothing is deleted.
+  const shop = orders.filter(o => !unfinishedCard(o));
+  const filtered = shop.filter(o => (statusFilter === "all" || o.status === statusFilter) && matches(o));
+  const unpaid = orders.filter(o => unfinishedThisWeek(o) && matches(o));
+  const [showUnpaid, setShowUnpaid] = useState(false);
+  const statusCounts = { all:shop.length, ...Object.fromEntries(ORDER_STATUSES.map(([v]) => [v, 0])) };
+  shop.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
   const shipOrder = shipFor == null ? null : orders.find(o => o.id === shipFor) || null;
   const money = (o) => o.amount ? `$${Number(o.amount).toLocaleString()}` : "—";
   const shortDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}) : "";
   // A long email may wrap, and it is easier to read broken just before the @.
   const emailText = (email) => { const s = String(email || ""), at = s.indexOf("@"); return at > 0 ? <>{s.slice(0, at)}<wbr />{s.slice(at)}</> : s; };
+  // The orders' table: the main list, and the small "Didn't finish paying" list, in the same rows.
+  const ordersTable = (list) => (
+    <table className="crm-table crm-cards orders-table">
+      <thead><tr><th>Artwork</th><th>Client</th><th>Amount</th><th>Status</th><th>Ship to</th><th>Shipping</th><th aria-label="Open, More and Notes"></th></tr></thead>
+      <tbody>{list.map(o=>{
+        const status = o.status || "pending";
+        const name = o.client_name || clientName(o.client_email);
+        const open = panelOpen(o);
+        const art = findArtwork(catalog, o.item_title);
+        return (
+        <Fragment key={o.id}>
+          <tr className={`order-row${open ? " is-open" : ""}`} data-order={o.id}>
+            <td data-label="Artwork" className="crm-wide o-art">
+              <div className="o-art-in">
+                <ArtThumb key={art?.image || ""} art={art} />
+                <div className="o-art-text">
+                  <div className="o-title">{o.item_title || "Untitled"}</div>
+                  <div className="o-ref">{orderRef(o)}{o.invoice_token && <CopyButton text={invoiceNumber(o)} />}</div>
+                </div>
+              </div>
+            </td>
+            <td data-label="Client" className="crm-wide o-client">
+              {name && <div className="o-name">{name}</div>}
+              <div className="o-email">{emailText(o.client_email)}</div>
+            </td>
+            <td data-label="Amount" className="o-amount">
+              <div className="o-money">{money(o)}</div>
+              {o.created_at && <div className="o-date">{shortDate(o.created_at)}</div>}
+            </td>
+            <td data-label="Status" className="o-status">
+              <span className="o-pill" data-status={status}>
+                <select value={status} onChange={e=>pickStatus(o,e.target.value)} aria-label="Status">
+                  {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                </select>
+              </span>
+              {/* Mark paid: two taps, because it emails the client a receipt. The second
+                  tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ...").
+                  Picking Paid in the menu above opens the same question, from any status. */}
+              {!asking("paid", o.id) && canMarkPaid(o.status) && (
+                <button className="tap mark-paid" onClick={()=>pickStatus(o,"paid")}>✓ Mark paid</button>
+              )}
+              {approvalNote(o) && <div className="o-note">{approvalNote(o)}</div>}
+            </td>
+            <td data-label="Ship to" className="crm-wide o-shipto-cell">{shipToCell(o)}</td>
+            <td data-label="Shipping" className="crm-wide o-shipping">{shippingCell(o)}</td>
+            <td data-label="Actions" className="crm-wide o-actions">{actionsCell(o)}</td>
+          </tr>
+          {open && (
+            <tr className="order-panel" data-order={o.id}>
+              <td colSpan={7}>{panel(o)}</td>
+            </tr>
+          )}
+        </Fragment>
+        );
+      })}</tbody>
+    </table>
+  );
   return (
     <div className="crm-wrap orders-tab">
       <div className="crm-header">
-        <h2 className="crm-title">Orders <span className="o-count">({orders.length})</span></h2>
+        <h2 className="crm-title">Orders <span className="o-count">({shop.length})</span></h2>
         <div className="o-head-btns">
           <button className="btn-s" onClick={()=>{ setSendingInvoice(i=>!i); setAdding(false); setInvSent(""); }}
             style={{background:sendingInvoice?"#1e3a52":undefined,color:sendingInvoice?"#fff":undefined}}>
@@ -793,61 +855,18 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       </div>
       {loading ? <p className="crm-empty">Loading…</p>
         : filtered.length===0 ? <p className="crm-empty">No orders match this filter.</p>
-        : <table className="crm-table crm-cards orders-table">
-            <thead><tr><th>Artwork</th><th>Client</th><th>Amount</th><th>Status</th><th>Ship to</th><th>Shipping</th><th aria-label="Open, More and Notes"></th></tr></thead>
-            <tbody>{filtered.map(o=>{
-              const status = o.status || "pending";
-              const name = o.client_name || clientName(o.client_email);
-              const open = panelOpen(o);
-              const art = findArtwork(catalog, o.item_title);
-              return (
-              <Fragment key={o.id}>
-                <tr className={`order-row${open ? " is-open" : ""}`} data-order={o.id}>
-                  <td data-label="Artwork" className="crm-wide o-art">
-                    <div className="o-art-in">
-                      <ArtThumb key={art?.image || ""} art={art} />
-                      <div className="o-art-text">
-                        <div className="o-title">{o.item_title || "Untitled"}</div>
-                        <div className="o-ref">{orderRef(o)}{o.invoice_token && <CopyButton text={invoiceNumber(o)} />}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td data-label="Client" className="crm-wide o-client">
-                    {name && <div className="o-name">{name}</div>}
-                    <div className="o-email">{emailText(o.client_email)}</div>
-                  </td>
-                  <td data-label="Amount" className="o-amount">
-                    <div className="o-money">{money(o)}</div>
-                    {o.created_at && <div className="o-date">{shortDate(o.created_at)}</div>}
-                  </td>
-                  <td data-label="Status" className="o-status">
-                    <span className="o-pill" data-status={status}>
-                      <select value={status} onChange={e=>pickStatus(o,e.target.value)} aria-label="Status">
-                        {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-                      </select>
-                    </span>
-                    {/* Mark paid: two taps, because it emails the client a receipt. The second
-                        tap says how the money came (Andy, 2026-11-17: the invoice says "Paid by ...").
-                        Picking Paid in the menu above opens the same question, from any status. */}
-                    {!asking("paid", o.id) && canMarkPaid(o.status) && (
-                      <button className="tap mark-paid" onClick={()=>pickStatus(o,"paid")}>✓ Mark paid</button>
-                    )}
-                    {approvalNote(o) && <div className="o-note">{approvalNote(o)}</div>}
-                  </td>
-                  <td data-label="Ship to" className="crm-wide o-shipto-cell">{shipToCell(o)}</td>
-                  <td data-label="Shipping" className="crm-wide o-shipping">{shippingCell(o)}</td>
-                  <td data-label="Actions" className="crm-wide o-actions">{actionsCell(o)}</td>
-                </tr>
-                {open && (
-                  <tr className="order-panel" data-order={o.id}>
-                    <td colSpan={7}>{panel(o)}</td>
-                  </tr>
-                )}
-              </Fragment>
-              );
-            })}</tbody>
-          </table>
-      }
+        : ordersTable(filtered)}
+      {!loading && unpaid.length > 0 && (statusFilter === "all" || statusFilter === "pending") && (
+        <section className="o-unfinished" aria-label="Didn't finish paying">
+          <button className="tap o-unfinished-head" aria-expanded={showUnpaid} onClick={() => setShowUnpaid(v => !v)}>
+            <span className="o-unfinished-title">Didn't finish paying</span>
+            <span className="o-chip-n">{unpaid.length}</span>
+            <span className="o-unfinished-arrow" aria-hidden="true">{showUnpaid ? "▴" : "▾"}</span>
+          </button>
+          <p className="o-unfinished-note">Started paying by card or Klarna and never finished. Each one shows here for a week, then is hidden. Nothing is deleted.</p>
+          {showUnpaid && ordersTable(unpaid)}
+        </section>
+      )}
       {shipOrder && (
         <ShipAddressDialog key={shipOrder.id} order={shipOrder} art={findArtwork(catalog, shipOrder.item_title)}
           prefill={shipPrefill(shipOrder, { client: clientOf(shipOrder), orders })} clientName={clientLabel(shipOrder)}

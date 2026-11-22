@@ -945,6 +945,13 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .btn-d { font-size:16px; }
 .orders-tab .ok-msg, .orders-tab .warn-msg { font-size:17px;border-radius:10px;overflow-wrap:anywhere; } /* a long email address wraps on a phone */
 .orders-tab .crm-empty { font-size:17px; }
+
+/* Admin -> Orders: "Didn't finish paying" (src/admin/OrdersTab.jsx). Card (or Klarna) checkouts the
+   buyer never paid, under the main list, closed until tapped; inside, the same rows as the main list. */
+.o-unfinished { margin-top:32px; padding-top:20px; border-top:1px solid var(--border); }
+.o-unfinished-head { display:inline-flex; align-items:center; gap:10px; min-height:44px; padding:6px 0; background:none; border:0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:17px; font-weight:600; letter-spacing:.04em; color:var(--ink); }
+.o-unfinished-arrow { font-size:16px; color:var(--muted); }
+.o-unfinished-note { font-size:16px; color:var(--muted); margin:2px 0 14px; line-height:1.45; max-width:62ch; }
 /* Search and the status chips. */
 .orders-tab .o-toolbar { display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin-bottom:22px; }
 .orders-tab .crm-search { flex:1 1 280px;min-width:0;margin:0;padding:10px 18px;font-size:17px;border-radius:999px;background:#fff; }

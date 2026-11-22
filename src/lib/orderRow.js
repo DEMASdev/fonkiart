@@ -100,3 +100,22 @@ export function shipPrefill(order, { client = null, orders = [] } = {}) {
 
 // The fields still to fill in: required, and empty.
 export const neededFields = (fields, form) => fields.filter(([column, , , required]) => required && !clean(form?.[column])).map(([column]) => column);
+
+// "Didn't finish paying" (Andy, 2026-11-20: "2am"). A Cart card checkout is saved the moment the
+// buyer opens the card form (which also offers Klarna), before any money moves; its notes end
+// with CARD_NOTE (the server's own words, api/_lib/cartCheckout.js; tests/ordersUnfinished.test.js
+// checks they agree). Paid in that form it turns Paid; paid another way the ending changes. So one
+// still Pending with that ending was never paid. Once Andy moves it on (Confirmed, Paid...), it is
+// a normal order again.
+export const CARD_NOTE = " · Paying by card";
+export const unfinishedCard = (order) => !!order && String(order.notes || "").endsWith(CARD_NOTE)
+  && (order.status || "pending") === "pending";
+// It sits in that small list for a week from when the buyer started it, then shows nowhere. It is
+// only hidden: the order stays in the database. An order with no date stays in the list, so
+// nothing is hidden without knowing how old it is.
+export const UNFINISHED_DAYS = 7;
+export function unfinishedThisWeek(order, now = Date.now()) {
+  if (!unfinishedCard(order)) return false;
+  const started = Date.parse(order.created_at || "");
+  return !Number.isFinite(started) || now - started < UNFINISHED_DAYS * 24 * 60 * 60 * 1000;
+}
