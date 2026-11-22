@@ -356,7 +356,7 @@ test("a bank payment that fails: back to unpaid, the piece for sale again, ONE s
   assert.equal(mail.sent[0].to, "jane@x.co");
   assert.equal(mail.sent[0].subject, "Your bank payment didn't go through — 2 pieces · Fonkiart");
   assert.match(mail.sent[0].htmlContent, /If you'd still like them, just reply to this email and we'll help\./);
-  assert.deepEqual(await op("cart-order")(db, { body: CART_BODY }, mail), { state: "open", ref: "FA-1752", lines: CART_VIEW.lines, total: 800 }, "the order can be paid again");
+  assert.deepEqual(await op("cart-order")(db, { body: CART_BODY }, mail), { state: "open", ref: "FA-1752", lines: CART_VIEW.lines, total: 800, email: "jane@x.co" }, "the order can be paid again, its email filled in again (the checkout's piece 2)");
 });
 
 test("a failed bank payment never undoes what isn't its own: a forged message, an old page, another order's sale or another order's hold", async () => {
