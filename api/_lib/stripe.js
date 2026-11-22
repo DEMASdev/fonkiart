@@ -21,8 +21,9 @@
 //
 // Needs STRIPE_SECRET_KEY in Vercel (a restricted key with "Checkout Sessions: Write" is
 // enough for cards; to tell Klarna, Link and a bank payment apart, and to know when a bank payment
-// failed, it also needs "PaymentIntents: Read"). NEVER in git: this repo is public. No key = no
-// card option; nothing else breaks.
+// failed, it also needs "PaymentIntents: Read"; to know which ways to pay are switched on, Read
+// on the payment method configurations and on the webhook endpoints, else cards and Klarna only,
+// stripeWays). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
 
 import { siteUrl } from "./site.js";
 
@@ -102,14 +103,18 @@ export function keyShape(raw) {
 // The shop's own look at the card setup (op "card-setup"), without making a Stripe page: card
 // payments on, the Cart's card form able to open inside fonkiart.com, and if not, why; with a
 // bad key, its shape in words (keyShape). NEVER any part of a key (the answer goes to whoever asks).
-// ways: the ways to pay this server can open now, so the checkout shows a row only for those:
-// "card", "link" (inside the card way), "klarna" and "bank". None while no form can open. A way
-// Stripe has said is not switched on for the account is left out from then on (switchedOff).
-export function cardSetup() {
+// ways: the ways to pay Stripe has switched on for the account now (stripeWays), so the checkout
+// shows a row only for those: "card", "link" (inside the card way), "klarna" and "bank". None, and
+// Stripe not asked, while no form can open. cardKeys: the same answer without the ways, at once.
+export async function cardSetup() {
+  const answer = cardKeys();
+  answer.ways = answer.card && answer.form ? [...await stripeWays()] : [];
+  return answer;
+}
+export function cardKeys() {
   const { why } = pkCheck();
   const answer = { card: cardReady(), form: !!publishableKey(), why };
   if (why === "bad-key") answer.shape = keyShape(process.env.STRIPE_PUBLISHABLE_KEY);
-  answer.ways = answer.card && answer.form ? ALL_WAYS.filter(w => !switchedOff.has(w)) : [];
   return answer;
 }
 
@@ -190,15 +195,58 @@ const isCardsOnly = (types) => types.length === 1 && types[0] === "card";
 export const wayTypes = (way) => WAYS.get(way) ?? BEFORE_WAYS;
 // The checkout's names for what Stripe calls them (card-setup's ways), and those in words (the log).
 const ALL_WAYS = ["card", "link", "klarna", "bank"];
-const WAY_OF = new Map([["card", "card"], ["link", "link"], ["klarna", "klarna"], ["us_bank_account", "bank"]]);
 const WORDS = new Map([["card", "card"], ["link", "Link"], ["klarna", "Klarna"], ["us_bank_account", "bank (ACH)"]]);
 const said = (types) => (isCardsOnly(types) ? "cards only" : types.map(t => WORDS.get(t) || t).join(" and "));
-// Ways Stripe has said are not switched on for the account, as this server heard it (code
-// payment_method_unactivated: "Activate the payment method in the Dashboard"): card-setup leaves
-// them out from then on. Only that answer counts: any other refusal (an amount Klarna won't take,
-// say) is about one page, not the account. Forgotten when the server starts again (every deploy
-// does), so a way switched on in Stripe comes back by itself.
-const switchedOff = new Set();
+
+// Which ways to pay Stripe has switched on, as Stripe itself says, never as a guess: a way is
+// offered only while the account's default payment method configuration (the one Stripe uses when
+// none is named) says it is "available" (Stripe: "True if display_preference is on and the payment
+// method's capability is active"), so a way not switched on in the Dashboard is never shown. A
+// bank payment also needs Stripe's webhook to this site's op stripe-event (storeOps.js), switched
+// on, with both messages that say how a bank payment ended (bankHook): without them its order
+// would sit in "Payment processing", its piece held, for good. Anything else (Stripe out of reach
+// or slower than waitMs, a restricted key that may not read these, no default configuration, or
+// one that doesn't say whether cards are on): cards and Klarna, exactly as before the ways. Asked
+// at most once every 10 minutes per server (WAYS_FOR), so a switch in the Dashboard shows within
+// 10 minutes. Never throws, and never holds the checkout up for long.
+const WAYS_FOR = 10 * 60 * 1000;
+const STRIPE_NAMES = [["card", "card"], ["link", "link"], ["klarna", "klarna"], ["bank", "us_bank_account"]];
+const BANK_EVENTS = ["checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"];
+const LATE = Symbol("late");
+let waysAsked = null; // { at, ways }: ways, a promise of the answer, shared by everyone asking meanwhile
+export function stripeWays({ waitMs = 3000 } = {}) {
+  if (!waysAsked || !(Date.now() - waysAsked.at < WAYS_FOR)) waysAsked = { at: Date.now(), ways: askWays(waitMs) };
+  return waysAsked.ways;
+}
+async function askWays(waitMs) {
+  let timer;
+  try {
+    const late = new Promise((resolve) => { timer = setTimeout(resolve, waitMs, LATE); });
+    const answer = await Promise.race([Promise.all([stripe("/payment_method_configurations?limit=100"), stripe("/webhook_endpoints?limit=100")]), late]);
+    if (answer === LATE) throw new Error(`Stripe didn't answer within ${waitMs} ms`);
+    const [configs, hooks] = answer;
+    const config = (Array.isArray(configs?.data) ? configs.data : []).find(c => c?.is_default === true && c.active === true);
+    if (!config) throw new Error("Stripe has no default payment method configuration");
+    if (typeof config.card?.available !== "boolean") throw new Error("Stripe's default payment method configuration doesn't say whether cards are on");
+    const on = new Set(STRIPE_NAMES.filter(([, name]) => config[name]?.available === true).map(([way]) => way));
+    if (on.has("bank") && !(Array.isArray(hooks?.data) ? hooks.data : []).some(bankHook)) on.delete("bank");
+    return ALL_WAYS.filter(w => on.has(w));
+  } catch (e) {
+    console.warn("stripe: couldn't learn from Stripe which ways to pay are on, so the checkout offers cards and Klarna, as before:", e instanceof StripeError ? e.code : "", e?.message || e);
+    return [...BEFORE_WAYS];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// Stripe's webhook to this site's op stripe-event, switched on, with both of a bank payment's
+// endings, or every event ("*").
+function bankHook(hook) {
+  let url;
+  try { url = new URL(String(hook?.url)); } catch { return false; }
+  const events = Array.isArray(hook.enabled_events) ? hook.enabled_events : [];
+  return hook.status === "enabled" && url.origin === new URL(siteUrl()).origin && url.pathname === "/api/store"
+    && url.searchParams.get("op") === "stripe-event" && (events.includes("*") || BANK_EVENTS.every(t => events.includes(t)));
+}
 
 // The ways to pay in one card form, and where Stripe brings a buyer back to.
 // redirect_on_completion "if_required": a CARD (or Link) is paid right there in the form and the
@@ -218,17 +266,16 @@ function waysToPay(types, back) {
     : { payment_method_types: types, redirect_on_completion: "if_required", return_url: `${siteUrl()}${back}{CHECKOUT_SESSION_ID}` };
 }
 
-// A way the buyer picked by name, Klarna or a bank payment, that Stripe won't open for this page
-// (an amount outside what Klarna takes, or the way not switched on for the account): no page,
-// and never a card form in its place, since the buyer asked for that way and not for a card.
-// The buyer gets one calm line instead and picks another way (the ops answer it as a 409, which
-// the invoice page and the checkout show as it is, or as cart-card's cardError). Stripe's own
-// words stay in the log.
+// A way the buyer picked by name, Klarna or a bank payment, that isn't switched on (stripeWays)
+// or that Stripe won't open for this page (an amount outside what Klarna takes, or the way not
+// switched on after all): no page, and never a card form in its place, since the buyer asked for
+// that way and not for a card. The buyer gets one calm line instead and picks another way (the
+// ops answer it as a 409, which the invoice page and the checkout show as it is, or as
+// cart-card's cardError). Stripe's own words stay in the log. off: not switched on.
 export const WAY_REFUSED = "way-refused";
 const CHOSEN = new Map([["klarna", "Klarna"], ["bank", "Paying by bank (ACH)"]]);
-function wayRefused(way, e) {
-  const when = e.code === "payment_method_unactivated" ? "right now" : "for this amount";
-  const refused = new StripeError(`${CHOSEN.get(way)} isn't available ${when}. Please choose another way.`, WAY_REFUSED, e.httpStatus, e.param);
+function wayRefused(way, off, e) {
+  const refused = new StripeError(`${CHOSEN.get(way)} isn't available ${off ? "right now" : "for this amount"}. Please choose another way.`, WAY_REFUSED, e?.httpStatus, e?.param);
   refused.way = way;
   return refused;
 }
@@ -240,9 +287,21 @@ function wayRefused(way, e) {
 // an amount Klarna won't take...), again with cards only, as before Klarna, then without the
 // pictures too: at most three asks. For Klarna or a bank payment, chosen by name: no card form
 // instead (wayRefused above). Anything else (Stripe down, a bad key) is thrown at once.
+// A way the checkout named goes by what Stripe has switched on (stripeWays), as card-setup told the
+// checkout: Klarna or a bank payment that isn't on is refused before Stripe is asked, and the card
+// way carries Link only while Link is on. No way named: cards and Klarna, as before, unasked.
 async function askForPage(what, make, { pictures, way }) {
   const chosen = CHOSEN.has(way);
-  let want = { types: wayTypes(way), pictures: !!pictures };
+  let types = wayTypes(way);
+  if (WAYS.has(way)) {
+    const on = await stripeWays();
+    if (chosen && !on.includes(way)) {
+      console.warn(`stripe: ${what}: ${WORDS.get(types[0])} isn't switched on in Stripe, so no page and no card form instead`);
+      throw wayRefused(way, true);
+    }
+    if (way === "card" && !on.includes("link")) types = CARDS_ONLY;
+  }
+  let want = { types, pictures: !!pictures };
   for (;;) {
     try {
       return await stripe("/checkout/sessions", make(want));
@@ -253,12 +312,9 @@ async function askForPage(what, make, { pictures, way }) {
         : !isCardsOnly(want.types) ? { ...want, types: CARDS_ONLY }
         : want.pictures ? { ...want, pictures: false }
         : null;
-      if (e.code === "payment_method_unactivated" && !isCardsOnly(want.types)) {
-        for (const t of want.types) if (t !== "card" && WAY_OF.has(t)) switchedOff.add(WAY_OF.get(t));
-      }
       if (!next && chosen) {
         console.warn(`stripe: Stripe refused ${what} (${said(want.types)}, ${want.pictures ? "with" : "without"} pictures); the buyer chose it, so no card form instead:`, e.code, e.param || "", e.message);
-        throw wayRefused(way, e);
+        throw wayRefused(way, e.code === "payment_method_unactivated", e);
       }
       if (!next) throw e;
       console.warn(`stripe: Stripe refused ${what} (${said(want.types)}, ${want.pictures ? "with" : "without"} pictures); asking again with ${said(next.types)}, ${next.pictures ? "with" : "without"} pictures:`, e.code, e.param || "", e.message);

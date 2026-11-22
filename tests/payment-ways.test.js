@@ -5,7 +5,9 @@
 // "Payment processing" meanwhile, the piece held for the buyer, and Paid (with the paid emails)
 // only once Stripe says paid, for the exact cents; if it fails, back to unpaid, the piece for sale
 // again, one short email to the buyer. Klarna or a bank payment that Stripe refuses for a page: one
-// calm line, and never a card form in its place.
+// calm line, and never a card form in its place. Which ways the checkout lists, and the server
+// opens, is what Stripe itself says is switched on (its payment method settings, and for a bank
+// payment its webhook too), never a guess; Stripe unable to say: cards and Klarna, as before.
 // Stripe is never called: fetch is a fake that answers like Stripe. Fake data only; no email is
 // sent. Imported whole (import * as), so a part missing before this change fails only its own test.
 import { test, beforeEach, afterEach } from "node:test";
@@ -33,18 +35,55 @@ const realFetch = globalThis.fetch;
 const realConsole = { log: console.log, warn: console.warn, error: console.error };
 let calls, logs;
 
+// The clock stripe.js reads (Date.now). It asks Stripe which ways are on at most once every 10
+// minutes (stripeWays), so each test, and each new stand-in for Stripe, starts an hour later:
+// what an earlier one said is too old to be used. later(minutes) moves it on.
+const realNow = Date.now;
+let clock = Date.UTC(2026, 10, 21, 12);
+const later = (minutes) => { clock += minutes * 60 * 1000; };
+
+// The account's default payment method configuration as Stripe answers it (the one Stripe uses
+// when none is named). on: which ways are available, by Stripe's name: all of them unless named,
+// Affirm too, which Fonkiart doesn't offer. over: other fields in place of these.
+const AVAILABLE = (yes) => ({ available: yes, display_preference: { overridable: null, preference: yes ? "on" : "off", value: yes ? "on" : "off" } });
+const config = (on = {}, over = {}) => ({
+  id: "pmc_paymentwaysdefault01", object: "payment_method_configuration", active: true, is_default: true, livemode: false, name: "Default",
+  ...Object.fromEntries(["card", "link", "klarna", "us_bank_account", "affirm"].map(t => [t, AVAILABLE(on[t] ?? true)])), ...over,
+});
+// Stripe's webhook to this site's op stripe-event as it must be set up for a bank payment: on,
+// with both of a bank payment's endings.
+const HOOK = {
+  id: "we_paymentwaysbank000001", object: "webhook_endpoint", status: "enabled", livemode: false, api_version: null,
+  url: "https://fonkiart.com/api/store?op=stripe-event",
+  enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"],
+};
+
 // Answers like Stripe. pages: its records of payment pages, by id; payments: { status, type } by
 // payment id; refuse(form): what Stripe says to a new payment page, null for yes, or
 // { status, code, param } for no. made: every new payment page asked for, as the form sent.
-function fakeStripe({ pages = {}, payments = {}, refuse = () => null } = {}) {
+// Which ways are on (stripe.js stripeWays): on, as config above, read each time Stripe is asked
+// (so a test can switch a way on later), or configs, Stripe's list of configurations in its
+// place; hooks, its list of webhooks (HOOK unless named). Either list may be { status, code }
+// instead (Stripe refusing to say, as to a restricted key that may not read it), "unreachable"
+// (no answer at all), "silent" (an answer that never comes) or any other body, as it is. A new
+// stand-in is a new Stripe: the clock moves on an hour first.
+function fakeStripe({ pages = {}, payments = {}, refuse = () => null, on = {}, configs, hooks = [HOOK] } = {}) {
+  later(60);
   const made = [];
   calls = [];
+  const reply = (status, json) => ({ ok: status < 400, status, json: async () => json });
+  const list = (what) => (what === "unreachable" ? Promise.reject(new TypeError("fetch failed"))
+    : what === "silent" ? new Promise(() => {})
+    : Array.isArray(what) ? reply(200, { object: "list", data: what, has_more: false })
+    : what?.status ? reply(what.status, { error: { code: what.code, type: "invalid_request_error", message: "Stripe won't say" } })
+    : reply(200, what));
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(String(url));
     const path = u.pathname.replace(/^\/v1/, "");
     const method = init.method || "GET";
     calls.push(`${method} ${path}`);
-    const reply = (status, json) => ({ ok: status < 400, status, json: async () => json });
+    if (method === "GET" && path === "/payment_method_configurations") return list(configs ?? [config(on)]);
+    if (method === "GET" && path === "/webhook_endpoints") return list(hooks);
     if (method === "POST" && path === "/checkout/sessions") {
       const form = new URLSearchParams(init.body);
       made.push(form);
@@ -111,9 +150,15 @@ beforeEach(() => {
   process.env.STRIPE_PUBLISHABLE_KEY = PK;
   logs = [];
   console.log = console.warn = console.error = (...a) => logs.push(a.map(String).join(" "));
+  Date.now = () => clock;
+  later(60);
+  calls = [];
+  // Until a test makes its stand-in for Stripe, nothing gets out.
+  globalThis.fetch = async (url) => { throw new Error(`asked for ${url} with no stand-in for Stripe`); };
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
+  Date.now = realNow;
   Object.assign(console, realConsole);
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.STRIPE_PUBLISHABLE_KEY;
@@ -470,34 +515,188 @@ test("Stripe's messages: the three about a payment page are heard, any other is 
   assert.equal(clearing.tables.Orders[0].status, "processing");
 });
 
-// LAST in this file: Stripe saying a way is switched off is remembered for as long as the server
-// runs, so the ways card-setup answers change from here on.
-test("card-setup's ways: all four while the card form can open; a way Stripe says is switched off is left out from then on, any other refusal leaves it in", async () => {
-  const ALL = ["card", "link", "klarna", "bank"];
-  assert.deepEqual(stripeLib.cardSetup().ways, ALL);
+// The ways to pay, as Stripe says they are switched on (stripe.js stripeWays), and as card-setup
+// tells the checkout which rows to show.
+const ALL = ["card", "link", "klarna", "bank"];
+const BEFORE = ["card", "klarna"];
+const waysNow = async () => (await stripeLib.cardSetup()).ways;
+const asked = () => calls.filter(c => c === "GET /payment_method_configurations" || c === "GET /webhook_endpoints");
+
+test("card-setup's ways are Stripe's own: a way is listed only while the account's default payment method configuration says it is available", async () => {
+  fakeStripe();
+  const answer = await stripeLib.cardSetup();
+  assert.deepEqual(answer, { card: true, form: true, why: null, ways: ALL }, "all four on, and the webhook a bank payment needs; Affirm, on in Stripe, never listed");
+  assert.deepEqual(calls, ["GET /payment_method_configurations", "GET /webhook_endpoints"], "Stripe asked, and no payment page made");
+  assert.ok(!JSON.stringify(answer).includes(PK) && !JSON.stringify(answer).includes(SK), "never a key");
+
+  // The control: each one Stripe says isn't available is left out (before this change, all four were listed).
+  for (const [off, want] of [["card", ["link", "klarna", "bank"]], ["link", ["card", "klarna", "bank"]], ["klarna", ["card", "link", "bank"]], ["us_bank_account", ["card", "link", "klarna"]]]) {
+    fakeStripe({ on: { [off]: false } });
+    assert.deepEqual(await waysNow(), want, `${off} not available`);
+  }
+  fakeStripe({ on: { card: false, link: false, klarna: false, us_bank_account: false } });
+  assert.deepEqual(await waysNow(), [], "none available, none listed");
+  // On in the Dashboard, but Stripe hasn't activated it yet: Stripe says not available.
+  fakeStripe({ configs: [config({}, { us_bank_account: { available: false, display_preference: { overridable: null, preference: "on", value: "on" } } })] });
+  assert.deepEqual(await waysNow(), ["card", "link", "klarna"], "switched on, not active yet: not listed");
+  // Only the default configuration counts, the one Stripe uses when none is named.
+  fakeStripe({ configs: [config({ klarna: false, us_bank_account: false }, { id: "pmc_paymentwaysother001", is_default: false }), config({ link: false })] });
+  assert.deepEqual(await waysNow(), ["card", "klarna", "bank"]);
+
   delete process.env.STRIPE_PUBLISHABLE_KEY;
-  assert.deepEqual(stripeLib.cardSetup().ways, [], "no card form, no ways");
-  process.env.STRIPE_PUBLISHABLE_KEY = PK;
+  fakeStripe();
+  assert.deepEqual(await waysNow(), [], "no card form, no ways");
+  assert.deepEqual(calls, [], "and Stripe isn't asked");
+});
 
-  fakeStripe({ refuse: refuseIf("klarna", "amount_too_large") });
-  await assert.rejects(stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "klarna" }), (e) => e.code === stripeLib.WAY_REFUSED && e.way === "klarna");
-  assert.deepEqual(stripeLib.cardSetup().ways, ALL, "an amount Klarna won't take is about one page, not the account");
+test("a bank payment is listed only while Stripe's webhook to this site's op stripe-event is on, with both of a bank payment's endings", async () => {
+  const hook = (over) => ({ ...HOOK, ...over });
+  for (const [label, hooks, bank] of [
+    ["the webhook as it must be set up", [HOOK], true],
+    ["every event (*)", [hook({ enabled_events: ["*"] })], true],
+    ["both endings, without the page finishing", [hook({ enabled_events: ["checkout.session.async_payment_failed", "checkout.session.async_payment_succeeded"] })], true],
+    ["one webhook of several", [hook({ id: "we_paymentwaysother0001", url: "https://example.com/hook" }), HOOK], true],
+    ["no webhook at all", [], false],
+    ["switched off", [hook({ status: "disabled" })], false],
+    ["only the page finishing (the card payments' message)", [hook({ enabled_events: ["checkout.session.completed"] })], false],
+    ["one ending only", [hook({ enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded"] })], false],
+    ["another site", [hook({ url: "https://example.com/api/store?op=stripe-event" })], false],
+    ["www, which only sends Stripe on (Stripe doesn't follow)", [hook({ url: "https://www.fonkiart.com/api/store?op=stripe-event" })], false],
+    ["not https", [hook({ url: "http://fonkiart.com/api/store?op=stripe-event" })], false],
+    ["another op", [hook({ url: "https://fonkiart.com/api/store?op=card-paid" })], false],
+    ["another path", [hook({ url: "https://fonkiart.com/api/stripe?op=stripe-event" })], false],
+    ["not an address", [hook({ url: "fonkiart" })], false],
+  ]) {
+    fakeStripe({ hooks });
+    assert.deepEqual(await waysNow(), bank ? ALL : ["card", "link", "klarna"], label);
+  }
+});
 
-  fakeStripe({ refuse: refuseIf("link", "payment_method_unactivated") });
-  const page = await stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "card" });
-  assert.equal(page.clientSecret, "fake-form-2", "Link off: the card form opens with cards only");
-  assert.deepEqual(stripeLib.cardSetup().ways, ["card", "klarna", "bank"]);
+test("Stripe can't say which ways are on (a restricted key, out of reach, too slow, an answer it can't read): cards and Klarna, exactly as before, and nothing throws", async () => {
+  for (const [label, stand] of [
+    ["may not read the configurations (a restricted key)", { configs: { status: 403 } }],
+    ["may not read the webhooks (a restricted key)", { hooks: { status: 403 } }],
+    ["Stripe down", { configs: { status: 500, code: "api_error" } }],
+    ["out of reach", { configs: "unreachable", hooks: "unreachable" }],
+    ["no configurations", { configs: [] }],
+    ["no default configuration", { configs: [config({}, { is_default: false })] }],
+    ["the default one not active", { configs: [config({}, { active: false })] }],
+    ["an answer it can't read", { configs: { object: "list", data: "nope" } }],
+    ["a default one that doesn't say whether cards are on", { configs: [without(config(), "card")] }],
+  ]) {
+    fakeStripe(stand);
+    logs = [];
+    assert.deepEqual(await stripeLib.cardSetup(), { card: true, form: true, why: null, ways: BEFORE }, label);
+    assert.ok(logs.some(l => l.includes("couldn't learn from Stripe which ways to pay are on")), `${label}: the log says so`);
+  }
+  fakeStripe({ configs: "silent" });
+  assert.deepEqual(await stripeLib.stripeWays({ waitMs: 20 }), BEFORE, "an answer that never comes: cards and Klarna, after a short wait");
+  assert.ok(logs.some(l => l.includes("didn't answer within 20 ms")));
+  assert.deepEqual(await waysNow(), BEFORE, "and card-setup doesn't wait for it again");
+});
 
-  fakeStripe({ refuse: refuseIf("us_bank_account", "payment_method_unactivated") });
+test("Stripe is asked at most once every 10 minutes per server, and everyone asking meanwhile shares that one answer", async () => {
+  const on = { klarna: false };
+  fakeStripe({ on });
+  assert.deepEqual(await Promise.all([waysNow(), waysNow()]), [["card", "link", "bank"], ["card", "link", "bank"]]);
+  assert.equal(asked().length, 2, "two at once: Stripe asked once (its two lists)");
+  on.klarna = true; // switched on in the Dashboard
+  later(9);
+  assert.deepEqual(await waysNow(), ["card", "link", "bank"], "9 minutes on: the same answer");
+  await stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "bank" });
+  assert.equal(asked().length, 2, "a payment page made meanwhile goes by the same answer");
+  later(2);
+  assert.deepEqual(await waysNow(), ALL, "11 minutes on: asked again, and Klarna is there");
+  assert.equal(asked().length, 4);
+
+  fakeStripe({ configs: "unreachable" });
+  assert.deepEqual(await waysNow(), BEFORE);
+  later(5);
+  assert.deepEqual(await waysNow(), BEFORE);
+  assert.equal(asked().length, 2, "Stripe out of reach: not asked again within the 10 minutes, so no checkout waits on it twice");
+});
+
+test("the server goes by the same answer: Klarna or a bank payment not on is refused at once, in calm words, with no page and never a card form; the card way carries Link only while Link is on", async () => {
+  const OFF = (name) => `${name} isn't available right now. Please choose another way.`;
+  for (const [label, stand, way, line] of [
+    ["bank not on", { on: { us_bank_account: false } }, "bank", OFF("Paying by bank (ACH)")],
+    ["bank on, but no webhook to tell how it ends", { hooks: [] }, "bank", OFF("Paying by bank (ACH)")],
+    ["Stripe can't say (a restricted key)", { configs: { status: 403 } }, "bank", OFF("Paying by bank (ACH)")],
+    ["Klarna not on", { on: { klarna: false } }, "klarna", OFF("Klarna")],
+  ]) {
+    const stripe = fakeStripe(stand);
+    const db = fakeDb({ Orders: [invoice()], Artworks: arts() });
+    const cdb = fakeDb({ Orders: cartRows(), Artworks: arts() });
+    const mail = mailbox();
+    await assert.rejects(op("card-checkout")(db, { body: { token: TOKEN, embedded: true, way } }, mail), (e) => e.status === 409 && e.message === line, label);
+    await assert.rejects(op("cart-again")(cdb, { body: { ...CART_BODY, way } }, mail), (e) => e.status === 409 && e.message === line, `${label}: cart-again`);
+    assert.deepEqual(await cart.opCartCard(fakeDb({}), { embedded: true, way }, mail, savedOrder),
+      { ref: "FA-1752", ids: [41, 42], lines: CART_VIEW.lines, total: 800, refused: way, cardError: line }, `${label}: cart-card keeps the order, no form`);
+    assert.equal(stripe.made.length, 0, `${label}: no payment page asked for`);
+    assert.deepEqual([db.tables.Orders[0].status, orderWrites(db), orderWrites(cdb), mail.sent], ["confirmed", [], [], []], `${label}: nothing changes, nobody is emailed`);
+    assert.ok(logs.some(l => l.includes("isn't switched on in Stripe, so no page and no card form instead")), label);
+  }
+  for (const [label, stand, types] of [["Link on", {}, ["card", "link"]], ["Link not on", { on: { link: false } }, ["card"]], ["Stripe can't say", { configs: { status: 403 } }, ["card"]]]) {
+    const stripe = fakeStripe(stand);
+    assert.equal((await stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "card" })).clientSecret, "fake-form-1", label);
+    assert.deepEqual(stripe.made.map(typesOf), [types], `${label}: one ask, and the card form opens`);
+    assert.equal(stripe.made[0].get("redirect_on_completion"), types.length > 1 ? "if_required" : "never", label);
+  }
+  const plain = fakeStripe({ configs: { status: 403 } });
+  await stripeLib.createCheckout({ order: invoice(), invNum: "FA-1" });
+  assert.deepEqual(plain.made.map(typesOf), [BEFORE], "no way named: cards and Klarna, as before");
+  assert.deepEqual(asked(), [], "and Stripe isn't asked which ways are on");
+});
+
+test("the refusal line stays as the backstop: a way Stripe lists as on but then won't open is \"not available right now\", and never a card form; Stripe's lists still decide what's listed", async () => {
+  const bank = fakeStripe({ refuse: refuseIf("us_bank_account", "payment_method_unactivated") });
   await assert.rejects(op("card-checkout")(fakeDb({ Orders: [invoice()], Artworks: arts() }), { body: { token: TOKEN, embedded: true, way: "bank" } }, mailbox()),
     (e) => e.status === 409 && e.message === "Paying by bank (ACH) isn't available right now. Please choose another way.");
-  assert.deepEqual(stripeLib.cardSetup().ways, ["card", "klarna"]);
-
+  assert.deepEqual(bank.made.map(typesOf), [["us_bank_account"]], "asked once; never a card form");
+  assert.deepEqual(await waysNow(), ALL, "what Stripe's lists say still decides the ways, not one refusal");
   fakeStripe({ refuse: refuseIf("klarna", "payment_method_unactivated") });
-  await assert.rejects(stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "klarna" }), (e) => e.message === "Klarna isn't available right now. Please choose another way.");
-  const answer = stripeLib.cardSetup();
-  assert.deepEqual(answer.ways, ["card"]);
-  assert.ok(!JSON.stringify(answer).includes(PK) && !JSON.stringify(answer).includes(SK), "never a key");
+  await assert.rejects(stripeLib.createCheckout({ order: invoice(), invNum: "FA-1", way: "klarna" }),
+    (e) => e.code === stripeLib.WAY_REFUSED && e.way === "klarna" && e.message === "Klarna isn't available right now. Please choose another way.");
+});
+
+test("a Cart order whose bank payment failed can be paid again another way: a new form, or Zelle; one whose bank payment is still clearing can't", async () => {
+  const failedOrder = () => ({
+    stripe: fakeStripe({ pages: { [CART_PAGE]: bankCartPage() }, payments: BANK("requires_payment_method") }),
+    db: fakeDb({ Orders: cartRows({ status: "processing", art_held: true, bank_page: CART_PAGE }), Artworks: arts({ isSold: true }) }),
+    mail: mailbox(),
+  });
+  const FAILED = "Your bank payment didn't go through — 2 pieces · Fonkiart";
+  // The control: before this change, both answered "This order already has a card payment" (a 409).
+  const again = failedOrder();
+  const answer = await op("cart-again")(again.db, { body: { ...CART_BODY, session: CART_PAGE, way: "card" } }, again.mail);
+  assert.deepEqual([answer.clientSecret, answer.ref, answer.ids, answer.total], ["fake-form-1", "FA-1752", [41, 42], 800], "a new card form, for the same rows");
+  assert.deepEqual(again.stripe.made.map(typesOf), [["card", "link"]], "for the way the buyer chose now");
+  assert.deepEqual(again.db.tables.Orders.map(r => [r.status, r.art_held]), [["pending", false], ["pending", false]], "the failure recorded first");
+  assert.deepEqual(sold(again.db), [false, false], "the pieces for sale again until it's paid");
+  assert.deepEqual(again.mail.sent.map(m => [m.to, m.subject]), [["jane@x.co", FAILED]], "the buyer told, once");
+  const twice = await op("cart-again")(again.db, { body: { ...CART_BODY, session: CART_PAGE, way: "klarna" } }, again.mail);
+  assert.equal(twice.clientSecret, "fake-form-2", "asked again, another way: another form");
+  assert.deepEqual(again.stripe.made.map(typesOf), [["card", "link"], ["klarna"]]);
+  assert.equal(again.mail.sent.length, 1, "still one email");
+
+  const other = failedOrder();
+  assert.deepEqual(await op("cart-other")(other.db, { body: { ...CART_BODY, session: CART_PAGE, method: "zelle" } }, other.mail), { ok: true, ref: "FA-1752" });
+  assert.deepEqual(other.db.tables.Orders.map(r => [r.status, r.notes]), [["pending", "Order Ref: FA-1752 · Jane Doe · Paying by Zelle"], ["pending", "Order Ref: FA-1752 · Jane Doe · Paying by Zelle"]]);
+  assert.equal(other.stripe.made.length, 0);
+  const sent = other.mail.sent.map(m => `${m.to}: ${m.subject}`);
+  assert.equal(sent.length, 3, sent.join(" | "));
+  assert.equal(sent[0], `jane@x.co: ${FAILED}`, "the failure first");
+  assert.ok(sent.some(t => /^jane@x\.co: Order Received — .+ · Fonkiart$/.test(t)) && sent.some(t => /^shop@fonkiart\.com: 🎨 New Order FA-1752: /.test(t)), "then the order received pair, as for any Zelle order");
+
+  const stripe = fakeStripe({ pages: { [CART_PAGE]: bankCartPage() }, payments: BANK("processing") });
+  const db = fakeDb({ Orders: cartRows({ status: "processing", art_held: true, bank_page: CART_PAGE }), Artworks: arts({ isSold: true }) });
+  const mail = mailbox();
+  const CLEARING = "This order's bank payment is still clearing. We'll email you as soon as it does.";
+  await assert.rejects(op("cart-again")(db, { body: { ...CART_BODY, session: CART_PAGE, way: "card" } }, mail), (e) => e.status === 409 && e.message === CLEARING);
+  await assert.rejects(op("cart-other")(db, { body: { ...CART_BODY, session: CART_PAGE, method: "zelle" } }, mail), (e) => e.status === 409 && e.message === CLEARING);
+  assert.equal(stripe.made.length, 0, "no new page while it clears");
+  assert.deepEqual([db.tables.Orders.map(r => [r.status, r.notes]), sold(db), mail.sent.length],
+    [[["processing", "Order Ref: FA-1752 · Jane Doe · Paying by card"], ["processing", "Order Ref: FA-1752 · Jane Doe · Paying by card"]], [true, true], 0], "nothing changes");
 });
 
 // The thank-you (src/components/PaidThanks.jsx), compiled with the project's own Vite and drawn once

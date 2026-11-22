@@ -2,7 +2,7 @@
 // payments on, the Cart's card form able to open inside fonkiart.com, and if not, why. Asked
 // through the real /api/store handler, so what is checked is exactly what a browser gets back.
 // It must never show any part of a key: this repo is public and anyone can ask. Fakes only: no
-// Stripe, no database call, no email.
+// database call, no email, and Stripe is a stand-in (STRIPE below): the real one is never called.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import handler from "../api/store.js";
@@ -19,7 +19,22 @@ const ENV = ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "SUPABASE_URL", "SUP
 const saved = {};
 const realWarn = console.warn;
 let warned;
+// Stripe's answers to the two things card-setup asks it (stripe.js stripeWays): every way switched
+// on, and the webhook that tells this site how a bank payment ended, whose secret must never show.
+// Anything else asked of Stripe fails the test. tests/payment-ways.test.js covers the other answers.
+const HOOK_SECRET = ["whsec", "WSHEADc3Vn58qLm2xR7tB4yWSTAIL"].join("_");
+const realFetch = globalThis.fetch;
+const on = { available: true, display_preference: { overridable: null, preference: "on", value: "on" } };
+const STRIPE = {
+  "/v1/payment_method_configurations": { object: "list", data: [{ id: "pmc_fakecardsetup1", object: "payment_method_configuration", is_default: true, active: true, card: on, link: on, klarna: on, us_bank_account: on }] },
+  "/v1/webhook_endpoints": { object: "list", data: [{ id: "we_fakecardsetup1", object: "webhook_endpoint", status: "enabled", url: "https://fonkiart.com/api/store?op=stripe-event", enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"], secret: HOOK_SECRET }] },
+};
 beforeEach(() => {
+  globalThis.fetch = async (url) => {
+    const { pathname } = new URL(String(url));
+    if (!STRIPE[pathname]) throw new Error(`card-setup asked Stripe for ${pathname}`);
+    return { ok: true, status: 200, json: async () => STRIPE[pathname] };
+  };
   for (const k of ENV) saved[k] = process.env[k];
   process.env.SUPABASE_URL = "http://127.0.0.1:9";                 // never reached: the probe reads no table
   process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_secret_FAKEFORTESTS";
@@ -29,6 +44,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const k of ENV) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
   console.warn = realWarn;
+  globalThis.fetch = realFetch;
 });
 
 async function ask({ sk, pk, method = "POST" }) {
@@ -40,7 +56,7 @@ async function ask({ sk, pk, method = "POST" }) {
 }
 
 // Anything in an answer that is, or comes from, a key: a key prefix, or a start or end mark.
-const MARKS = /(sk|rk|pk)_(live|test)|SKHEAD|SKTAIL|RKHEAD|RKTAIL|PKHEAD|PKTAIL|PTHEAD|PTTAIL/;
+const MARKS = /(sk|rk|pk)_(live|test)|whsec_|SKHEAD|SKTAIL|RKHEAD|RKTAIL|PKHEAD|PKTAIL|PTHEAD|PTTAIL|WSHEAD|WSTAIL/;
 const leak = (text) => MARKS.exec(text)?.[0] ?? null;
 
 test("control: the leak check sees a key, the start of one or the end of one, and passes a clean answer", () => {
@@ -49,10 +65,13 @@ test("control: the leak check sees a key, the start of one or the end of one, an
   assert.equal(leak(JSON.stringify({ hint: PK_TEST.slice(0, 14) })), "pk_test");
   assert.equal(leak(JSON.stringify({ hint: SK_LIVE.slice(-6) })), "SKTAIL");
   assert.equal(leak(JSON.stringify({ hint: SK_TEST.slice(8, 14) })), "RKHEAD");
+  assert.equal(leak(JSON.stringify({ hint: HOOK_SECRET })), "whsec_");
+  assert.equal(leak(JSON.stringify({ hint: HOOK_SECRET.slice(-6) })), "WSTAIL");
 });
 
-// The ways to pay the server can open (stripe.js cardSetup ways): all four once the form can open,
-// none while it can't. tests/payment-ways.test.js covers a way Stripe says is switched off.
+// The ways to pay the server can open (stripe.js cardSetup ways): all four while Stripe says all four
+// are on and the form can open, none while it can't. tests/payment-ways.test.js covers what else
+// Stripe can say.
 const WAYS = ["card", "link", "klarna", "bank"];
 
 test("card-setup: card on, the form able to open inside fonkiart.com, and if not, why; never any part of a key", async () => {
