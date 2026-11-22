@@ -124,8 +124,10 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 /* The two hero buttons. Their sizes were inline until 2026-11-18; phones stack them, below. */
 .hero-buttons .btn-p { font-size:16px;letter-spacing:.16em;padding:13px 28px; }
 .hero-buttons .btn-s { font-size:16px; }
-.hero-panel { position:absolute;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.6); }
-.hero-panel img { width:100%;height:100%;object-fit:cover;display:block; }
+/* The art is never cut (Andy, 2026-11-21). Each panel is a slot: the piece sits in it whole, at its
+   own shape, centred, framed by its own border and shadow (no bars), on the hero's white. */
+.hero-panel { position:absolute; }
+.hero-panel img { position:absolute;top:0;right:0;bottom:0;left:0;margin:auto;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;display:block;box-sizing:border-box;border:2px solid rgba(255,255,255,.6);box-shadow:0 6px 24px rgba(0,0,0,.35); }
 .hero-panel:nth-child(1) { width:48%;height:78%;top:4%;left:2%;transform:rotate(-3deg);z-index:1; }
 .hero-panel:nth-child(2) { width:50%;height:82%;top:6%;left:26%;transform:rotate(1.5deg);z-index:3; }
 .hero-panel:nth-child(3) { width:48%;height:78%;top:4%;left:51%;transform:rotate(-2deg);z-index:2; }
@@ -390,8 +392,12 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 /* ── WELCOME POPUP ── */
 .welcome-modal { background:#fff;max-width:660px;width:100%;overflow:hidden;animation:su .3s cubic-bezier(.25,.46,.45,.94);position:relative;display:grid;grid-template-columns:230px 1fr; }
 .welcome-gallery { position:relative;overflow:hidden;background:var(--sidebar-bg); }
-.wg-item { position:absolute;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.5); }
-.wg-item img { width:100%;height:100%;object-fit:cover;display:block; }
+/* The art is never cut (Andy, 2026-11-21). Each item is a slot: the piece sits in it whole, at its
+   own shape, centred, with its own shadow (no bars), on the gallery's dark. The grey stand-in for a
+   place the shop has no piece for fills its slot, with the same shadow. */
+.wg-item { position:absolute; }
+.wg-item img { position:absolute;top:0;right:0;bottom:0;left:0;margin:auto;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;display:block;box-shadow:0 8px 28px rgba(0,0,0,.5); }
+.wg-item > div { box-shadow:0 8px 28px rgba(0,0,0,.5); }
 .wg-item:nth-child(1) { width:82%;height:46%;top:3%;left:6%;transform:rotate(-4deg);z-index:1; }
 .wg-item:nth-child(2) { width:78%;height:44%;top:30%;left:16%;transform:rotate(3deg);z-index:2; }
 .wg-item:nth-child(3) { width:80%;height:45%;top:54%;left:5%;transform:rotate(-2deg);z-index:3; }

@@ -72,6 +72,37 @@ test("the pictures shown at their own size (the checkout's wall, the invoice pag
   }
 });
 
+// The three collages, small pieces laid over each other: the home page's hero, the conversation
+// page's header and the welcome window's gallery (its sign-in window too). Each tile is a slot the
+// piece sits in, whole, at its own shape, centred; the frame and the shadow are the picture's own,
+// so they hug the piece. Fitted into a fixed box with a ground of its own, a tall or a wide piece
+// would show bars beside it instead, which is not wanted either. The test fails on the shop before
+// (8cef3e0), where every one was cover in a box that cut it.
+const COLLAGES = [
+  ["src/index.css", ".hero-panel", "the home page's hero"],
+  ["src/threads.css", ".rq-hero-tile", "the conversation page's header"],
+  ["src/index.css", ".wg-item", "the welcome and sign-in windows' gallery"],
+];
+const sheetOf = (file) => read(file).replace(/\/\*[\s\S]*?\*\//g, "");
+test("the collages (the home hero, the conversation header, the welcome gallery): every piece whole, at its own shape, its frame hugging it: no bars, nothing cut", () => {
+  for (const [file, slot, where] of COLLAGES) {
+    const pics = rules(sheetOf(file), `${slot} img`);
+    assert.ok(pics.length > 0, `${where} (${slot} img): its rule is in ${file}`);
+    assert.ok(pics.every(b => !/object-fit:\s*cover/.test(b)), `${where}: never cover`);
+    assert.match(pics[0], /position:absolute;top:0;right:0;bottom:0;left:0;margin:auto;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;/, `${where}: whole, its own shape, centred in its slot`);
+    assert.match(pics[0], /box-shadow:/, `${where}: the shadow is the picture's own`);
+    const slots = rules(sheetOf(file), slot);
+    assert.ok(slots.length > 0, `${where} (${slot}): its rule`);
+    for (const body of slots) assert.doesNotMatch(body, /overflow:\s*hidden|background|border|box-shadow/, `${where}: the slot has no clip, ground or frame of its own, which would show as bars`);
+  }
+});
+test("control: the collage check sees the shop before, where each was cut", () => {
+  const before = ".hero-panel { position:absolute;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.35); }\n.hero-panel img { width:100%;height:100%;object-fit:cover;display:block; }\n";
+  assert.ok(rules(before, ".hero-panel img").some(b => /object-fit:\s*cover/.test(b)), "the cover is seen");
+  assert.match(rules(before, ".hero-panel")[0], /overflow:\s*hidden|box-shadow/, "the slot's own clip and frame are seen");
+  assert.doesNotMatch(rules(before, ".hero-panel img")[0], /max-width:100%;max-height:100%;object-fit:contain;/);
+});
+
 // The pages whose picture boxes sit in their code.
 const PAGES = {
   "src/pages/CollectorsRoomPage.jsx": 2,   // its two grids (the collection, early access)
