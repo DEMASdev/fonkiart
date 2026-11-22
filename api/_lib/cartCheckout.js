@@ -41,11 +41,15 @@
 //    card page is closed first, then, ONCE, the normal "order received" pair goes out for its
 //    rows, exactly as for a Zelle order (Andy's rule, 2026-11-18: a card order's emails only
 //    once it is paid).
+// 7. A bank payment (ACH, the checkout's "bank" way) clears days after the form is done. Until
+//    then the rows read "Payment processing" and their pieces are held for the buyer; they turn
+//    Paid, with the two emails, only once Stripe says paid. If it fails, the rows go back to
+//    Pending, the pieces back on sale, and the buyer gets one short email (bankCart).
 
 import { InputError } from "./errors.js";
-import { artPrice, cardImage, findPricedArtwork, markSoldForOrder, PAID_STATUSES } from "./artworks.js";
-import { cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, paidWith, publishableKey, StripeError, toCents } from "./stripe.js";
-import { cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
+import { artPrice, cardImage, findPricedArtwork, holdArtForOrder, markSoldForOrder, otherPageClearing, PAID_STATUSES, releaseArtForOrder } from "./artworks.js";
+import { bankClearing, bankState, cardReady, cardSetup, createCartCheckout, expireCheckout, getCheckout, isSessionId, paidWith, publishableKey, StripeError, toCents, WAY_REFUSED } from "./stripe.js";
+import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject, cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
 export const CARD_SOON = "Card payment is being set up. Please use Zelle or contact Fonkiart directly.";
@@ -63,6 +67,9 @@ const OTHER_WAYS = new Map([["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", 
 const COUPON_RE = / · (\d{1,2})% coupon applied\b/;
 
 const NOT_PAID = ["pending", "confirmed"]; // as storeOps.js NOT_PAID_STATUSES
+// A bank payment (ACH) on its way, as storeOps.js CLEARING: "Payment processing", not money yet.
+const CLEARING = "processing";
+const BEFORE_PAID = [...NOT_PAID, CLEARING];
 const REF_RE = /^FA-\d{1,9}$/;
 const IDS_RE = /^\d{1,15}(,\d{1,15}){0,24}$/;  // opOrder takes at most 25 pieces
 
@@ -135,9 +142,13 @@ export async function opCartCard(db, body, mail, saveOrder) {
   const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total, ...(order.coupon ? { coupon: order.coupon } : {}) };
   let page;
   try {
-    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email });
+    // way: the one way to pay the buyer chose (stripe.js WAYS), or none, as before.
+    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, way: body.way });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
+    // Klarna or a bank payment, chosen, that Stripe won't open for this order: its one calm line
+    // (stripe.js wayRefused) and which way it was (refused), never a card form in its place.
+    if (e instanceof StripeError && e.code === WAY_REFUSED) return { ...saved, refused: e.way, cardError: e.message };
     // The order is saved (its emails wait until it is paid). Not an error for the checkout: it
     // keeps the order and offers card again (cart-again) or another way (cart-other). It says
     // nothing of "saved" or the order's number: the buyer hears of those once paid.
@@ -153,16 +164,25 @@ export function cartPaidFor(session, rows) {
     && session.amount_total === rows.reduce((sum, r) => sum + cents(r.amount), 0);
 }
 
-// The thank-you's "Paid by ..." (src/components/PaidThanks.jsx): only a Klarna payment names its
-// way in the answer, so a card's answer stays exactly as before ("Paid by card").
-const saidHow = (method) => (method === "klarna" ? { method } : {});
+// A bank payment for these rows, still clearing or failed (stripe.js bankClearing), for exactly
+// the cents they hold.
+export function cartClearingFor(session, rows) {
+  return bankClearing(session) && session.amount_total === sumCents(rows);
+}
+
+// The thank-you's "Paid by ..." (src/components/PaidThanks.jsx): a payment made another way than a
+// card names its way in the answer ("klarna", "link", "bank"), so a card's answer stays exactly as
+// before ("Paid by card").
+const SAID = new Set(["klarna", "link", "bank"]);
+const saidHow = (method) => (SAID.has(method) ? { method } : {});
 
 // Stripe's page for a Cart order -> its rows -> Paid, SOLD and the two emails, once. The rows keep
-// the way Stripe says it was paid (stripe.js paidWith: "klarna", else "card"), and the emails and
-// the thank-you say it.
-// The update only matches rows still Pending or Confirmed, so whoever gets there first (the
-// buyer coming back, Stripe's message, a second tab, a replay) sends the two emails, and
-// everyone after sends none. If the database refuses the change:
+// the way Stripe says it was paid (stripe.js paidWith: "klarna", "link", "bank", else "card"),
+// and the emails and the thank-you say it. A bank payment still clearing, or failed: bankCart.
+// The update only matches rows still Pending, Confirmed or Payment processing (a bank payment
+// that just cleared), so whoever gets there first (the buyer coming back, Stripe's message, a
+// second tab, a replay) sends the two emails, and everyone after sends none. If the database
+// refuses the change:
 //  - via "redirect" (the buyer coming back): email anyway, telling the shop to mark it by hand;
 //  - via "webhook" (Stripe's message): email nobody and answer 500, so Stripe sends it again.
 async function settleCart(db, session, mail, via) {
@@ -177,11 +197,12 @@ async function settleCart(db, session, mail, via) {
   }
   const view = cartView(ref, rows);
   if (rows.every(r => PAID_STATUSES.has(r.status))) return { paid: true, ...view, ...saidHow(rows[0].paid_method) };
+  if (cartClearingFor(session, rows)) return bankCart(db, session, rows, view, mail, via);
   if (!cartPaidFor(session, rows)) return { paid: false, why: "not paid", ...view };
 
   const method = await paidWith(session);
   const { data: flipped, error: flipErr } = await db.from("Orders").update({ status: "paid", paid_method: method })
-    .in("id", ids).in("status", NOT_PAID).select("id");
+    .in("id", ids).in("status", BEFORE_PAID).select("id");
   if (flipErr) {
     console.error(`store cart (${via}): could not mark order ${ref} Paid:`, flipErr.message);
     if (via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
@@ -198,6 +219,64 @@ async function settleCart(db, session, mail, via) {
   // The pieces are SOLD (artworks.js: never a print, never twice).
   for (const row of rows) await markSoldForOrder(db, { ...row, status: "paid" });
   return { paid: true, ...view, ...saidHow(method) };
+}
+
+// A bank payment (ACH) for a Cart order, still clearing or failed, as Stripe's own record of the
+// payment says (stripe.js bankState), handled as for invoices (storeOps.js settleInvoice):
+//  - clearing: every row still Pending or Confirmed turns "Payment processing", and its piece is
+//    held for this buyer (artworks.js holdArtForOrder). No email: the paid pair goes out once it
+//    clears (settleCart above). Answer: { paid: false, processing: true, ...view }.
+//  - failed: the rows go back to Pending, their pieces back on sale (releaseArtForOrder), and the
+//    buyer gets ONE short email: only the call whose guarded write moves the rows sends it, and a
+//    page that failed long ago never undoes a newer page's (otherPageClearing). The shop hears it
+//    only when a piece needs a person. Answer: { paid: false, failed: true, ...view }.
+// Stripe can't say how it stands: 502, nothing decided. The database refuses: via "webhook", 500,
+// so Stripe sends it again; via "redirect", the log.
+async function bankCart(db, session, rows, view, mail, via) {
+  let state;
+  try {
+    state = await bankState(session);
+  } catch (e) {
+    if (!(e instanceof StripeError)) throw e;
+    console.error(`store cart (${via}): couldn't ask Stripe how ${view.ref}'s bank payment stands:`, e.code, e.message);
+    throw new InputError("Couldn't check the bank payment right now", 502);
+  }
+  if (state === "processing") {
+    const { data: moved, error } = await db.from("Orders").update({ status: CLEARING })
+      .in("id", rows.map(r => r.id)).in("status", NOT_PAID).select("id");
+    if (error) {
+      console.error(`store cart (${via}): could not mark order ${view.ref} Payment processing:`, error.message);
+      if (via === "webhook") throw new InputError("Could not mark the order Payment processing yet. Please send this again.", 500);
+    } else {
+      const now = new Set((moved || []).map(r => r.id));
+      for (const row of rows) {
+        if (now.has(row.id) || row.status === CLEARING) await holdArtForOrder(db, row, { page: session.id, fresh: now.has(row.id) });
+      }
+    }
+    return { paid: false, processing: true, ...view };
+  }
+  const mine = rows.filter(r => r.status === CLEARING && !otherPageClearing(r, session.id));
+  if (!mine.length) return { paid: false, failed: true, ...view };
+  const { data: back, error } = await db.from("Orders").update({ status: "pending" })
+    .in("id", mine.map(r => r.id)).eq("status", CLEARING).select("id");
+  if (error) {
+    console.error(`store cart (${via}): could not set order ${view.ref} back to Pending after its bank payment failed:`, error.message);
+    if (via === "webhook") throw new InputError("Could not record the failed bank payment yet. Please send this again.", 500);
+    return { paid: false, failed: true, ...view };
+  }
+  const moved = new Set((back || []).map(r => r.id));
+  const freed = rows.filter(r => moved.has(r.id));
+  if (freed.length) {
+    const check = [];
+    for (const row of freed) if (await releaseArtForOrder(db, row) === "check") check.push(row.item_title);
+    const email = rows[0].client_email;
+    const who = rows[0].ship_name || email || "The customer";
+    await Promise.allSettled([
+      mail.send({ to: email, subject: bankFailedSubject(view), htmlContent: bankFailed(view) }),
+      ...(check.length ? [mail.send({ to: mail.sender, subject: bankFailedShopSubject(view), htmlContent: bankFailedShop({ ...view, who, email, back: "pending", check }) })] : []),
+    ]);
+  }
+  return { paid: false, failed: true, ...view };
 }
 
 // The buyer is back from paying (?cart=FA-...&card=cs_...). Stripe's answer decides; the
@@ -364,8 +443,9 @@ export async function opCartAgain(db, body, mail, helpers = {}) {
   // made, so a Stripe failure writes nothing, and the browser's email still names the order.
   let page;
   try {
-    page = await createCartCheckout({ ref, ids, lines, email: checked ? checked.email : rows[0].client_email });
+    page = await createCartCheckout({ ref, ids, lines, email: checked ? checked.email : rows[0].client_email, way: body.way });
   } catch (e) {
+    if (e instanceof StripeError && e.code === WAY_REFUSED) throw new InputError(e.message, 409); // as cart-card
     throw stripeLater("cart-again", e);
   }
   try {
@@ -438,13 +518,15 @@ export async function opCartOther(db, body, mail, orderReceived, helpers = {}) {
   return { ok: true, ref };
 }
 
-// The checkout opening again with a Cart order it saved earlier: paid by now, still open to pay,
-// or closed (cancelled, confirmed or shipped by hand: the checkout then starts afresh). It only
-// reads, except for a payment Stripe says is done that nobody recorded yet (the buyer paid and
-// closed the tab before coming back, and Stripe's own message hasn't come): that is recorded
-// here, exactly as on the way back. Stripe out of reach: the rows alone answer.
+// The checkout opening again with a Cart order it saved earlier: paid by now, a bank payment still
+// clearing ("processing"), still open to pay, or closed (cancelled, confirmed or shipped by hand:
+// the checkout then starts afresh). It only reads, except for a payment Stripe says is done that
+// nobody recorded yet (the buyer paid and closed the tab before coming back, and Stripe's own
+// message hasn't come): that is recorded here, exactly as on the way back, and so is a bank
+// payment that failed (the rows are then read again). Stripe out of reach: the rows alone answer.
 export async function opCartOrder(db, body, mail) {
-  const { ref, ids, rows } = await savedCart(db, body);
+  const { ref, ids, rows: saved } = await savedCart(db, body);
+  let rows = saved;
   if (rows.every(r => PAID_STATUSES.has(r.status))) return { state: "paid", ...cartView(ref, rows) };
   let page = null;
   try {
@@ -453,18 +535,30 @@ export async function opCartOrder(db, body, mail) {
     if (!(e instanceof InputError) || e.status !== 502) throw e;
   }
   if (page?.status === "complete") {
-    const { paid, why: _why, ...view } = await settleCart(db, page, mail, "redirect");
+    let settled = {};
+    try {
+      settled = await settleCart(db, page, mail, "redirect");
+    } catch (e) {
+      if (!(e instanceof InputError) || e.status !== 502) throw e;
+    }
+    const { paid, processing, failed, why: _why, ...view } = settled;
     if (paid) return { state: "paid", ...view };
+    if (processing) return { state: "processing", ...view };
+    if (failed) ({ rows } = await savedCart(db, body));
   }
+  if (rows.some(r => r.status === CLEARING)) return { state: "processing", ...cartView(ref, rows) };
   if (rows.some(r => r.status !== "pending")) return { state: "closed" };
   const { name: _name, ...view } = cartView(ref, rows);
   // email: the one the rows hold, which the checkout names the order by from now on (savedCart).
   return { state: "open", ...view, email: rows[0].client_email };
 }
 
-// Stripe's own "paid" message for a Cart order (storeOps.js opStripeEvent). 200 means done,
-// also for anything ignored; a database failure throws, and Stripe sends it again later.
+// Stripe's own messages for a Cart order (storeOps.js opStripeEvent): paid, a bank payment clearing
+// or failed. 200 means done, also for anything ignored; a database failure throws, and Stripe
+// sends it again later.
 export async function cartStripeEvent(db, session, mail) {
-  const { paid, why } = await settleCart(db, session, mail, "webhook");
-  return paid ? { received: true, paid: true } : { received: true, ignored: why };
+  const { paid, processing, failed, why } = await settleCart(db, session, mail, "webhook");
+  if (paid) return { received: true, paid: true };
+  if (processing) return { received: true, processing: true };
+  return failed ? { received: true, failed: true } : { received: true, ignored: why };
 }

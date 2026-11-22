@@ -8,7 +8,7 @@ import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
 import ArtThumb from "./ArtThumb";
 import ShipAddressDialog from "./ShipAddressDialog";
-import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick } from "../lib/orderStatus";
+import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick, statusOptions } from "../lib/orderStatus";
 import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave, withNumber } from "../lib/tracking";
 import { hasShipAddress, shipLines } from "../lib/shipAddress";
 import { needsAddress, shipShort, shipPrefill, orderRef, approvalNote, unfinishedCard, unfinishedThisWeek } from "../lib/orderRow";
@@ -588,7 +588,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <td data-label="Status" className="o-status">
               <span className="o-pill" data-status={status}>
                 <select value={status} onChange={e=>pickStatus(o,e.target.value)} aria-label="Status">
-                  {ORDER_STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                  {statusOptions(status).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                 </select>
               </span>
               {/* Mark paid: two taps, because it emails the client a receipt. The second

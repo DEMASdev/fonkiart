@@ -70,10 +70,19 @@ export function paidCongrats(status) {
 
 // How a paid invoice was paid, in words for "Paid by <label> ✓" (Andy, 2026-11-17: "should say
 // Thank you for your payment ! then under Paid by ... and the method used"). The order's
-// paid_method holds one of: card, klarna (only Stripe records it: api/_lib/stripe.js paidWith),
-// zelle, venmo, cashapp, cash, other. "other", empty (older orders) or a word not on this list:
-// null, and the page says just "Paid ✓".
-const PAID_BY = new Map([["card", "card"], ["klarna", "Klarna"], ["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"], ["cash", "cash"]]);
+// paid_method holds one of: card, link, klarna, bank (those three only Stripe records:
+// api/_lib/stripe.js paidWith), zelle, venmo, cashapp, cash, other. "other", empty (older orders)
+// or a word not on this list: null, and the page says just "Paid ✓".
+const PAID_BY = new Map([["card", "card"], ["link", "Link"], ["klarna", "Klarna"], ["bank", "bank (ACH)"], ["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"], ["cash", "cash"]]);
 export function paidByLabel(method) {
   return PAID_BY.get(String(method ?? "").trim().toLowerCase()) ?? null;
 }
+
+// A bank payment (ACH) on its way (the order's status "processing": src/lib/orderStatus.js): what
+// the buyer is told while it clears, in the same words wherever it is shown (src/components/
+// PaidThanks.jsx). Stripe says such a payment can take up to 4 business days; the "Payment
+// received" email goes out once it is in.
+export const BANK_CLEARING = {
+  title: "Payment processing",
+  note: "A bank payment can take up to 4 business days to clear. We'll email you as soon as yours does.",
+};

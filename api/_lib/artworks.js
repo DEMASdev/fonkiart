@@ -133,6 +133,101 @@ export async function markSoldForOrder(db, order) {
   }
 }
 
+// ── HELD while a bank payment clears ────────────────────────────
+// A bank payment (ACH: stripe.js bankClearing) takes days to clear. Meanwhile its piece is held
+// for that buyer: marked Sold like a paid one, so nobody else can buy it. The order keeps what was
+// done, in two columns (db/2026-11-21-bank-hold.sql): art_held (THIS hold marked the piece Sold)
+// and bank_page (the payment page whose bank payment is clearing). So if that payment fails, only
+// a hold it made is undone, and a page that failed long ago can never undo a newer one's
+// (otherPageClearing). The same rules as markSoldForOrder: exactly one artwork with exactly the
+// order's title, never a print. Never throws: the order's own status is what counts.
+const keepsHold = (order) => Object.hasOwn(order || {}, "art_held") && Object.hasOwn(order || {}, "bank_page");
+const HOLD_SQL = "db/2026-11-21-bank-hold.sql";
+
+// order: the order as read before (select "*"), now Payment processing. page: the payment page.
+// fresh: the order has just turned Payment processing (not a message sent again), so what it kept
+// from an earlier bank payment is replaced. Returns { held } (this call marked the piece Sold).
+export async function holdArtForOrder(db, order, { page, fresh = false } = {}) {
+  const title = order?.item_title;
+  const ref = `order ${order?.id ?? "(new)"}`;
+  let held = false;
+  try {
+    const rows = usable(title) ? await titled(db, title) : [];
+    const [art] = rows;
+    if (rows.length !== 1) console.warn(`artworks: ${ref}'s bank payment is clearing, but ${rows.length ? "more than one artwork has" : "no artwork has"} the title "${title}"; nothing held`);
+    else if (art.isSold !== true && !isPrint(art)) {
+      const { data, error } = await db.from("Artworks").update({ isSold: true }).eq("id", art.id).not("isSold", "is", true).select("id");
+      if (error) throw new Error(`Artworks write: ${error.message}`);
+      held = !!data?.length;
+      if (held) console.log(`artworks: "${title}" held (marked Sold) while ${ref}'s bank payment clears`);
+    }
+  } catch (e) {
+    console.error(`artworks: ${ref}'s bank payment is clearing, but "${title}" could not be held:`, e?.message || e);
+  }
+  if (!keepsHold(order)) {
+    console.warn(`artworks: ${ref} can't keep its bank payment's hold until ${HOLD_SQL} is run`);
+    return { held };
+  }
+  const note = { bank_page: page, ...(fresh || held ? { art_held: held } : {}) };
+  const { error } = await db.from("Orders").update(note).eq("id", order.id);
+  if (error) console.error(`artworks: ${ref} could not keep its bank payment's hold:`, error.message);
+  return { held };
+}
+
+// Is another payment page's bank payment the one clearing for this order now? Then this page is
+// an old one, and its failure changes nothing.
+export const otherPageClearing = (order, page) => typeof order?.bank_page === "string" && order.bank_page !== "" && order.bank_page !== page;
+
+// The bank payment failed and the order is unpaid again: its piece goes back on sale, if THIS
+// order's hold marked it Sold and no other order has paid for it since. Another order's bank
+// payment still clearing for the same piece: the hold passes to that order instead.
+// "released": back on sale. "kept": stays as it is (not held by this order, or another order's
+// now). "check": a person must look: the piece is Sold and the website can't tell whether this
+// order's hold did it (HOLD_SQL not run), the title no longer names exactly one artwork, or the
+// database failed.
+export async function releaseArtForOrder(db, order) {
+  const title = order?.item_title;
+  const ref = `order ${order?.id ?? "(new)"}`;
+  const known = keepsHold(order);
+  if (known && order.art_held !== true) return "kept";
+  try {
+    const { data, error: readErr } = await db.from("Orders").select("id,status").eq("item_title", title)
+      .in("status", [...PAID_STATUSES, "processing"]).neq("id", order.id);
+    if (readErr) throw new Error(`Orders read: ${readErr.message}`);
+    const others = data || [];
+    const waiting = others.filter(o => o.status === "processing").map(o => o.id);
+    if (others.length) {
+      // Paid for by another order (Sold for good), or held for another bank payment.
+      if (known && waiting.length && !others.some(o => PAID_STATUSES.has(o.status))) {
+        const { error } = await db.from("Orders").update({ art_held: true }).in("id", waiting);
+        if (error) throw new Error(`Orders write: ${error.message}`);
+      }
+    } else {
+      const rows = usable(title) ? await titled(db, title) : [];
+      if (!known) {
+        if (rows.length !== 1 || rows[0].isSold !== true || isPrint(rows[0])) return "kept";
+        console.warn(`artworks: ${ref}'s bank payment failed; whether "${title}" was held for it is unknown until ${HOLD_SQL} is run, so it stays Sold`);
+        return "check";
+      }
+      if (rows.length !== 1) {
+        console.warn(`artworks: ${ref}'s bank payment failed, but ${rows.length ? "more than one artwork has" : "no artwork has"} the title "${title}" now; nothing put back on sale`);
+        return "check";
+      }
+      const { error } = await db.from("Artworks").update({ isSold: false }).eq("id", rows[0].id).eq("isSold", true);
+      if (error) throw new Error(`Artworks write: ${error.message}`);
+      console.log(`artworks: "${title}" is for sale again (${ref}'s bank payment failed)`);
+    }
+    if (known) {
+      const { error } = await db.from("Orders").update({ art_held: false }).eq("id", order.id);
+      if (error) console.error(`artworks: ${ref} could not note that its hold is over:`, error.message);
+    }
+    return others.length ? "kept" : "released";
+  } catch (e) {
+    console.error(`artworks: ${ref}'s bank payment failed, but "${title}" could not be put back on sale:`, e?.message || e);
+    return "check";
+  }
+}
+
 // The admin's query (api/admin.js), plus SOLD for the orders it turns paid: Admin -> Orders
 // "✓ Mark paid", a Status menu, or "+ Add Order" saved as Paid, Shipped or Delivered. Marked
 // only once the database has saved the write. A change between paid statuses (Paid -> Shipped)

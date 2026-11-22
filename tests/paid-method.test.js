@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { transformWithOxc } from "vite";
 import { STORE_OPS } from "../api/_lib/storeOps.js";
 import { validateChain, PAID_METHODS } from "../api/_lib/adminOps.js";
-import { paidByLabel } from "../src/lib/invoiceView.js";
+import * as invoiceView from "../src/lib/invoiceView.js";
 import { knownPaidMethod, markPaidChoices, paidPick } from "../src/lib/orderStatus.js";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -239,8 +239,8 @@ test("the exact-cents check is unchanged: a Klarna page a cent short, or not pai
 });
 
 test("the words around it: the paid invoice says \"Paid by Klarna\"; Admin keeps it and never offers it as a Mark-paid button", () => {
-  assert.equal(paidByLabel("klarna"), "Klarna");
-  assert.equal(paidByLabel("card"), "card", "a card: as before");
+  assert.equal(invoiceView.paidByLabel("klarna"), "Klarna");
+  assert.equal(invoiceView.paidByLabel("card"), "card", "a card: as before");
   assert.equal(knownPaidMethod({ paid_method: "klarna" }), "klarna");
   assert.equal(paidPick({ paid_method: "klarna" }, "paid"), "save-quietly", "Shipped -> Paid again: not asked twice, no second receipt");
   for (const ways of ["zelle,stripe", "stripe", null]) {
@@ -257,7 +257,7 @@ const element = (type, props) => ({ type, props: props || {} });
 globalThis.__paidMethodTest = {
   "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "fragment" },
   "./PayArt": { default: function PayArt() { return null; } },
-  "../lib/invoiceView": { paidCongrats: () => ({ title: "Congratulations, you made it yours!", sub: "A one of a kind!" }) },
+  "../lib/invoiceView": invoiceView,
 };
 async function loadPaidThanks() {
   const file = "components/PaidThanks.jsx";

@@ -15,9 +15,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // How an order was paid: the paid invoice says "Paid by ...". Orders.paid_method holds only
 // these (Andy, 2026-11-17). The admin's "Mark paid" saves one; a payment in the card form saves
-// "card", or "klarna" when Stripe says it was Klarna, by itself (stripe.js paidWith). Browser
-// copy, with the button labels: src/lib/orderStatus.js.
-export const PAID_METHODS = new Set(["card", "klarna", "zelle", "venmo", "cashapp", "cash", "other"]);
+// "card", or "klarna", "link" or "bank" when Stripe says it was paid that way, by itself
+// (stripe.js paidWith). Browser copy, with the button labels: src/lib/orderStatus.js.
+export const PAID_METHODS = new Set(["card", "link", "klarna", "bank", "zelle", "venmo", "cashapp", "cash", "other"]);
 const WRITES = new Set(["insert", "update", "upsert"]);
 
 // Tracking, saved when an order goes out with a carrier (Andy, 2026-11-17). The link made from

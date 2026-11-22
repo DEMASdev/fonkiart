@@ -51,25 +51,29 @@ test("control: the leak check sees a key, the start of one or the end of one, an
   assert.equal(leak(JSON.stringify({ hint: SK_TEST.slice(8, 14) })), "RKHEAD");
 });
 
+// The ways to pay the server can open (stripe.js cardSetup ways): all four once the form can open,
+// none while it can't. tests/payment-ways.test.js covers a way Stripe says is switched off.
+const WAYS = ["card", "link", "klarna", "bank"];
+
 test("card-setup: card on, the form able to open inside fonkiart.com, and if not, why; never any part of a key", async () => {
   for (const [label, sk, pk, want] of [
-    ["all set (live)", SK_LIVE, PK_LIVE, { card: true, form: true, why: null }],
-    ["all set (test)", SK_TEST, PK_TEST, { card: true, form: true, why: null }],
-    ["spaces around the key are fine", SK_LIVE, ` ${PK_LIVE}\n`, { card: true, form: true, why: null }],
-    ["no publishable key", SK_LIVE, undefined, { card: true, form: false, why: "no-key" }],
-    ["an empty one", SK_LIVE, "  ", { card: true, form: false, why: "no-key" }],
-    ["wrapped in quotes", SK_LIVE, `"${PK_LIVE}"`, { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 2, kind: null, slips: ["quoted"] } }],
-    ["a space inside", SK_LIVE, PK_LIVE.replace("Wd73", "Wd 73"), { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 1, kind: "publishable", slips: ["spaced"] } }],
-    ["the SECRET key pasted in by mistake", SK_LIVE, SK_LIVE, { card: true, form: false, why: "bad-key", shape: { length: SK_LIVE.length, kind: "secret", slips: ["secret"] } }],
-    ["live public key, test secret key", SK_TEST, PK_LIVE, { card: true, form: false, why: "mode-mismatch" }],
-    ["test public key, live secret key", SK_LIVE, PK_TEST, { card: true, form: false, why: "mode-mismatch" }],
-    ["card payments off (no secret key)", undefined, PK_LIVE, { card: false, form: false, why: null }],
-    ["nothing set", undefined, undefined, { card: false, form: false, why: "no-key" }],
+    ["all set (live)", SK_LIVE, PK_LIVE, { card: true, form: true, why: null, ways: WAYS }],
+    ["all set (test)", SK_TEST, PK_TEST, { card: true, form: true, why: null, ways: WAYS }],
+    ["spaces around the key are fine", SK_LIVE, ` ${PK_LIVE}\n`, { card: true, form: true, why: null, ways: WAYS }],
+    ["no publishable key", SK_LIVE, undefined, { card: true, form: false, why: "no-key", ways: [] }],
+    ["an empty one", SK_LIVE, "  ", { card: true, form: false, why: "no-key", ways: [] }],
+    ["wrapped in quotes", SK_LIVE, `"${PK_LIVE}"`, { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 2, kind: null, slips: ["quoted"] }, ways: [] }],
+    ["a space inside", SK_LIVE, PK_LIVE.replace("Wd73", "Wd 73"), { card: true, form: false, why: "bad-key", shape: { length: PK_LIVE.length + 1, kind: "publishable", slips: ["spaced"] }, ways: [] }],
+    ["the SECRET key pasted in by mistake", SK_LIVE, SK_LIVE, { card: true, form: false, why: "bad-key", shape: { length: SK_LIVE.length, kind: "secret", slips: ["secret"] }, ways: [] }],
+    ["live public key, test secret key", SK_TEST, PK_LIVE, { card: true, form: false, why: "mode-mismatch", ways: [] }],
+    ["test public key, live secret key", SK_LIVE, PK_TEST, { card: true, form: false, why: "mode-mismatch", ways: [] }],
+    ["card payments off (no secret key)", undefined, PK_LIVE, { card: false, form: false, why: null, ways: [] }],
+    ["nothing set", undefined, undefined, { card: false, form: false, why: "no-key", ways: [] }],
   ]) {
     const got = await ask({ sk, pk });
     assert.equal(got.code, 200, label);
     assert.deepEqual(got.body, want, label);
-    const keys = want.why === "bad-key" ? ["card", "form", "why", "shape"] : ["card", "form", "why"];
+    const keys = want.why === "bad-key" ? ["card", "form", "why", "shape", "ways"] : ["card", "form", "why", "ways"];
     assert.deepEqual(Object.keys(got.body), keys, `${label}: only these answers`);
     assert.equal(leak(got.text), null, `${label}: no part of a key in ${got.text}`);
   }
@@ -106,7 +110,7 @@ test("card-setup: a bad key's shape names every slip in words, and never any cha
   ]) {
     const got = await ask({ sk: SK_LIVE, pk });
     assert.equal(got.code, 200, label);
-    assert.deepEqual(got.body, { card: true, form: false, why: "bad-key", shape: { length: pk.trim().length, kind, slips } }, label);
+    assert.deepEqual(got.body, { card: true, form: false, why: "bad-key", shape: { length: pk.trim().length, kind, slips }, ways: [] }, label);
     assert.equal(leak(got.text), null, `${label}: no part of a key in ${got.text}`);
     assert.equal(echoed(got.text, pk), null, `${label}: no 6 characters of it in ${got.text}`);
   }

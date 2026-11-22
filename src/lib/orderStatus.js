@@ -21,14 +21,17 @@ export const canMarkPaid = (status) => !status || status === "pending" || status
 
 // How the client paid, saved on the order as paid_method; the paid invoice says "Paid by ..."
 // (Andy, 2026-11-17). Only these: the server refuses anything else (api/_lib/adminOps.js).
-// Klarna is saved only by the website, when Stripe says so (api/_lib/stripe.js paidWith); it is
-// never a "Mark paid" button (markPaidChoices), but an order paid with it keeps it (knownPaidMethod).
+// Klarna, Link and a bank payment (ACH) are saved only by the website, when Stripe says so
+// (api/_lib/stripe.js paidWith); they are never a "Mark paid" button (markPaidChoices), but an
+// order paid with one keeps it (knownPaidMethod).
 export const PAID_METHODS = [
   ["zelle", "Zelle"],
   ["venmo", "Venmo"],
   ["cashapp", "Cash App"],
   ["card", "Card"],
+  ["link", "Link"],
   ["klarna", "Klarna"],
+  ["bank", "Bank (ACH)"],
   ["cash", "Cash"],
   ["other", "Other"],
 ];
@@ -62,8 +65,8 @@ export const resendQuestion = (status) => isPaid(status)
   ? "This invoice was sent already and paid. Send it again?"
   : "This invoice was sent already. Send it again?";
 
-// The method already saved on the order, if it is one of the six; else null. An order that was
-// paid before (Paid -> Shipped -> Paid again) knows how it was paid, so nobody is asked twice.
+// The method already saved on the order, if it is one of PAID_METHODS; else null. An order that
+// was paid before (Paid -> Shipped -> Paid again) knows how it was paid, so nobody is asked twice.
 export function knownPaidMethod(order) {
   const m = order && order.paid_method;
   return PAID_METHODS.some(([v]) => v === m) ? m : null;
@@ -93,12 +96,29 @@ export const STATUS_LOOK = {
   delivered: { bg: "var(--gold)", fg: "var(--ink)" },
 };
 
+// A bank payment (ACH) on its way: the website sets the order to "processing" until Stripe says
+// the money is in (Paid) or that it didn't come (back to unpaid): api/_lib/stripe.js bankClearing.
+// Nobody picks it, so it is not a step on ORDER_STATUSES: it reads "Payment processing", lit as
+// far as Confirmed (no money yet), its white words on a blue chip at 6.7:1. Admin's Status menu
+// shows it only on an order that is in it (statusOptions).
+export const PROCESSING = "processing";
+const PROCESSING_LOOK = { label: "Payment processing", bg: "#2f5f8a", fg: "#fff", step: 1 };
+
 // One status as a buyer sees it: its word, its colours and its step on the list (0 = Pending ...
 // 4 = Delivered). A status the list doesn't know shows its own word on a plain chip, step -1, so
 // nothing is lit.
 export function statusLook(status) {
+  if (status === PROCESSING) return { ...PROCESSING_LOOK, dot: PROCESSING_LOOK.bg };
   const step = ORDER_STATUSES.findIndex(([v]) => v === status);
   if (step < 0) return { label: status || "", bg: "var(--border)", fg: "var(--ink)", dot: "var(--border)", step: -1 };
   const { bg, fg, dot = bg } = STATUS_LOOK[status];
   return { label: ORDER_STATUSES[step][1], bg, fg, dot, step };
+}
+
+// The choices in an order's Status menu (Admin -> Orders): the five steps, and "Payment processing"
+// between Confirmed and Paid while the order is in it, so the menu shows what the order really is.
+export function statusOptions(status) {
+  if (status !== PROCESSING) return ORDER_STATUSES;
+  const at = ORDER_STATUSES.findIndex(([v]) => v === "paid");
+  return [...ORDER_STATUSES.slice(0, at), [PROCESSING, PROCESSING_LOOK.label], ...ORDER_STATUSES.slice(at)];
 }

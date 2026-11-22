@@ -5,13 +5,14 @@ import { bearer } from "./adminToken.js";
 import { checkPassword } from "./adminSecret.js";
 import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
-import { cardPicture, markSoldForOrder } from "./artworks.js";
+import { cardPicture, holdArtForOrder, markSoldForOrder, otherPageClearing, releaseArtForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
-import { cardReady, cardSetup, createCheckout, expireCheckout, getCheckout, paidFor, paidWith, isSessionId, publishableKey, StripeError } from "./stripe.js";
+import { bankState, cardReady, cardSetup, clearingFor, createCheckout, expireCheckout, getCheckout, paidFor, paidWith, isSessionId, publishableKey, StripeError, WAY_REFUSED } from "./stripe.js";
 import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
+import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } from "./cartEmails.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -268,6 +269,10 @@ export async function opInvoice(db, body) {
 // Money has arrived: Paid, and everything after it. (Browser copy: src/lib/orderStatus.js.)
 const PAID_STATUSES = ["paid", "shipped", "delivered"];
 const NOT_PAID_STATUSES = ["pending", "confirmed"];
+// A bank payment (ACH) on its way: "Payment processing" until Stripe says it is paid, or that it
+// failed (stripe.js bankClearing; browser copy: src/lib/orderStatus.js PROCESSING). Not money yet.
+const CLEARING = "processing";
+const BEFORE_PAID = [...NOT_PAID_STATUSES, CLEARING];
 const cardTicked = (order) => !order.payment_methods || String(order.payment_methods).split(",").includes("stripe");
 
 // Stripe refused or is out of reach: the client hears card payment isn't working right now, never
@@ -283,20 +288,35 @@ const cardLater = (op, e) => {
 // then back"). As the Cart's (cartCheckout.js formKey): the browser must have Stripe.js ready
 // (embedded: true) and the shop's publishable key must be set and right, or no page is made and
 // the page says so calmly (CARD_FORM_DOWN, 409). Stripe's own page is never made any more; pages
-// made before still bring the client back (&card=..., opCardPaid), and so does Klarna, the one
-// way to pay in the form that leaves for its own site (stripe.js waysToPay).
+// made before still bring the client back (&card=..., opCardPaid), and so does any way to pay in
+// the form that leaves for its own site, such as Klarna (stripe.js waysToPay).
 // last: the card page this tab opened before for this invoice, asked about first so only ONE page
 // can take the money. Paid after all: recorded (markCardPaid: Paid, the emails once) and no new
-// form. Still open: closed (Stripe "expire") before the new one. Another invoice's: left alone.
+// form. A bank payment made there, still clearing: no new form either ({ processing: true }); one
+// that failed: recorded (markBankFailed), and a new form. Still open: closed (Stripe "expire")
+// before the new one. Another invoice's: left alone. A bank payment still clearing for this
+// invoice (Payment processing): no new form, whatever page the tab names, until Stripe says how
+// it went.
+// way: the one way to pay the client chose (stripe.js WAYS: "card", "klarna" or "bank"); none: as
+// before the checkout asked for one. Klarna or a bank payment that Stripe won't open here: a 409
+// with one calm line (stripe.js wayRefused), and never a card form in its place.
 // Answers the form: { ref (the invoice number), lines, total, session, clientSecret, publishableKey }.
 export async function opCardCheckout(db, body, mail) {
-  const order = await findInvoice(db, invoiceToken(body.token));
+  let order = await findInvoice(db, invoiceToken(body.token));
   if (PAID_STATUSES.includes(order.status)) return { paid: true };
   if (!order.invoice_approved) throw new InputError("Please confirm the invoice first", 409);
   if (!cardTicked(order)) throw new InputError("Card payment is not offered on this invoice", 409);
   if (!cardReady()) throw cardLater("card-checkout", new StripeError("Card payments are not set up yet", "no-key"));
   let before = await pageBefore(body.last, order);
-  if (before?.status === "complete") return paidBefore(db, before, order, mail);
+  if (before?.status === "complete") {
+    const done = await paidBefore(db, before, order, mail);
+    if (done) return done;
+    // Its bank payment failed, and that is recorded now: on with the invoice as it stands now.
+    before = null;
+    order = await findInvoice(db, order.invoice_token);
+    if (PAID_STATUSES.includes(order.status)) return { paid: true };
+  }
+  if (order.status === CLEARING) return { paid: false, processing: true };
   const key = formKey("card-checkout", body); // before the page before is closed: no form, no change
   if (before?.status === "open") {
     try {
@@ -305,7 +325,10 @@ export async function opCardCheckout(db, body, mail) {
       if (!(e instanceof StripeError)) throw e;
       // Stripe won't close it: just paid, or closed already? Its own record says.
       try { before = await getCheckout(before.id); } catch (again) { throw cardLater("card-checkout", again); }
-      if (before?.status === "complete") return paidBefore(db, before, order, mail);
+      if (before?.status === "complete") {
+        const done = await paidBefore(db, before, order, mail);
+        if (done) return done;
+      }
       if (before?.status !== "expired") throw cardLater("card-checkout", e);
     }
   }
@@ -314,8 +337,11 @@ export async function opCardCheckout(db, body, mail) {
   const invNum = invoiceNumber(order);
   let page;
   try {
-    page = await createCheckout({ order, invNum, image });
+    page = await createCheckout({ order, invNum, image, way: body.way });
   } catch (e) {
+    // Klarna or a bank payment, chosen, that Stripe won't open for this invoice: its one calm line
+    // (stripe.js wayRefused), which the invoice page shows as it is, beside the other ways to pay.
+    if (e instanceof StripeError && e.code === WAY_REFUSED) throw new InputError(e.message, 409);
     throw cardLater("card-checkout", e);
   }
   // What the page shows above the form, the piece first (src/components/CardCheckout.jsx).
@@ -337,33 +363,112 @@ async function pageBefore(sessionId, order) {
   return page?.metadata?.invoice_token === order.invoice_token ? page : null;
 }
 
-// The page before was paid after all (the tab moved on before it heard, or Stripe's message hasn't
-// come yet): recorded exactly as on the way back (markCardPaid: Paid, the emails once, the piece
-// SOLD). A finished page for another amount (the invoice was changed since) is never taken as paid.
+// The page before is finished (the tab moved on before it heard, or Stripe's message hasn't come
+// yet): recorded exactly as on the way back (settleInvoice). Paid: { paid: true }; its bank payment
+// still clearing: { paid: false, processing: true }; that bank payment failed: null, and the
+// invoice can be paid again. A finished page for another amount (the invoice was changed since)
+// is never taken as paid.
 async function paidBefore(db, page, order, mail) {
-  if (!paidFor(page, order)) {
-    console.warn("store card-checkout: a finished card page that isn't this invoice's exact amount", page.id);
-    throw new InputError("This invoice already has a card payment. Please contact Fonkiart.", 409);
+  const done = await settleInvoice(db, order, mail, "redirect", page);
+  if (done.paid || done.processing) return done;
+  if (done.failed) return null;
+  console.warn("store card-checkout: a finished card page that isn't this invoice's exact amount", page.id);
+  throw new InputError("This invoice already has a card payment. Please contact Fonkiart.", 409);
+}
+
+// What Stripe's record of a finished page (page) means for this invoice, acted on once, however
+// it is heard (the client coming back, a page found paid before, Stripe's message):
+//  - paid, for its exact amount: Paid, the emails, the piece SOLD (markCardPaid) -> { paid: true };
+//  - a bank payment (ACH) still clearing: Payment processing, the piece held (markClearing), no
+//    email -> { paid: false, processing: true };
+//  - that bank payment failed: back to unpaid, the piece released, the client told (markBankFailed)
+//    -> { paid: false, failed: true };
+//  - anything else: nothing changes -> { paid: false }.
+// NOTHING is marked Paid unless Stripe says "paid". Throws a 502 when Stripe can't say how a bank
+// payment stands, so nothing is decided on a guess (Stripe's message is then sent again).
+async function settleInvoice(db, order, mail, via, page) {
+  if (paidFor(page, order)) {
+    await markCardPaid(db, order, mail, via, page);
+    await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
+    return { paid: true };
   }
-  await markCardPaid(db, order, mail, "redirect", page);
-  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
-  return { paid: true };
+  if (!clearingFor(page, order)) return { paid: false };
+  let state;
+  try {
+    state = await bankState(page);
+  } catch (e) {
+    if (!(e instanceof StripeError)) throw e;
+    console.error(`store card-paid (${via}): couldn't ask Stripe how a bank payment stands:`, e.code, e.message);
+    throw new InputError("Couldn't check the bank payment right now", 502);
+  }
+  if (state === "processing") {
+    await markClearing(db, order, via, page);
+    return { paid: false, processing: true };
+  }
+  await markBankFailed(db, order, mail, via, page);
+  return { paid: false, failed: true };
+}
+
+// A bank payment is clearing for this invoice: "Payment processing" (only from Pending or
+// Confirmed, so never over a Paid one), and its piece held for this client (artworks.js
+// holdArtForOrder). A message sent again holds it again, which changes nothing. If the database
+// refuses: via "webhook", 500, so Stripe sends it again; via "redirect", the log.
+async function markClearing(db, order, via, page) {
+  const { data: moved, error } = await db.from("Orders").update({ status: CLEARING })
+    .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
+  if (error) {
+    console.error(`store card-paid (${via}): could not mark the order Payment processing:`, error.message);
+    if (via === "webhook") throw new InputError("Could not mark the order Payment processing yet. Please send this again.", 500);
+    return;
+  }
+  const fresh = !!moved?.length;
+  if (fresh || order.status === CLEARING) await holdArtForOrder(db, order, { page: page.id, fresh });
+}
+
+// That bank payment failed: the order goes back to Confirmed (Pending if it was never confirmed),
+// its piece back on sale (artworks.js releaseArtForOrder), and the client gets ONE short email
+// with the way back to their invoice. Only the call whose guarded write moves the order out of
+// Payment processing does this, so a replay, a second tab or a forged message sends nothing; and
+// a page that failed long ago never undoes a newer page's bank payment (otherPageClearing). The
+// shop hears it only when a piece needs a person: one the website can't put back on sale itself.
+async function markBankFailed(db, order, mail, via, page) {
+  if (otherPageClearing(order, page.id)) return;
+  const back = order.invoice_approved ? "confirmed" : "pending";
+  const { data: moved, error } = await db.from("Orders").update({ status: back })
+    .eq("id", order.id).eq("status", CLEARING).select("id");
+  if (error) {
+    console.error(`store card-paid (${via}): could not set the order back to ${back} after its bank payment failed:`, error.message);
+    if (via === "webhook") throw new InputError("Could not record the failed bank payment yet. Please send this again.", 500);
+    return;
+  }
+  if (!moved?.length) return; // recorded already, or no longer clearing
+  const released = await releaseArtForOrder(db, order);
+  const amount = Number(order.amount);
+  const view = { ref: invoiceNumber(order), refLabel: "Invoice", lines: [{ title: order.item_title, amount }], total: amount,
+    name: String(order.client_name || "").trim().split(/\s+/)[0] || "" };
+  const link = `${siteUrl()}/?invoice=${encodeURIComponent(order.invoice_token)}`;
+  const who = order.client_name || order.client_email || "The client";
+  await Promise.allSettled([
+    mail.send({ to: order.client_email, subject: bankFailedSubject(view), htmlContent: bankFailed({ ...view, link }) }),
+    ...(released === "check" ? [mail.send({ to: mail.sender, subject: bankFailedShopSubject(view),
+      htmlContent: bankFailedShop({ ...view, who, email: order.client_email, back, check: [order.item_title] }) })] : []),
+  ]);
 }
 
 // Stripe says this invoice is paid (page: Stripe's record of the paid page): mark the order Paid,
-// with the way Stripe says it was paid (stripe.js paidWith: "klarna", else "card"; the paid
-// invoice then says "Paid by Klarna" or "Paid by card"), then email the shop and the client in
-// the same words.
-// The update only matches an order that is still Pending or Confirmed, so whoever gets there
-// first (the client coming back, Stripe's webhook, a second tab, a replay) sends the two
-// emails, and everyone after them sends none.
+// with the way Stripe says it was paid (stripe.js paidWith: "klarna", "link", "bank", else
+// "card"; the paid invoice then says "Paid by Klarna", "Paid by card"...), then email the shop and
+// the client in the same words.
+// The update only matches an order that is still Pending, Confirmed or Payment processing (a bank
+// payment that just cleared), so whoever gets there first (the client coming back, Stripe's
+// webhook, a second tab, a replay) sends the two emails, and everyone after them sends none.
 // If the database refuses the change:
 //  - via "redirect" (the client coming back): email anyway, telling the shop to mark it by hand;
 //  - via "webhook" (Stripe's message): email nobody and answer 500, so Stripe sends it again later.
 async function markCardPaid(db, order, mail, via, page) {
   const method = await paidWith(page);
   const { data: flipped, error } = await db.from("Orders").update({ status: "paid", invoice_approved: true, paid_method: method })
-    .eq("id", order.id).in("status", NOT_PAID_STATUSES).select("id");
+    .eq("id", order.id).in("status", BEFORE_PAID).select("id");
   if (error) {
     console.error(`store card-paid (${via}): could not mark the order Paid:`, error.message);
     if (via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
@@ -379,7 +484,8 @@ async function markCardPaid(db, order, mail, via, page) {
 // Paid in the card form on the invoice page, or back on it (?invoice=...&card=<page id>) from
 // Klarna's own site, or from Stripe's own page for a page made before the form opened inside it.
 // Ask Stripe if that page was really paid, for this invoice and amount; only then mark the order
-// Paid and email the shop and the client, once. Not paid yet (Klarna can say so): nothing changes.
+// Paid and email the shop and the client, once (settleInvoice). Not paid yet (Klarna can say so):
+// nothing changes. A bank payment made there: { paid: false, processing: true } while it clears.
 export async function opCardPaid(db, body, mail) {
   const order = await findInvoice(db, invoiceToken(body.token));
   if (PAID_STATUSES.includes(order.status)) return { paid: true };
@@ -392,27 +498,29 @@ export async function opCardPaid(db, body, mail) {
     console.error("store card-paid:", e.code, e.message);
     throw new InputError("Couldn't check the card payment right now", 502);
   }
-  if (!paidFor(page, order)) return { paid: false };
-  await markCardPaid(db, order, mail, "redirect", page);
-  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
-  return { paid: true };
+  return settleInvoice(db, order, mail, "redirect", page);
 }
 
-// Stripe's own "paid" message (a webhook), for the client who pays and closes the tab before
-// coming back. Set up in Stripe -> Developers -> Webhooks: endpoint
-// POST https://fonkiart.com/api/store?op=stripe-event, event checkout.session.completed.
+// Stripe's own messages about a payment page (a webhook), for the client who pays and closes the
+// tab before coming back, and for a bank payment, which clears days later. Set up in Stripe ->
+// Developers -> Webhooks: endpoint POST https://fonkiart.com/api/store?op=stripe-event, events
+// checkout.session.completed (a page finished: paid, or a bank payment started),
+// checkout.session.async_payment_succeeded (that bank payment cleared) and
+// checkout.session.async_payment_failed (it didn't).
 //
-// No signature check, on purpose: nothing in the message is believed. Only the payment page's
-// id is taken from it; the website then asks Stripe about that page with its own key, and
-// finds the order from STRIPE's answer, exactly like the client coming back. So a forged or
-// replayed message can only make the website learn what Stripe itself says, and the order
-// turns Paid (and the emails go out) once.
+// No signature check, on purpose: nothing in the message is believed, not even which of the three
+// it says it is. Only the payment page's id is taken from it; the website then asks Stripe about
+// that page with its own key (settleInvoice: paid, clearing or failed, as Stripe's own record says
+// NOW), and finds the order from STRIPE's answer, exactly like the client coming back. So a forged
+// or replayed message can only make the website learn what Stripe itself says, and the order turns
+// Paid (and the emails go out) once.
 //
 // What we answer matters to Stripe: 200 means done (also for anything we choose to ignore);
 // anything else means "try again later", which Stripe does for up to 3 days.
+const EVENTS = new Set(["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"]);
 export async function opStripeEvent(db, event, mail) {
   const type = typeof event.type === "string" ? event.type.slice(0, 100) : "no type";
-  if (type !== "checkout.session.completed") return { received: true, ignored: type };
+  if (!EVENTS.has(type)) return { received: true, ignored: type };
   const sessionId = event.data?.object?.id;
   if (!isSessionId(sessionId)) return { received: true, ignored: "not a payment page id" };
   let session;
@@ -442,10 +550,10 @@ export async function opStripeEvent(db, event, mail) {
     return { received: true, ignored: "unknown order" };
   }
   if (PAID_STATUSES.includes(order.status)) return { received: true, paid: true };
-  if (!paidFor(session, order)) return { received: true, ignored: "not paid" };
-  await markCardPaid(db, order, mail, "webhook", session);
-  await markSoldForOrder(db, { ...order, status: "paid" }); // the artwork is SOLD (artworks.js)
-  return { received: true, paid: true };
+  const { paid, processing, failed } = await settleInvoice(db, order, mail, "webhook", session);
+  if (paid) return { received: true, paid: true };
+  if (processing) return { received: true, processing: true };
+  return failed ? { received: true, failed: true } : { received: true, ignored: "not paid" };
 }
 
 export async function opInvoiceApprove(db, body, mail) {

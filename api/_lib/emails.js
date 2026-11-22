@@ -326,9 +326,10 @@ export function shipAddressShop({ order, invNum, address, before = null }) {
     + footnote, [order.item_title]);
 }
 
-// To the shop when a client pays an invoice in the card form (a card or Klarna). Stripe
-// confirmed it to the server, so the website marked the order Paid by itself, with the way
-// Stripe says it was paid (paid_method), in the words of stripe.js paidWords.
+// To the shop when a client pays an invoice in the card form (a card, Link, Klarna, or a bank
+// payment once it clears). Stripe confirmed it to the server, so the website marked the order
+// Paid by itself, with the way Stripe says it was paid (paid_method), in the words of stripe.js
+// paidWords.
 export function cardPaidSubject(order) {
   return `Paid ${paidWords(order.paid_method).by} ✓ — ${order.item_title} · $${money(order.amount)}`;
 }
@@ -337,7 +338,7 @@ export function cardPaidShop({ order, invNum, saved = true }) {
   const way = paidWords(order.paid_method);
   return frame(`Paid ${way.by}`,
     p(`<strong>${clientWho(order)}</strong> paid <strong>${amount}</strong> ${way.how} for <strong>${e(order.item_title)}</strong>.`)
-    + panel("Paid", field("Invoice", e(invNum)) + field("Amount", amount) + field("Paid with", `${way.name} (Stripe)`))
+    + panel("Paid", field("Invoice", e(invNum)) + field("Amount", amount) + field("Paid with", way.stripe))
     + (saved
       ? p(`The website already marked the order <strong>Paid</strong>. Ship it, then set it to <strong>Shipped</strong> in Admin → Orders.`)
       : p(`⚠ The website could not mark the order Paid. Please tap <strong>✓ Mark paid</strong> on it in Admin → Orders, then ship it.`))

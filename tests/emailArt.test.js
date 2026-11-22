@@ -97,6 +97,8 @@ const ABOUT_PIECES = {
   "New order (shop)": (ts) => T.orderStore({ orderRef: "FA-1752", items: ts.map(title => ({ title, amount: 950 })), total: 950, couponApplied: false, discount: 15, fullName: "Ana Test", email: "ana@example.com", phone: "", addr: "", saveFailed: false }),
   "Cart paid by card (shop)": (ts) => CE.cartPaidShop({ ...cartView(ts), who: "Ana Test", email: "ana@example.com" }),
   "Cart payment received (buyer)": (ts) => CE.cartReceived(cartView(ts)),
+  "Bank payment didn't go through (buyer)": (ts) => CE.bankFailed(cartView(ts)),
+  "Bank payment didn't go through (shop)": (ts) => CE.bankFailedShop({ ...cartView(ts), who: "Ana Test", email: "ana@example.com", back: "pending", check: ts }),
   "Waiting for you (shop reminder)": (ts) => T.reminderStore({ requests: [], orders: ts.map(title => ({ title, amount: 950, email: "ana@example.com", status: "paid", days: 1 })) }),
 };
 const ABOUT_ONE = {
@@ -318,5 +320,5 @@ test("the table: every email the server can build is either about its pieces or 
   assert.deepEqual(emails, ["adminReset", "cardPaidShop", "contactBuyer", "contactStore", "customerReset", "inboundUnmatched", "inquiryBuyer",
     "inquiryStore", "invoiceApproved", "orderBuyer", "orderStore", "paymentReceived", "reminderStore", "requestReply", "requestReplyStore",
     "shipAddressShop", "welcomeCoupon"], "a new email? add it to this table and to ABOUT_ONE / ABOUT_PIECES or the no-piece list");
-  assert.deepEqual(Object.keys(CE).filter(k => !k.endsWith("Subject")).sort(), ["cartPaidShop", "cartReceived"]);
+  assert.deepEqual(Object.keys(CE).filter(k => !k.endsWith("Subject")).sort(), ["bankFailed", "bankFailedShop", "cartPaidShop", "cartReceived"]);
 });

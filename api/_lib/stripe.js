@@ -9,7 +9,10 @@
 // user jump to stripe then back"). The form takes cards and Klarna (Andy, 2026-11-20: "Klarna is
 // something we should try to push ... little payments"): a card is paid right there in the form;
 // Klarna takes the buyer to Klarna's own site to agree the payments, and brings them back to
-// fonkiart.com (return_url, waysToPay below).
+// fonkiart.com (return_url, waysToPay below). Since 2026-11-21 the checkout can also ask for ONE
+// way per page (Andy: "also paying options look what strip offers .. klarma , Secure Link
+// (https://link.com/) , bank transfer / ACH"): cards with Link, Klarna, or a US bank account (ACH),
+// which clears days later (WAYS below).
 //
 // Once paid, the website asks Stripe AGAIN whether that page was really paid, for this
 // invoice and this amount, before it marks the order Paid. Nothing the browser sends is
@@ -17,7 +20,9 @@
 // storeOps.js) is checked the same way, for the client who closes the tab too soon.
 //
 // Needs STRIPE_SECRET_KEY in Vercel (a restricted key with "Checkout Sessions: Write" is
-// enough). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
+// enough for cards; to tell Klarna, Link and a bank payment apart, and to know when a bank payment
+// failed, it also needs "PaymentIntents: Read"). NEVER in git: this repo is public. No key = no
+// card option; nothing else breaks.
 
 import { siteUrl } from "./site.js";
 
@@ -97,10 +102,14 @@ export function keyShape(raw) {
 // The shop's own look at the card setup (op "card-setup"), without making a Stripe page: card
 // payments on, the Cart's card form able to open inside fonkiart.com, and if not, why; with a
 // bad key, its shape in words (keyShape). NEVER any part of a key (the answer goes to whoever asks).
+// ways: the ways to pay this server can open now, so the checkout shows a row only for those:
+// "card", "link" (inside the card way), "klarna" and "bank". None while no form can open. A way
+// Stripe has said is not switched on for the account is left out from then on (switchedOff).
 export function cardSetup() {
   const { why } = pkCheck();
   const answer = { card: cardReady(), form: !!publishableKey(), why };
   if (why === "bad-key") answer.shape = keyShape(process.env.STRIPE_PUBLISHABLE_KEY);
+  answer.ways = answer.card && answer.form ? ALL_WAYS.filter(w => !switchedOff.has(w)) : [];
   return answer;
 }
 
@@ -149,8 +158,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const isSessionId = (id) => /^cs_(live|test)_[A-Za-z0-9]{10,250}$/.test(String(id || ""));
 
 // A payment page: one item, paid once, in dollars, by card (Apple Pay and Google Pay count as
-// cards). The card form adds Klarna (waysToPay below); Admin's card check (cardCheck) stays
-// cards only. Never a slower method such as a bank transfer, which comes back "not paid yet".
+// cards). The card form sets its own ways to pay (waysToPay below); Admin's card check (cardCheck)
+// stays cards only.
 // image: one picture shown beside the item (Stripe's product_data.images), or none.
 function paymentPage({ cents, name, description, image, ...rest }) {
   return {
@@ -161,43 +170,98 @@ function paymentPage({ cents, name, description, image, ...rest }) {
   };
 }
 
-// The ways to pay in our card form, and where Stripe brings a buyer back to. Cards and Klarna
-// (Andy, 2026-11-20: "Klarna is something we should try to push ... little payments").
-// redirect_on_completion "if_required": a CARD is paid right there in the form and the buyer
-// STAYS (Stripe.js says so, onComplete, exactly as with "never": 3-D Secure opens inside Stripe's
-// own form); only a way to pay that must leave, Klarna (its own site), comes back to return_url.
-// "never" would turn Klarna off ("redirect-based payment methods will be disabled").
+// ── the ways to pay ─────────────────────────────────────────────
+// The checkout shows each way to pay as its own choice, and asks for ONE way per payment page
+// (way, from the browser; Andy, 2026-11-21: "also paying options look what strip offers ..
+// klarma , Secure Link (https://link.com/) , bank transfer / ACH"). Stripe's names for each:
+//  - "card": cards (Apple Pay and Google Pay count as cards) and Link, Stripe's saved details for
+//    a faster checkout, which Stripe offers only when "link" is in the list beside "card";
+//  - "klarna": Klarna alone;
+//  - "bank": a US bank account (ACH Direct Debit). Stripe checks the account (it finds the bank
+//    online, or sends two small deposits for the buyer to confirm), and the money can take up to
+//    4 business days to clear (Stripe's ACH docs). Until then Stripe says the page is "complete"
+//    but "unpaid" (bankClearing).
+// No way named, or a word this list doesn't know: cards and Klarna, exactly as before the
+// checkout asked for one.
+const WAYS = new Map([["card", ["card", "link"]], ["klarna", ["klarna"]], ["bank", ["us_bank_account"]]]);
+const BEFORE_WAYS = ["card", "klarna"];
+const CARDS_ONLY = ["card"];
+const isCardsOnly = (types) => types.length === 1 && types[0] === "card";
+export const wayTypes = (way) => WAYS.get(way) ?? BEFORE_WAYS;
+// The checkout's names for what Stripe calls them (card-setup's ways), and those in words (the log).
+const ALL_WAYS = ["card", "link", "klarna", "bank"];
+const WAY_OF = new Map([["card", "card"], ["link", "link"], ["klarna", "klarna"], ["us_bank_account", "bank"]]);
+const WORDS = new Map([["card", "card"], ["link", "Link"], ["klarna", "Klarna"], ["us_bank_account", "bank (ACH)"]]);
+const said = (types) => (isCardsOnly(types) ? "cards only" : types.map(t => WORDS.get(t) || t).join(" and "));
+// Ways Stripe has said are not switched on for the account, as this server heard it (code
+// payment_method_unactivated: "Activate the payment method in the Dashboard"): card-setup leaves
+// them out from then on. Only that answer counts: any other refusal (an amount Klarna won't take,
+// say) is about one page, not the account. Forgotten when the server starts again (every deploy
+// does), so a way switched on in Stripe comes back by itself.
+const switchedOff = new Set();
+
+// The ways to pay in one card form, and where Stripe brings a buyer back to.
+// redirect_on_completion "if_required": a CARD (or Link) is paid right there in the form and the
+// buyer STAYS (Stripe.js says so, onComplete, exactly as with "never": 3-D Secure opens inside
+// Stripe's own form); only a way to pay that must leave (Klarna, its own site; a bank's own page,
+// if Stripe needs one) comes back to return_url. "never" would turn those off ("redirect-based
+// payment methods will be disabled").
 // return_url: the shop's own address (site.js), NEVER one from the browser, on the return path the
 // site already reads (back): an invoice's ?invoice=<token>&card=<page id> (InvoicePage, op
 // card-paid), a Cart order's ?cart=FA-...&card=<page id> (CardReturnPage, op cart-paid). Stripe
 // puts the page's id in place of {CHECKOUT_SESSION_ID}. Back there, the server asks Stripe itself
 // whether that page is paid, for the exact amount (paidFor, cartPaidFor): until Stripe says
-// "paid", the order stays unpaid. klarna false: cards only, never sent anywhere, as before Klarna.
-function waysToPay(klarna, back) {
-  return klarna
-    ? { payment_method_types: ["card", "klarna"], redirect_on_completion: "if_required", return_url: `${siteUrl()}${back}{CHECKOUT_SESSION_ID}` }
-    : { payment_method_types: ["card"], redirect_on_completion: "never" };
+// "paid", the order stays unpaid. Cards only: never sent anywhere, exactly as before Klarna.
+function waysToPay(types, back) {
+  return isCardsOnly(types)
+    ? { payment_method_types: CARDS_ONLY, redirect_on_completion: "never" }
+    : { payment_method_types: types, redirect_on_completion: "if_required", return_url: `${siteUrl()}${back}{CHECKOUT_SESSION_ID}` };
 }
 
-// Asks Stripe for a payment page (make({ klarna, pictures }) builds it), so that neither Klarna nor
-// a picture can ever stop a card payment. If Stripe refuses it (a 400): when Stripe names a
-// picture as the field it refused, it is asked again without the pictures; otherwise (Klarna off
-// for the account, the amount outside Klarna's range...) again with cards only, as before Klarna,
-// then without the pictures too. At most three asks. Anything else (Stripe down, a bad key) is
-// thrown at once.
-async function askForPage(what, make, { pictures }) {
-  let want = { klarna: true, pictures: !!pictures };
+// A way the buyer picked by name, Klarna or a bank payment, that Stripe won't open for this page
+// (an amount outside what Klarna takes, or the way not switched on for the account): no page,
+// and never a card form in its place, since the buyer asked for that way and not for a card.
+// The buyer gets one calm line instead and picks another way (the ops answer it as a 409, which
+// the invoice page and the checkout show as it is, or as cart-card's cardError). Stripe's own
+// words stay in the log.
+export const WAY_REFUSED = "way-refused";
+const CHOSEN = new Map([["klarna", "Klarna"], ["bank", "Paying by bank (ACH)"]]);
+function wayRefused(way, e) {
+  const when = e.code === "payment_method_unactivated" ? "right now" : "for this amount";
+  const refused = new StripeError(`${CHOSEN.get(way)} isn't available ${when}. Please choose another way.`, WAY_REFUSED, e.httpStatus, e.param);
+  refused.way = way;
+  return refused;
+}
+
+// Asks Stripe for a payment page (make({ types, pictures }) builds it) for the way the checkout
+// asked for, so that neither a way to pay nor a picture can ever stop a card payment. If Stripe
+// refuses it (a 400): when Stripe names a picture as the field it refused, it is asked again
+// without the pictures. Otherwise, for the card way or none (Link or Klarna off for the account,
+// an amount Klarna won't take...), again with cards only, as before Klarna, then without the
+// pictures too: at most three asks. For Klarna or a bank payment, chosen by name: no card form
+// instead (wayRefused above). Anything else (Stripe down, a bad key) is thrown at once.
+async function askForPage(what, make, { pictures, way }) {
+  const chosen = CHOSEN.has(way);
+  let want = { types: wayTypes(way), pictures: !!pictures };
   for (;;) {
     try {
       return await stripe("/checkout/sessions", make(want));
     } catch (e) {
       if (!(e instanceof StripeError) || e.httpStatus !== 400) throw e;
       const next = want.pictures && /\[images\]/.test(String(e.param || "")) ? { ...want, pictures: false }
-        : want.klarna ? { ...want, klarna: false }
+        : chosen ? null
+        : !isCardsOnly(want.types) ? { ...want, types: CARDS_ONLY }
         : want.pictures ? { ...want, pictures: false }
         : null;
+      if (e.code === "payment_method_unactivated" && !isCardsOnly(want.types)) {
+        for (const t of want.types) if (t !== "card" && WAY_OF.has(t)) switchedOff.add(WAY_OF.get(t));
+      }
+      if (!next && chosen) {
+        console.warn(`stripe: Stripe refused ${what} (${said(want.types)}, ${want.pictures ? "with" : "without"} pictures); the buyer chose it, so no card form instead:`, e.code, e.param || "", e.message);
+        throw wayRefused(way, e);
+      }
       if (!next) throw e;
-      console.warn(`stripe: Stripe refused ${what} (${want.klarna ? "card and Klarna" : "cards only"}, ${want.pictures ? "with" : "without"} pictures); asking again ${next.klarna ? "with Klarna" : "with cards only"}, ${next.pictures ? "with" : "without"} pictures:`, e.code, e.param || "", e.message);
+      console.warn(`stripe: Stripe refused ${what} (${said(want.types)}, ${want.pictures ? "with" : "without"} pictures); asking again with ${said(next.types)}, ${next.pictures ? "with" : "without"} pictures:`, e.code, e.param || "", e.message);
       want = next;
     }
   }
@@ -211,16 +275,18 @@ async function askForPage(what, make, { pictures }) {
 // ?invoice=<token>&card=<page id> (waysToPay), the same way back as Stripe's own pages made before
 // this change, checked the same way (storeOps.js opCardPaid).
 // image: the artwork's picture (artworks.js cardPicture), or nothing. Neither the picture nor
-// Klarna ever stops a payment: if Stripe refuses the page, it is asked for again (askForPage).
+// Link or Klarna ever stops a card payment: if Stripe refuses the page, it is asked for again
+// (askForPage). way: the one way to pay the client chose ("card", "klarna" or "bank", WAYS above),
+// or none; Klarna or a bank payment chosen and refused: no page at all (WAY_REFUSED).
 // Returns { id, clientSecret }: id, which the invoice page names once paid (card-paid) or when it
 // asks for a form again (card-checkout's last); clientSecret, for Stripe.js to open the form.
-export async function createCheckout({ order, invNum, image }) {
+export async function createCheckout({ order, invNum, image, way }) {
   const cents = toCents(order.amount);
   if (cents < MIN_CENTS) throw new StripeError("This invoice is too small for a card payment", "too-small");
   const title = String(order.item_title || "Fonkiart artwork").slice(0, 200);
   const picture = typeof image === "string" && image.startsWith("https://") ? image : undefined;
   const back = `/?invoice=${encodeURIComponent(order.invoice_token)}&card=`;
-  const page = ({ klarna, pictures }) => paymentPage({
+  const page = ({ types, pictures }) => paymentPage({
     cents, name: title, description: `Invoice ${invNum}`, image: pictures ? picture : undefined,
     customer_email: EMAIL_RE.test(order.client_email || "") ? order.client_email : undefined,
     client_reference_id: invNum,
@@ -228,9 +294,9 @@ export async function createCheckout({ order, invNum, image }) {
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart invoice ${invNum}: ${title}`, metadata: { invoice: invNum, order_id: order.id } },
     ui_mode: "embedded",
-    ...waysToPay(klarna, back), // paid by card, the client stays on the invoice page
+    ...waysToPay(types, back), // paid by card, the client stays on the invoice page
   });
-  const session = await askForPage("the invoice's payment page", page, { pictures: picture });
+  const session = await askForPage("the invoice's payment page", page, { pictures: picture, way });
   if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
   if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
   return { id: session.id, clientSecret: session.client_secret };
@@ -248,15 +314,15 @@ export async function createCheckout({ order, invNum, image }) {
 // (CardReturnPage asks cart-paid).
 // Returns { id, clientSecret }: id, kept by the checkout so paying again re-opens THIS order
 // (cart-again); clientSecret, for Stripe.js to open the form.
-// lines: [{ title, amount, image }]. Neither a picture nor Klarna ever stops a payment: if Stripe
-// refuses the page, it is asked for again (askForPage).
-export async function createCartCheckout({ ref, ids, lines, email }) {
+// lines: [{ title, amount, image }]. Neither a picture nor Link or Klarna ever stops a card
+// payment: if Stripe refuses the page, it is asked for again (askForPage). way: as for invoices.
+export async function createCartCheckout({ ref, ids, lines, email, way }) {
   const cents = lines.map(l => toCents(l.amount));
   if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
   if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
   const names = lines.map(l => String(l.title || "Fonkiart artwork").slice(0, 200));
   const tags = { cart_ref: ref, order_ids: ids.join(",") };
-  const page = ({ klarna, pictures: withPictures }) => ({
+  const page = ({ types, pictures: withPictures }) => ({
     mode: "payment",
     line_items: lines.map((l, n) => {
       const picture = withPictures && typeof l.image === "string" && l.image.startsWith("https://") ? [l.image] : undefined;
@@ -268,9 +334,9 @@ export async function createCartCheckout({ ref, ids, lines, email }) {
     // What Aliana sees on the payment in Stripe's own list.
     payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
     ui_mode: "embedded",
-    ...waysToPay(klarna, `/?cart=${encodeURIComponent(ref)}&card=`), // as invoices: cards and Klarna
+    ...waysToPay(types, `/?cart=${encodeURIComponent(ref)}&card=`), // as invoices
   });
-  const session = await askForPage("the Cart's payment page", page, { pictures: lines.some(l => typeof l.image === "string" && l.image.startsWith("https://")) });
+  const session = await askForPage("the Cart's payment page", page, { pictures: lines.some(l => typeof l.image === "string" && l.image.startsWith("https://")), way });
   if (!isSessionId(session?.id)) throw new StripeError("Stripe sent no payment page", "no-id");
   if (!session.client_secret) throw new StripeError("Stripe sent no card form", "no-client-secret");
   return { id: session.id, clientSecret: session.client_secret };
@@ -304,31 +370,77 @@ export async function checkoutPaidFor({ sessionId, order }) {
   return paidFor(await getCheckout(sessionId), order);
 }
 
-// How a paid page was paid, as the order keeps it (Orders.paid_method): "klarna" for Klarna, else
-// "card" (Apple Pay and Google Pay are cards), exactly as before Klarna. Read from Stripe's own
-// record, never from a browser: the page's payment (its PaymentIntent), asked for with the payment
-// method it used, says that method's type. Asked only once a page is found paid, and never throws:
-// if Stripe can't answer this one question, the order is still recorded Paid, as a card, as before.
-const PAID_WITH = new Map([["klarna", "klarna"]]);
+// A page's payment (its PaymentIntent), as Stripe keeps it, with the payment method it used:
+// null when the page names none. Stripe's own record, never a browser's.
+async function paymentOf(session) {
+  const payment = session?.payment_intent;
+  if (payment && typeof payment === "object") return payment;
+  if (typeof payment !== "string" || !/^pi_[A-Za-z0-9]{10,250}$/.test(payment)) return null;
+  return stripe(`/payment_intents/${payment}?expand%5B%5D=payment_method`);
+}
+
+// How a paid page was paid, as the order keeps it (Orders.paid_method): "klarna", "link" (Link,
+// inside the card way) or "bank" (a US bank account), else "card" (Apple Pay and Google Pay are
+// cards), exactly as before Klarna. Read from Stripe's own record, never from a browser: the
+// page's payment says the type of the payment method it used. Asked only once a page is found
+// paid, and never throws: if Stripe can't answer this one question, the order is still recorded
+// Paid, as a card, as before.
+const PAID_WITH = new Map([["klarna", "klarna"], ["link", "link"], ["us_bank_account", "bank"]]);
 export async function paidWith(session) {
-  let payment = session?.payment_intent;
   try {
-    if (typeof payment === "string") {
-      if (!/^pi_[A-Za-z0-9]{10,250}$/.test(payment)) return "card";
-      payment = await stripe(`/payment_intents/${payment}?expand%5B%5D=payment_method`);
-    }
-    return PAID_WITH.get(payment?.payment_method?.type) ?? "card";
+    return PAID_WITH.get((await paymentOf(session))?.payment_method?.type) ?? "card";
   } catch (e) {
     console.warn("stripe: could not learn how a paid page was paid, so it is recorded as a card:", e?.code || "", e?.message || e);
     return "card";
   }
 }
 
-// That way in words, as the emails say it (emails.js for invoices, cartEmails.js for the Cart):
-// Klarna when the order says so, else a card, word for word as before Klarna.
-export const paidWords = (method) => (method === "klarna"
-  ? { by: "by Klarna", how: "with Klarna", name: "Klarna" }
-  : { by: "by card", how: "by card", name: "Card" });
+// ── a bank payment (ACH) clearing ───────────────────────────────
+// A bank payment is not money yet when the buyer finishes the form: Stripe says the page is
+// "complete" but "unpaid", then, days later, "paid" (its message
+// checkout.session.async_payment_succeeded) or not (async_payment_failed). Until then the order
+// reads "Payment processing" and its art stays held for that buyer (storeOps.js, cartCheckout.js).
+// NOTHING is ever marked Paid on "unpaid": only paidFor / cartPaidFor do that, on "paid".
+// bankClearing: does Stripe's record say a bank payment was made on this page and is clearing (or
+// has failed: bankState tells which)? Only a page that offered a bank account (Klarna's pages,
+// say, can also be "complete" but "unpaid" for a while, and stay exactly as before).
+export function bankClearing(session) {
+  return session?.status === "complete"
+    && session.payment_status === "unpaid"
+    && Array.isArray(session.payment_method_types) && session.payment_method_types.includes("us_bank_account")
+    && String(session.currency).toLowerCase() === "usd";
+}
+
+// As bankClearing, for this invoice and its exact amount (as paidFor).
+export function clearingFor(session, order) {
+  return bankClearing(session)
+    && session.metadata?.invoice_token === order.invoice_token
+    && session.amount_total === toCents(order.amount);
+}
+
+// A clearing bank payment's state, from Stripe's own record of the payment, never from the message
+// that brought it (anyone can post one): "failed" once Stripe has given up on it (the bank refused
+// the debit, or the account was never confirmed: Stripe puts the payment back to
+// "requires_payment_method", or cancels it), else "processing" (the account still being confirmed,
+// or the money on its way). Throws when Stripe can't say, so nothing is decided on a guess.
+const GAVE_UP = new Set(["requires_payment_method", "canceled"]);
+export async function bankState(session) {
+  const payment = await paymentOf(session);
+  if (!payment?.status) throw new StripeError("Stripe sent no payment for this bank payment", "no-payment");
+  return GAVE_UP.has(payment.status) ? "failed" : "processing";
+}
+
+// That way in words, as the emails say it (emails.js for invoices, cartEmails.js for the Cart).
+// by: the subject's "Paid by card ✓"; how: "paid $X by card"; name: the buyer's receipt;
+// stripe: the shop's "Paid with". A card (or a way this list doesn't know): word for word as
+// before Klarna.
+const CARD_WORDS = { by: "by card", how: "by card", name: "Card", stripe: "Card (Stripe)" };
+const PAID_WORDS = new Map([
+  ["klarna", { by: "by Klarna", how: "with Klarna", name: "Klarna", stripe: "Klarna (Stripe)" }],
+  ["link", { by: "by Link", how: "with Link", name: "Link", stripe: "Link (Stripe)" }],
+  ["bank", { by: "by bank (ACH)", how: "by bank (ACH)", name: "Bank (ACH)", stripe: "Bank, ACH (Stripe)" }],
+]);
+export const paidWords = (method) => ({ ...(PAID_WORDS.get(method) ?? CARD_WORDS) });
 
 // Admin -> Settings -> Stripe: can this key take card payments?
 //  - Quick (when the panel opens): a read. Proves Stripe accepts the key, NOT that it may
