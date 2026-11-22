@@ -863,7 +863,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
             <span className="o-chip-n">{unpaid.length}</span>
             <span className="o-unfinished-arrow" aria-hidden="true">{showUnpaid ? "▴" : "▾"}</span>
           </button>
-          <p className="o-unfinished-note">Started paying by card or Klarna and never finished. Each one shows here for a week, then is hidden. Nothing is deleted.</p>
+          <p className="o-unfinished-note">Started paying by card, Klarna or bank transfer and never finished. Each one shows here for a week, then is hidden. Nothing is deleted.</p>
           {showUnpaid && ordersTable(unpaid)}
         </section>
       )}

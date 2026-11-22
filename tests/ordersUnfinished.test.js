@@ -59,7 +59,7 @@ test("the Orders tab: the main list, its counts and its chips leave them out; th
   assert.match(tab, /\{showUnpaid && ordersTable\(unpaid\)\}/, "the small list: the same table, the same rows");
   assert.match(tab, /aria-expanded=\{showUnpaid\}/, "it opens and closes, and says so");
   assert.match(tab, />Didn't finish paying</);
-  assert.match(tab, />Started paying by card or Klarna and never finished\. Each one shows here for a week, then is hidden\. Nothing is deleted\.</, "what the list is, in plain words");
+  assert.match(tab, />Started paying by card, Klarna or bank transfer and never finished\. Each one shows here for a week, then is hidden\. Nothing is deleted\.</, "what the list is, in plain words");
   assert.doesNotMatch(tab, /unfinished[^\n]*\.delete\(|unpaid[^\n]*\.delete\(/, "hidden, never deleted");
 });
 
