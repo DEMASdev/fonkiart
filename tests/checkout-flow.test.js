@@ -378,6 +378,7 @@ const CheckoutModal = await load("components/CheckoutModal.jsx", {
   "../lib/store": store, "../lib/stripeJs": stripeJs, "../lib/cartOrder": cartOrder,
   "./CardCheckout": { default: CardCheckout }, "./PaidThanks": { default: PaidThanks }, "./Pic": { default: Pic },
   "./PayRows": { default: PayRows }, "../lib/payWays": payWays,
+  "../lib/klarnaOffer": await import("../src/lib/klarnaOffer.js"),
 });
 const CartPage = await load("pages/CartPage.jsx", {
   react: React, "react/jsx-runtime": runtime,
@@ -1949,6 +1950,100 @@ test("NO JUMP: nothing in the checkout, the Cart page or the card form can send 
   }
   assert.doesNotMatch("const site = window.location.origin;", LEAVES, "control: reading the address is not leaving it");
   assert.equal(CARD_FORM_DOWN, cartOrder.CARD_FORM_DOWN, "the browser and the server say the same calm words");
+});
+
+// ── the Klarna offer ────────────────────────────────────────
+// Andy said "build" (2026-11-22) to the offer as it was put to him: "when a piece is just over that line (say $3,000), the checkout
+// says "Get $300 off and pay with Klarna."". The browser only SAYS it (src/lib/klarnaOffer.js): on
+// Klarna's row while one fits the shop's numbers (Admin -> Settings -> Stripe), and once Klarna's
+// page is open at the lower price (the server's `klarna`, api/_lib/cartCheckout.js), on the art
+// wall, with that page's amounts. The server decides and takes it off on that page only
+// (tests/klarna-offer.test.js); the browser sends nothing of it. Any other way: the full price.
+const OVER_LINE = { id: "t9", title: "Test Piece X", price: 3000, category: "Ocean", image: "https://img.example.test/x.jpg" };
+const KLARNA_LINE = { ...NO_LINK, klarnaMax: 2800, klarnaMostOff: 300 };
+PRICES["Test Piece X"] = 3000;
+const offers = (root) => findAll(root.tree, n => n.props.className === "pay-row-offer").map(textOf);
+const wallText = (root) => textOf(only(root, "the art wall", n => n.type === "section" && String(n.props.className).includes("checkout-wall")));
+async function atOffer(cart, settings) {
+  freshWorld();
+  server.world.setup = ALL_WAYS;
+  const stripe = fakeStripeJs();
+  const { root } = openShop(cart, { settings });
+  click(button(root, "Checkout →")); await settle();
+  await details(root);
+  click(button(root, "Continue →")); await settle();
+  return { root, stripe };
+}
+
+test("KLARNA OFFER: Klarna's row says it while one fits the shop's numbers; with none set, too far over or under the line, nothing is said", async () => {
+  await quiet(async () => {
+    const { root } = await atOffer([OVER_LINE], KLARNA_LINE);
+    assert.deepEqual(offers(root), ["Get $200 off and pay with Klarna"], "once");
+    assert.equal(textOf(payOption(root, "Klarna")), "KlarnaPay over timeGet $200 off and pay with Klarna", "on Klarna's own row, under its quiet line");
+    assert.deepEqual(rowLabels(root), ALL_ROWS, "every way still offered, in the same order");
+    for (const [what, cart, settings] of [
+      ["no numbers in Admin", [OVER_LINE], NO_LINK],
+      ["only Klarna's highest price", [OVER_LINE], { ...NO_LINK, klarnaMax: 2800 }],
+      ["too far over", [{ ...OVER_LINE, price: 3500 }], KLARNA_LINE],
+      ["under the line", [PRINT], KLARNA_LINE],
+    ]) {
+      const again = await atOffer(cart, settings);
+      assert.deepEqual(offers(again.root), [], what);
+      assert.doesNotMatch(screen(again.root), /off for Klarna|off and pay with Klarna/, what);
+    }
+  });
+});
+
+test("KLARNA OFFER: chosen, the server opens Klarna's page at the lower price; the art wall shows that page's price and how much is off; the browser sends nothing of it; another way: the full price again", async () => {
+  await quiet(async () => {
+    const { root, stripe } = await atOffer([OVER_LINE], KLARNA_LINE);
+    server.world.cardAnswer = (o) => {
+      const id = page(9);
+      server.world.pages.set(id, { id, status: "open", ref: o.ref });
+      return { ...server.view(o), session: id, clientSecret: `${id}_secret_FAKE`, publishableKey: FAKE_PK, klarna: { off: 200, total: 2800, lines: [{ title: "Test Piece X", amount: 2800 }] } };
+    };
+    assert.equal(wallText(root), "Test Piece X$3,000", "before: the full price");
+    click(payOption(root, "Klarna")); await settle();
+    click(button(root, "Continue →")); await settle();
+    const [asked] = server.asked("cart-card");
+    assert.equal(asked.way, "klarna", "the server is told the way, as always");
+    assert.deepEqual(Object.keys(asked).filter(k => /klarna|offer|discount/i.test(k)), [], "and nothing of the offer: the server works it out");
+    assert.deepEqual([asked.items, asked.total], [[{ title: "Test Piece X", amount: 3000 }], 3000], "the price as always");
+    assert.deepEqual(stripe.map(e => Object.keys(e)[0]), ["init", "mount"], "Klarna's page, in place");
+    assert.equal(wallText(root), "Test Piece X$2,800✓ $200 off for Klarna", "the page's price, and how much is off");
+
+    click(button(root, "← Choose another way to pay")); await settle();
+    assert.equal(wallText(root), "Test Piece X$3,000", "back on the ways to pay: the full price");
+    assert.deepEqual(offers(root), ["Get $200 off and pay with Klarna"], "the offer still on Klarna's row");
+    await choose(root, "Card or Link");
+    assert.deepEqual(server.asked("cart-again").map(p => p.way), ["card"]);
+    assert.equal(wallText(root), "Test Piece X$3,000", "by card: the full price");
+    assert.doesNotMatch(screen(root), /off for Klarna/);
+  });
+});
+
+test("KLARNA OFFER, REFUSED: Stripe won't open Klarna even at the lower price: the same calm line as before, and Klarna's row stops saying the offer while that line shows; a refused bank payment leaves the offer said", async () => {
+  await quiet(async () => {
+    const { root, stripe } = await atOffer([OVER_LINE], KLARNA_LINE);
+    server.world.cardAnswer = (o) => ({ ...server.view(o), refused: "klarna", cardError: KLARNA_NO });
+    click(payOption(root, "Klarna")); await settle();
+    click(button(root, "Continue →")); await settle();
+    assert.deepEqual([statuses(root), alerts(root)], [[KLARNA_NO], []], "the same calm line as before, once");
+    assert.deepEqual(offers(root), [], "Klarna's row no longer says the offer: the page refused already had it");
+    assert.equal(textOf(payOption(root, "Klarna")), "KlarnaPay over time", "its row as it always was");
+    assert.deepEqual(rowLabels(root), ALL_ROWS, "every way still offered");
+    assert.equal(wallText(root), "Test Piece X$3,000", "the full price");
+    assert.doesNotMatch(screen(root), /off for Klarna|off and pay with Klarna/);
+    assert.equal(stripe.length, 0, "no form");
+
+    // Control: the bank payment refused instead: its line, and Klarna's row still says the offer.
+    const bank = await atOffer([OVER_LINE], KLARNA_LINE);
+    server.world.cardAnswer = (o) => ({ ...server.view(o), refused: "bank", cardError: BANK_NO });
+    click(payOption(bank.root, "Bank transfer (ACH)")); await settle();
+    click(button(bank.root, "Continue →")); await settle();
+    assert.deepEqual(statuses(bank.root), [BANK_NO], "the bank's line");
+    assert.deepEqual(offers(bank.root), ["Get $200 off and pay with Klarna"], "Klarna's row still says the offer");
+  });
 });
 
 // Defined last, so it runs last: across every test above, the checkout never once tried to send

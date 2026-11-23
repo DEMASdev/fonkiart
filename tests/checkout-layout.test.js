@@ -139,7 +139,7 @@ test("the art's label and the money: titles in Cormorant Garamond, prices in Cor
 test("how to pay: rows, the words first (no emoji), a quiet line under each, the footer's own small marks, and the one chosen plain to see: a pale pink and a gold bar, its words easy to read", () => {
   const rows = read("src/components/PayRows.jsx");
   assert.match(rows, /role="radiogroup" aria-label="How to pay"/);
-  assert.match(rows, /role="radio" aria-checked=\{chosen\} className=\{`pay-row\$\{chosen \? " sel" : ""\}`\}/, "a screen reader hears which one is chosen");
+  assert.match(rows, /role="radio" aria-checked=\{chosen\} className=\{`pay-row\$\{chosen \? " sel" : ""\}\$\{offer \? " has-offer" : ""\}`\}/, "a screen reader hears which one is chosen");
   assert.match(rows, /<span className="pay-row-marks" aria-hidden="true"><PayMarks way=\{id\} \/><\/span>/, "the marks: pictures of the words beside them, heard once");
   const modal = read("src/components/CheckoutModal.jsx");
   const invoice = read("src/pages/InvoicePage.jsx");

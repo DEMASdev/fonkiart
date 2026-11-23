@@ -8,6 +8,7 @@ import PaidThanks from "./PaidThanks";
 import PayRows from "./PayRows";
 import Pic from "./Pic";
 import { payRows, stripeRows, isStripe, serverWays } from "../lib/payWays";
+import { klarnaOffer, offerLine, offerDone } from "../lib/klarnaOffer";
 
 // The card order this cart was paying is gone from the shop (cancelled, or handled by hand): the
 // checkout starts over, with the details still filled in.
@@ -51,6 +52,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // not switched on): the server's one line (api/_lib/stripe.js wayRefused), shown on the ways to
   // pay, with that way no longer chosen and no Try Again.
   const [refused, setRefused] = useState("");
+  // Which way that was: while Klarna's line shows, its row no longer says the Klarna offer (the page
+  // Stripe just refused already had the offer in its price, so saying it again would promise what failed).
+  const [refusedWay, setRefusedWay] = useState("");
   // The ways Stripe's form can open right now, as the server says (op "card-setup", src/lib/payWays.js);
   // null until it says, or when it says nothing (an older server): then cards and Klarna.
   const [ways, setWays] = useState(null);
@@ -98,6 +102,16 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const savedAmount = (i) => saved?.lines.find(l => String(l.title).trim() === String(i.title).trim())?.amount;
   const shownAmount = (i) => (saved ? savedAmount(i) : undefined) ?? itemEffective(i);
   const amountDue = saved ? saved.total : effectivePrice;
+  // The Klarna offer (Andy, 2026-11-22, "build"; src/lib/klarnaOffer.js). The server decides it
+  // (api/_lib/klarnaOffer.js) from the shop's own prices; here it is only said: on Klarna's row while
+  // one fits these amounts (the shop's own once the order is saved), and, once the Klarna page is
+  // open at the lower price (the server's `klarna`), on the art wall, with that page's amounts as
+  // Stripe's form shows them. Any other way: the full price, everywhere.
+  const offer = klarnaOffer(items.map(i => Math.round(Number(shownAmount(i) || 0) * 100)), settings);
+  const offerPage = pay?.klarna || null;
+  const pageAmount = (i) => offerPage?.lines?.find(l => String(l.title).trim() === String(i.title).trim())?.amount;
+  const wallAmount = (i) => (offerPage ? pageAmount(i) : undefined) ?? shownAmount(i);
+  const wallDue = offerPage ? offerPage.total : amountDue;
   const refShown = saved ? saved.ref : orderRef;
   // Step 1 (where to send it) is done with a name and an email; step 2 (how to pay) with a way to
   // pay, once the server has said what became of a saved order.
@@ -123,7 +137,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     if (!method) { setCheckoutError("Please select a payment method."); return; }
     const missing = detailsMissing();
     if (missing) { setCheckoutError(missing); setStep(1); return; }
-    setCheckoutError(""); setRefused("");
+    setCheckoutError(""); setRefused(""); setRefusedWay("");
     setStep(3);
     // Card, Klarna or a bank transfer: Stripe's form opens at once, with no page in between (Andy:
     // "jumps into another useless page ... instead of just going into the CC page"). The buyer sees
@@ -221,7 +235,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // again). An order already saved stays saved, so another way pays THAT order, never a second.
   const refuseWay = (line) => {
     setPay(null); setCalm(""); setRetry(false);
-    setMethod(null); setRefused(line); setStep(2);
+    setRefusedWay(method || ""); setMethod(null); setRefused(line); setStep(2);
   };
 
   // Paying by card: Continue with Card, Klarna or a bank transfer chosen (and "Try Again" after a
@@ -458,24 +472,28 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
             <div className="checkout-piece-label">
               <p className="checkout-piece-title">{i.title}</p>
               {(i.medium || i.dimensions) && <p className="checkout-piece-meta">{[i.medium, i.dimensions].filter(Boolean).join(" · ")}</p>}
-              {shownAmount(i) ? <p className="checkout-piece-price">{money(shownAmount(i))}</p> : null}
+              {wallAmount(i) ? <p className="checkout-piece-price">{money(wallAmount(i))}</p> : null}
               {pieceOff(i) && <p className="checkout-off">✓ {discount}% off</p>}
+              {offerPage && !many && <p className="checkout-klarna-off">{offerDone(Math.round(offerPage.off * 100))}</p>}
             </div>
           </li>
         ))}
       </ul>
-      {many && amountDue ? (
+      {many && wallDue ? (
         <div className="checkout-wall-total">
           <span className="checkout-wall-total-label">Total</span>
-          <span className="checkout-wall-total-sum">{money(amountDue)}</span>
+          <span className="checkout-wall-total-sum">{money(wallDue)}</span>
         </div>
       ) : null}
       {many && couponOn && basePrice !== effectivePrice && <p className="checkout-off checkout-wall-total-off">✓ {discount}% off</p>}
+      {many && offerPage && <p className="checkout-klarna-off checkout-wall-total-off">{offerDone(Math.round(offerPage.off * 100))}</p>}
     </section>
   );
   // How to pay: one row each (src/components/PayRows.jsx), Stripe's only for the ways the server
-  // can open right now (src/lib/payWays.js).
-  const rows = payRows({ ways });
+  // can open right now (src/lib/payWays.js). Klarna's says the offer while one fits (above), and not
+  // while the line saying Stripe refused Klarna shows.
+  const offerSaid = offer && !(refused && refusedWay === "klarna");
+  const rows = payRows({ ways }).map(r => (r.id === "klarna" && offerSaid ? { ...r, offer: offerLine(offer.off) } : r));
   // Stripe's ways, on the payment step: its heading, and the word while the form opens.
   const stripeQ = { card: "Pay by Card", klarna: "Pay with Klarna", bank: "Pay by Bank Transfer" }[method];
   const opening = method === "card" ? "Opening the secure card form…" : "Opening the secure payment form…";

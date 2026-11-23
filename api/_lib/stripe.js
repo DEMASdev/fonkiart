@@ -26,6 +26,7 @@
 // stripeWays). NEVER in git: this repo is public. No key = no card option; nothing else breaks.
 
 import { siteUrl } from "./site.js";
+import { offerWords } from "./klarnaOffer.js";
 
 const API = "https://api.stripe.com/v1";
 const VERSION = "2024-06-20"; // pinned: a change in Stripe's default can't change what we send
@@ -372,12 +373,19 @@ export async function createCheckout({ order, invNum, image, way }) {
 // (cart-again); clientSecret, for Stripe.js to open the form.
 // lines: [{ title, amount, image }]. Neither a picture nor Link or Klarna ever stops a card
 // payment: if Stripe refuses the page, it is asked for again (askForPage). way: as for invoices.
-export async function createCartCheckout({ ref, ids, lines, email, way }) {
-  const cents = lines.map(l => toCents(l.amount));
+// offer: the Klarna offer (klarnaOffer.js; cartCheckout.js works it out), { off, split } in cents,
+// for a Klarna page ONLY (way "klarna", which never falls back to a card form): each piece's line
+// is its price less its share (split), and the page says so in its metadata (klarna_off, the cents
+// off; klarna_split, each piece's share, in the order of ids), which only this server writes, so the
+// check once paid knows the lower amount is the right one (cartCheckout.js offerOf).
+export async function createCartCheckout({ ref, ids, lines, email, way, offer }) {
+  if (offer && (way !== "klarna" || !Array.isArray(offer.split) || offer.split.length !== lines.length
+    || offer.split.reduce((a, b) => a + b, 0) !== offer.off)) throw new StripeError("The Klarna offer is for a Klarna payment page only, split across its pieces", "bad-offer");
+  const cents = lines.map((l, n) => toCents(l.amount) - (offer ? offer.split[n] : 0));
   if (!lines.length || cents.some(c => c <= 0)) throw new StripeError("Every piece needs a price for a card payment", "no-price");
   if (cents.reduce((a, b) => a + b, 0) < MIN_CENTS) throw new StripeError("This order is too small for a card payment", "too-small");
   const names = lines.map(l => String(l.title || "Fonkiart artwork").slice(0, 200));
-  const tags = { cart_ref: ref, order_ids: ids.join(",") };
+  const tags = { cart_ref: ref, order_ids: ids.join(","), ...(offer ? { klarna_off: String(offer.off), klarna_split: offer.split.join(",") } : {}) };
   const page = ({ types, pictures: withPictures }) => ({
     mode: "payment",
     line_items: lines.map((l, n) => {
@@ -388,7 +396,7 @@ export async function createCartCheckout({ ref, ids, lines, email, way }) {
     client_reference_id: ref,
     metadata: tags,
     // What Aliana sees on the payment in Stripe's own list.
-    payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}`.slice(0, 1000), metadata: tags },
+    payment_intent_data: { description: `Fonkiart order ${ref}: ${names.join(", ")}${offer ? offerWords(offer.off) : ""}`.slice(0, 1000), metadata: tags },
     ui_mode: "embedded",
     ...waysToPay(types, `/?cart=${encodeURIComponent(ref)}&card=`), // as invoices
   });
