@@ -12,11 +12,29 @@ import { artPrice } from "./artworks.js";
 //   answered (no orders, no address, no account). The answer is { ok: true } and nothing else,
 //   the same whether anything was kept or not, so it can't tell anyone who is on the list.
 // - Until the SQL has run there are no cart columns (seen on the row read, the way artworks.js
-//   keepsHold does): nothing is saved and nothing breaks.
+//   keepsHold does): nothing is saved and nothing breaks. The store action "cart-saving" tells the
+//   site which it is, one yes or no for everyone, so the site says the pieces are saved only when
+//   they really are (src/lib/cartMemory.js cartSaving).
 
 const MAX_PIECES = 30;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const hasCart = (row) => Object.hasOwn(row || {}, "cart") && Object.hasOwn(row || {}, "cart_at");
+
+// Has the SQL run? A Leads row shows its columns (as above). An empty list shows none, so then the
+// two columns are asked for by name, and a refusal means no. A list that can't be read throws.
+async function cartColumns(db) {
+  const { data, error } = await db.from("Leads").select("*").limit(1);
+  if (error) throw error;
+  if (data?.length) return hasCart(data[0]);
+  const { error: missing } = await db.from("Leads").select("cart,cart_at").limit(1);
+  return !missing;
+}
+
+// The store action "cart-saving": is cart saving on? One yes or no for the whole site. It reads no
+// email and answers nothing about anyone.
+export async function opCartSaving(db) {
+  return { on: await cartColumns(db) };
+}
 
 // The cart's pieces as the browser sends them: artwork ids, whole numbers, each once, at most 30.
 function pieceIds(value) {
@@ -72,9 +90,7 @@ export async function opRememberCart(db, req, now = new Date()) {
   const cart = pieces.length ? pieces : null;
   if (!lead) {
     if (!cart) return { ok: true };
-    const { data: any, error: probeErr } = await db.from("Leads").select("*").limit(1);
-    if (probeErr) throw probeErr;
-    if (!hasCart(any?.[0])) return { ok: true }; // the SQL hasn't run yet (or no row to tell by)
+    if (!(await cartColumns(db))) return { ok: true }; // the SQL hasn't run yet
   }
   const at = now.toISOString();
   const { error: writeErr } = lead

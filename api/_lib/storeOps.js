@@ -14,7 +14,7 @@ import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } from "./cartEmails.js";
 import { buyerSignInLink } from "./verifyLink.js";
-import { opRememberCart } from "./cartMemory.js";
+import { opCartSaving, opRememberCart } from "./cartMemory.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -621,8 +621,10 @@ export async function opBuyer(db, req) {
 
 export const STORE_OPS = {
   "welcome": (db, req, mail) => opWelcome(db, req.body || {}, mail),
-  // The cart of someone who gave their email, or of a signed-in buyer (cartMemory.js).
+  // The cart of someone who gave their email, or of a signed-in buyer (cartMemory.js), and
+  // whether that saving is on at all: one yes or no for the whole site.
   "remember-cart": (db, req) => opRememberCart(db, req),
+  "cart-saving": (db) => opCartSaving(db),
   "collectors": (db, req) => opCollectors(db, req.body || {}),
   "request": (db, req, mail) => opRequest(db, req.body || {}, mail),
   "next-ref": (db) => opNextRef(db),

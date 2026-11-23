@@ -8,18 +8,18 @@ import "../cartBox.css";
 // discount then we know who the person is"). Shown once a visit by CartMemory.jsx to someone not
 // known yet, never during checkout. It gives the welcome gift: the same code, the same % and the
 // same email as the welcome window (the store action "welcome"), whose email also carries "Verify
-// my email". The email is remembered AT ONCE (src/lib/cartMemory.js), so the cart is saved with it.
-// It says plainly that the code is sent and the pieces are remembered. Closed with the X, "No
-// thanks", Escape or a tap outside it. The pieces are shown whole.
+// my email". The email is remembered AT ONCE (src/lib/cartMemory.js). It says plainly that the code
+// is sent, and, only while cart saving is on (saving: the store action "cart-saving"), that the
+// pieces are remembered with the email; only then is the cart saved with it. Closed with the X,
+// "No thanks", Escape or a tap outside it. The pieces are shown whole.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SHOWN = 4; // pieces shown; any more are counted
 
-export default function CartEmailBox({ cart, percent, onClose }) {
+export default function CartEmailBox({ cart, percent, saving, onClose }) {
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(null); // { code, returning, used }
-  const [copied, setCopied] = useState(false);
   const box = useRef(null);
 
   useEffect(() => { box.current?.focus(); }, []);
@@ -37,18 +37,12 @@ export default function CartEmailBox({ cart, percent, onClose }) {
     setSending(true);
     try {
       const r = await storeCall("welcome", { email: v });
-      remember(v);
+      remember(v, { told: saving }); // told: the words above said the pieces are remembered
       setDone({ code: r.code, returning: !!r.returning, used: !!r.used });
     } catch {
       setErr("That didn't go through. Please try again.");
     }
     setSending(false);
-  };
-
-  const copy = () => {
-    navigator.clipboard?.writeText(done.code)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
-      .catch(() => {});
   };
 
   const pieces = cart.slice(0, SHOWN);
@@ -76,7 +70,7 @@ export default function CartEmailBox({ cart, percent, onClose }) {
 
         {!done ? (
           <form onSubmit={send} noValidate>
-            <p className="cart-box-text">We&apos;ll send your code to this email, and remember the pieces in your cart with it.</p>
+            <p className="cart-box-text">We&apos;ll send your code to this email{saving && ", and remember the pieces in your cart with it"}.</p>
             <input className="cart-box-input" type="email" autoComplete="email" inputMode="email" aria-label="Your email"
               placeholder="your@email.com" value={email} onChange={(e) => { setEmail(e.target.value); setErr(""); }}
               aria-invalid={err ? true : undefined} aria-describedby={err ? "cart-box-err" : undefined} />
@@ -84,25 +78,37 @@ export default function CartEmailBox({ cart, percent, onClose }) {
             <button type="submit" className="cart-box-send" disabled={sending}>{sending ? "Sending…" : "Send my code →"}</button>
             <button type="button" className="cart-box-later" onClick={onClose}>No thanks</button>
           </form>
-        ) : (
-          <div role="status">
-            {done.used ? (
-              <p className="cart-box-text">Your welcome code has already been used.</p>
-            ) : (
-              <>
-                {done.returning && <p className="cart-box-text">Your welcome code is still waiting for you:</p>}
-                <div className="cart-box-code">
-                  <span className="cart-box-code-text">{done.code}</span>
-                  <button type="button" className="cart-box-copy" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
-                </div>
-                {!done.returning && <p className="cart-box-text">We sent it to your email, with a &ldquo;Verify my email&rdquo; button that signs you in. No password needed.</p>}
-              </>
-            )}
-            <p className="cart-box-text">Your pieces are saved with your email.</p>
-            <button type="button" className="cart-box-send" onClick={onClose}>Keep shopping</button>
-          </div>
-        )}
+        ) : <BoxSent done={done} saving={saving} onClose={onClose} />}
       </div>
+    </div>
+  );
+}
+
+// After sending: the code (or that it was used), "Verify my email" for someone new, and, only
+// while cart saving is on, that the pieces are saved with the email.
+export function BoxSent({ done, saving, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(done.code)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => {});
+  };
+  return (
+    <div role="status">
+      {done.used ? (
+        <p className="cart-box-text">Your welcome code has already been used.</p>
+      ) : (
+        <>
+          {done.returning && <p className="cart-box-text">Your welcome code is still waiting for you:</p>}
+          <div className="cart-box-code">
+            <span className="cart-box-code-text">{done.code}</span>
+            <button type="button" className="cart-box-copy" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          {!done.returning && <p className="cart-box-text">We sent it to your email, with a &ldquo;Verify my email&rdquo; button that signs you in. No password needed.</p>}
+        </>
+      )}
+      {saving && <p className="cart-box-text">Your pieces are saved with your email.</p>}
+      <button type="button" className="cart-box-send" onClick={onClose}>Keep shopping</button>
     </div>
   );
 }

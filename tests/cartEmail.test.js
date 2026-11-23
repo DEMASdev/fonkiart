@@ -10,9 +10,12 @@
 //   Tapping it signs them in as a BUYER, never a collector; a collector's sign-in gets no link.
 // - The 5-minute box: its % and its 5 minutes each in one place, once a visit, never during
 //   checkout, never a native dialog, nothing under 16px, no cream, no green, the art never cut.
+// - Cart saving is on only once that SQL has run (the store action "cart-saving": one yes or no
+//   for the whole site). While it is off nothing is sent and nothing on the site says a cart is
+//   saved, and a cart is only ever saved with an email that was told so when it was given.
 // Fakes only: no real Supabase, no real email. Every test fails on the shop before (3d36fc7),
-// where none of these files exist and the welcome email has no button; each check below has a
-// control that shows it can fail.
+// where none of these files exist and the welcome email has no button, and the on/off ones fail
+// on e3f3e1d, which had no switch; each check below has a control that shows it can fail.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -42,7 +45,9 @@ globalThis.sessionStorage = storage();
 // it reads, writes and asks Supabase's sign-in service for.
 function fakeDb({ leads = [], artworks = [], settings = { couponDiscount: 15 }, users = [], tokenUser = null,
   link = "https://proj.supabase.co/auth/v1/verify?token=tok-123&type=magiclink&redirect_to=https%3A%2F%2Ffonkiart.com",
-  linkError = null, linkUser, readError = null } = {}) {
+  linkError = null, linkUser, readError = null, cartColumns = false } = {}) {
+  // cartColumns: whether the SQL has run, for an EMPTY list (a row shows it by its own keys).
+  // Asked for by name before it has run, the columns are refused the way PostgREST refuses them.
   const writes = [];
   const asked = { generateLink: [], updateUserById: 0, deleteUser: 0, listUsers: 0 };
   const tables = { Leads: leads, Artworks: artworks, Settings: [{ id: 1, ...settings }] };
@@ -63,6 +68,9 @@ function fakeDb({ leads = [], artworks = [], settings = { couponDiscount: 15 }, 
     };
     function run() {
       if (readError && op === "select" && table === "Leads") return { data: null, error: readError };
+      if (op === "select" && table === "Leads" && cols !== "*" && /\bcart/.test(cols) && !cartColumns) {
+        return { data: null, error: { code: "42703", message: "column Leads.cart does not exist" } };
+      }
       const rows = tables[table] || [];
       if (op === "insert") { writes.push({ table, op, payload }); payload.forEach((r) => rows.push({ id: rows.length + 100, ...r })); return { error: null }; }
       if (op === "update") { writes.push({ table, op, payload }); rows.filter((r) => filters.every((f) => f(r))).forEach((r) => Object.assign(r, payload)); return { error: null }; }
@@ -224,6 +232,41 @@ test("remember-cart is a store action, and cartsLeft gives (email, pieces, when)
   assert.match(said.join("\n"), /cartsLeft: not read \(42703\)/);
 });
 
+// ── cart saving: on or off ──────────────────────────────────
+// Until db/2026-11-22-cart-email.sql has run nothing is saved, so nothing may SAY it is (the
+// coordinator, 11-22: "the site would tell buyers something untrue"). One yes or no for the whole
+// site, never per email, so it still tells nobody who is on the list.
+test("cart-saving: one yes or no for the whole site: no until the SQL has run, yes after (an empty list too), and nothing about anyone", async () => {
+  const m = await load("api/_lib/cartMemory.js");
+  assert.ok(m?.opCartSaving, "api/_lib/cartMemory.js has opCartSaving");
+  const store = await import(new URL("api/_lib/storeOps.js", root).href);
+  const op = store.STORE_OPS["cart-saving"];
+  assert.equal(typeof op, "function", "a store action");
+  assert.deepEqual(await op(fakeDb({ leads: [LEAD()] }), req({})), { on: false }, "before the SQL");
+  assert.deepEqual(await op(fakeDb({ leads: [LEAD({ cart: null, cart_at: null })] }), req({})), { on: true }, "control: after it, the check says yes");
+  assert.deepEqual(await op(fakeDb({ leads: [] }), req({})), { on: false }, "an empty list, before");
+  assert.deepEqual(await op(fakeDb({ leads: [], cartColumns: true }), req({})), { on: true }, "an empty list, after");
+  // Whatever email comes with it, the answer is the same and holds nothing else; it only reads.
+  const db = fakeDb({ leads: [LEAD({ cart: null, cart_at: null })] });
+  const answers = [await op(db, req({})), await op(db, req({ email: "ana@example.com" })), await op(db, req({ email: "stranger@example.com" }))];
+  assert.deepEqual(answers, [{ on: true }, { on: true }, { on: true }]);
+  assert.deepEqual(db.writes, []);
+  // A list that can't be read is an error the server logs, never a quiet answer.
+  await assert.rejects(op(fakeDb({ readError: { code: "XX000", message: "down" } }), req({})));
+});
+
+test("remember-cart agrees with cart-saving: a signed-in buyer's cart is saved on an empty list once the SQL has run, and not before", async () => {
+  const m = await load("api/_lib/cartMemory.js");
+  assert.ok(m, "api/_lib/cartMemory.js is there");
+  const before = fakeDb({ leads: [], artworks: ART, tokenUser: BUYER });
+  assert.deepEqual(await m.opRememberCart(before, req({ pieces: [12] }, "good-jwt")), { ok: true });
+  assert.deepEqual(before.writes, [], "before the SQL: nothing");
+  const after = fakeDb({ leads: [], artworks: ART, tokenUser: BUYER, cartColumns: true });
+  assert.deepEqual(await m.opRememberCart(after, req({ pieces: [12] }, "good-jwt")), { ok: true });
+  assert.equal(after.writes.length, 1, "control: the same call once the columns are there");
+  assert.equal(after.writes[0].payload[0].email, "ana@example.com");
+});
+
 // ── "Verify my email" ───────────────────────────────────────
 const LINK = "https://proj.supabase.co/auth/v1/verify?token=tok-123&type=magiclink&redirect_to=https%3A%2F%2Ffonkiart.com";
 
@@ -351,14 +394,15 @@ test("the cart is sent only for someone known, only when it changed, and nothing
   // Whatever the server said back, the browser keeps nothing of it.
   const ask = async (op, body, opts) => { calls.push([op, body, opts]); return { orders: [{ ref: "FA-1" }], address: "1 Main St" }; };
   const cart = [{ id: 12, title: "Flamingo Party" }, { id: 13 }, { id: 12 }];
-  assert.equal(await c.saveCart(ask, cart, { user: null, email: "" }), false, "anonymous: nothing is sent anywhere");
-  assert.equal(await c.saveCart(ask, cart, { user: { ...BUYER, user_metadata: { role: "collector" } }, email: "" }), false, "a collector's sign-in is not a buyer's");
+  const on = { saving: true }; // cart saving switched on (its own test below)
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: "", ...on }), false, "anonymous: nothing is sent anywhere");
+  assert.equal(await c.saveCart(ask, cart, { user: { ...BUYER, user_metadata: { role: "collector" } }, email: "", ...on }), false, "a collector's sign-in is not a buyer's");
   assert.deepEqual(calls, []);
-  assert.equal(await c.saveCart(ask, cart, { user: null, email: "ana@example.com" }), true);
-  assert.equal(await c.saveCart(ask, cart, { user: null, email: "ana@example.com" }), false, "unchanged: not sent again");
-  assert.equal(await c.saveCart(ask, [...cart, { id: 14 }], { user: null, email: "ana@example.com" }), true);
-  assert.equal(await c.saveCart(ask, cart, { user: BUYER, email: "ana@example.com" }), true, "signed in as a buyer: with the account");
-  assert.equal(await c.saveCart(ask, [], { user: BUYER, email: "" }), true, "emptied: cleared");
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: "ana@example.com", ...on }), true);
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: "ana@example.com", ...on }), false, "unchanged: not sent again");
+  assert.equal(await c.saveCart(ask, [...cart, { id: 14 }], { user: null, email: "ana@example.com", ...on }), true);
+  assert.equal(await c.saveCart(ask, cart, { user: BUYER, email: "ana@example.com", ...on }), true, "signed in as a buyer: with the account");
+  assert.equal(await c.saveCart(ask, [], { user: BUYER, email: "", ...on }), true, "emptied: cleared");
   assert.deepEqual(calls, [
     ["remember-cart", { email: "ana@example.com", pieces: [12, 13] }, undefined],
     ["remember-cart", { email: "ana@example.com", pieces: [12, 13, 14] }, undefined],
@@ -371,6 +415,68 @@ test("the cart is sent only for someone known, only when it changed, and nothing
   assert.deepEqual([...localStorage._map.keys()].sort(), ["fonkiart-cart-sent"], "nothing from the answers is kept");
   assert.equal(c.isBuyer({ user_metadata: { role: "buyer" } }), false, "a buyer who hasn't confirmed their email is not signed in for this");
   assert.deepEqual(c.pieceIds(Array.from({ length: 40 }, (_, i) => ({ id: i + 1 }))).length, 30);
+});
+
+test("the site asks once a visit whether cart saving is on; anything but a clear yes is no", async () => {
+  const c = await load("src/lib/cartMemory.js");
+  assert.ok(c?.cartSaving, "src/lib/cartMemory.js has cartSaving");
+  const asker = (answer) => {
+    const f = async (op) => { f.calls.push(op); if (answer instanceof Error) throw answer; return answer; };
+    f.calls = [];
+    return f;
+  };
+  const yes = asker({ on: true });
+  assert.equal(await c.cartSaving(yes), true, "control: a yes is yes");
+  assert.equal(await c.cartSaving(yes), true);
+  assert.deepEqual(yes.calls, ["cart-saving"], "asked once a visit");
+  for (const answer of [{ on: false }, {}, { on: "yes" }, null]) assert.equal(await c.cartSaving(asker(answer)), false, JSON.stringify(answer));
+  const down = asker(new Error("Store 500"));
+  assert.equal(await c.cartSaving(down), false, "can't be asked: no");
+  assert.equal(await c.cartSaving(down), false);
+  assert.equal(down.calls.length, 2, "a question that failed is asked again");
+});
+
+test("saving off: nothing is sent; and a cart is only saved with an email that was told so (given while saving was on)", async () => {
+  const c = await load("src/lib/cartMemory.js");
+  assert.ok(c?.toldEmail, "src/lib/cartMemory.js has toldEmail");
+  localStorage._map.clear();
+  c.forget();
+  const calls = [];
+  const ask = async (op, body) => { calls.push([op, body]); return { ok: true }; };
+  const cart = [{ id: 12 }];
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: "ana@example.com", saving: false }), false, "off: not for an email");
+  assert.equal(await c.saveCart(ask, cart, { user: BUYER, email: "", saving: false }), false, "off: not for a signed-in buyer");
+  assert.deepEqual(calls, []);
+  // Given while saving was off: known here, never saved with.
+  c.remember("ana@example.com");
+  assert.equal(c.rememberedEmail(), "ana@example.com");
+  assert.equal(c.toldEmail(), "");
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: c.toldEmail(), saving: true }), false, "known, not told: nothing");
+  // Given with the words that say so: saved with (control).
+  c.remember("ana@example.com", { told: true });
+  assert.equal(c.toldEmail(), "ana@example.com");
+  assert.equal(await c.saveCart(ask, cart, { user: null, email: c.toldEmail(), saving: true }), true);
+  assert.deepEqual(calls, [["remember-cart", { email: "ana@example.com", pieces: [12] }]]);
+  // The same email given again stays told; another one is not; "Not you?" forgets both.
+  c.remember("ana@example.com");
+  assert.equal(c.toldEmail(), "ana@example.com");
+  c.remember("bo@example.com");
+  assert.equal(c.toldEmail(), "");
+  c.remember("bo@example.com", { told: true });
+  c.forget();
+  assert.equal(c.toldEmail(), "");
+  assert.equal(localStorage.getItem("fonkiart-cart-told"), null);
+  // A browser that keeps nothing: the same, for this visit only.
+  const keep = globalThis.localStorage;
+  globalThis.localStorage = storage({ broken: true });
+  try {
+    c.remember("cy@example.com");
+    assert.equal(c.toldEmail(), "");
+    c.remember("cy@example.com", { told: true });
+    assert.equal(c.toldEmail(), "cy@example.com");
+    c.forget();
+    assert.equal(c.toldEmail(), "");
+  } finally { globalThis.localStorage = keep; }
 });
 
 // ── the 5-minute box ────────────────────────────────────────
@@ -413,20 +519,20 @@ test("the box's two dials live in one place: the 5 minutes and the % only in src
 test("the box's words, its email AT ONCE, and its ways out; no native dialog anywhere in this work", () => {
   const box = read("src/components/CartEmailBox.jsx");
   assert.match(box, /Leave your email and get <span className="cart-box-pct">\{percent\}%<\/span> off these pieces/);
-  assert.match(box, /We&apos;ll send your code to this email, and remember the pieces in your cart with it\./);
-  assert.match(box, /await storeCall\("welcome", \{ email: v \}\);\s*remember\(v\);/, "remembered the moment the gift is given");
+  // (Its other words, drawn with cart saving on and off: "the words that say a cart is saved", below.)
+  assert.match(box, /await storeCall\("welcome", \{ email: v \}\);\s*remember\(v, \{ told: saving \}\);/, "remembered the moment the gift is given");
   assert.match(box, /onSubmit=\{send\} noValidate/, "the browser's own pop-up bubble never shows");
   assert.match(box, /aria-label="Close" onClick=\{onClose\}/);
   assert.match(box, /className="cart-box-later" onClick=\{onClose\}>No thanks</);
   assert.match(box, /e\.key === "Escape"\) onClose\(\)/);
   assert.match(box, /className="cart-box-bg" onClick=\{onClose\}/, "a tap outside closes it");
   const welcome = read("src/components/WelcomeModal.jsx");
-  assert.match(welcome, /await storeCall\("welcome", \{ email \}\);\s*remember\(email\);/, "the welcome gift remembers the email too");
+  assert.match(welcome, /await storeCall\("welcome", \{ email \}\);\s*remember\(email, \{ told: saving \}\);/, "the welcome gift remembers the email too");
   const mem = read("src/components/CartMemory.jsx");
   assert.match(mem, /\.modal-bg, \.cart-drawer, \.checkout-page-bg/, "it waits for the checkout and any other window");
   assert.match(mem, /markBoxShown\(\);\s*setOpen\(true\);/);
-  assert.match(read("src/App.jsx"), /<CartMemory cart=\{cart\} user=\{user\} settings=\{mergedData\.settings\} quiet=\{LINK_PAGES\.has\(page\)\} \/>/);
-  assert.match(read("src/App.jsx"), /savedFor=\{<CartRemembered count=\{cart\.length\} user=\{user\} \/>\}/);
+  assert.match(read("src/App.jsx"), /<CartMemory cart=\{cart\} user=\{user\} settings=\{mergedData\.settings\} quiet=\{LINK_PAGES\.has\(page\)\} saving=\{cartSaving\} \/>/);
+  assert.match(read("src/App.jsx"), /savedFor=\{<CartRemembered count=\{cart\.length\} user=\{user\} saving=\{cartSaving\} \/>\}/);
   assert.match(read("src/pages/CartPage.jsx"), /<h1 className="cart-page-title">[^\n]*<\/h1>\n\s*\{savedFor\}\n/, "under the Cart page's title");
   // No alert, confirm or prompt (Andy: never a native dialog). Control: the scan sees one.
   const dialog = /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/;
@@ -434,6 +540,79 @@ test("the box's words, its email AT ONCE, and its ways out; no native dialog any
   for (const f of ["src/components/CartEmailBox.jsx", "src/components/CartMemory.jsx", "src/components/CartRemembered.jsx", "src/lib/cartMemory.js", "src/lib/cartBox.js", "src/components/WelcomeModal.jsx"]) {
     assert.equal(dialog.test(read(f)), false, f);
   }
+});
+
+// The site's own .jsx files, compiled with the project's Vite and drawn by React's own server
+// renderer. Each import becomes a stand-in given here; one without a stand-in fails loudly.
+globalThis.__cartEmailTest = {};
+let jsxLoads = 0;
+async function loadJsx(file, given) {
+  if (!has(file)) return null;
+  const { transformWithOxc } = await import("vite");
+  const { code } = await transformWithOxc(read(file), file, { lang: "jsx", jsx: { runtime: "automatic" } });
+  const id = `${file}#${++jsxLoads}`;
+  globalThis.__cartEmailTest[id] = given;
+  const body = code
+    .replace(/^import\s+"[^"]+\.css";?[ \t]*$/gm, "")
+    .replace(/^import\s+(.+?)\s+from\s+"([^"]+)";?[ \t]*$/gm, (line, names, from) => {
+      if (!(from in given)) throw new Error(`${file} imports "${from}", and this test has no stand-in for it`);
+      const m = names.match(/^([\w$]+)?\s*,?\s*(?:\{([^}]*)\})?$/);
+      if (!m || (!m[1] && !m[2])) throw new Error(`${file}: can't read the import line: ${line}`);
+      const mod = `globalThis.__cartEmailTest[${JSON.stringify(id)}][${JSON.stringify(from)}]`;
+      return [m[1] && `const ${m[1]} = ${mod}.default;`, m[2] && `const {${m[2].replace(/\s+as\s+/g, ": ")}} = ${mod};`].filter(Boolean).join(" ");
+    });
+  assert.doesNotMatch(body, /^\s*import[\s{"]/m, `${file}: an import was left unread`);
+  return import(`data:text/javascript;charset=utf-8,${encodeURIComponent(`${body}\n// ${id}`)}`);
+}
+
+test("the words that say a cart is saved show only while cart saving is on (drawn both ways); the offer, the code and 'Verify my email' stay", async () => {
+  const React = await import("react");
+  const runtime = await import("react/jsx-runtime");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const draw = (C, props) => renderToStaticMarkup(React.createElement(C, props)).replace(/<[^>]+>/g, " ")
+    .replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ").replace(/ ([.,!?])/g, "$1").trim();
+  const memory = (told) => ({ remember: () => true, toldEmail: () => told, onRemembered: () => () => {}, forget: () => {}, isBuyer: () => false });
+  const given = (told) => ({ react: React, "react/jsx-runtime": runtime, "../lib/store": { storeCall: async () => ({}) }, "./Pic": { default: () => null }, "../lib/cartMemory": memory(told) });
+  // Control: the drawing shows what a component says.
+  assert.equal(draw(() => React.createElement("p", null, "We'll ", "say ", false, "it."), {}), "We'll say it.");
+
+  // The box, before sending: the offer either way; the pieces remembered only while saving is on.
+  const box = await loadJsx("src/components/CartEmailBox.jsx", given(""));
+  assert.ok(box?.BoxSent, "CartEmailBox.jsx draws what comes after sending as BoxSent");
+  const cart = [{ id: 31, title: "Flamingo Party", image: "/a.jpg" }];
+  const form = (saving) => draw(box.default, { cart, percent: 15, saving, onClose() {} });
+  for (const saving of [false, true]) assert.match(form(saving), /Leave your email and get 15% off these pieces/);
+  assert.match(form(false), /We'll send your code to this email\. /);
+  assert.doesNotMatch(form(false), /remember/i, "off: nothing says the pieces are remembered");
+  assert.match(form(true), /We'll send your code to this email, and remember the pieces in your cart with it\./, "control: on, it says so");
+
+  // After sending: the code and "Verify my email" either way; "saved" only while saving is on.
+  const sent = (saving, done) => draw(box.BoxSent, { done, saving, onClose() {} });
+  const NEW = { code: "FK-TEST-0001", returning: false, used: false };
+  for (const saving of [false, true]) {
+    assert.match(sent(saving, NEW), /FK-TEST-0001/);
+    assert.match(sent(saving, NEW), /We sent it to your email, with a “Verify my email” button that signs you in\. No password needed\./);
+  }
+  assert.doesNotMatch(sent(false, NEW), /saved/i, "off: no saved line");
+  assert.match(sent(true, NEW), /Your pieces are saved with your email\./, "control: on, the line is there");
+  for (const done of [{ ...NEW, returning: true }, { ...NEW, returning: true, used: true }]) {
+    assert.doesNotMatch(sent(false, done), /saved/i, JSON.stringify(done));
+    assert.match(sent(true, done), /Your pieces are saved with your email\./, JSON.stringify(done));
+  }
+
+  // The Cart page line: only while saving is on, and only for an email that was told so.
+  const kept = async (told) => (await loadJsx("src/components/CartRemembered.jsx", given(told))).default;
+  const ana = await kept("ana@example.com");
+  assert.equal(draw(ana, { count: 2, user: null, saving: false }), "", "off: no line");
+  assert.match(draw(ana, { count: 2, user: null, saving: true }), /^Your pieces are saved for ana@example\.com\. Not you\?$/, "control: on, the line");
+  assert.equal(draw(await kept(""), { count: 2, user: null, saving: true }), "", "on, but the email wasn't told: no line");
+
+  // The welcome window's small print.
+  const welcome = (await loadJsx("src/components/WelcomeModal.jsx", given(""))).default;
+  const small = (saving) => draw(welcome, { onClose() {}, discount: 15, artworks: [], saving });
+  assert.match(small(false), /No spam\. Unsubscribe anytime\.( |$)/);
+  assert.doesNotMatch(small(false), /remember your cart/, "off: no promise about the cart");
+  assert.match(small(true), /No spam\. Unsubscribe anytime\. We'll remember your cart with your email\./, "control: on, it says so");
 });
 
 // Colours written in some text: every #hex and rgb()/rgba(), as [r, g, b] laid over white.
