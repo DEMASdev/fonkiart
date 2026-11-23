@@ -74,7 +74,7 @@ export default function AdminPage({ data, updateData, addArtwork, editArtwork, d
         </div>
         <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", marginTop:-6, marginBottom:12, textAlign:"right" }}>
           {reset === "sent"
-            ? <span style={{ color:"#2d6a4f" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
+            ? <span style={{ color:"var(--ok)" }}>✓ Reset link sent to {ADMIN_EMAIL}. It works once, for 30 minutes.</span>
             : <button className="tap" onClick={forgot} disabled={reset === "sending"} style={linkBtn}>
                 {reset === "sending" ? "Sending…" : "Forgot password?"}
               </button>}

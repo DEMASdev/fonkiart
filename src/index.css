@@ -2,6 +2,17 @@
 body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 :root {
   --cream:#fff;--white:#fff;--ink:#1c1a18;--muted:#9e7fa0;--accent:#b8923f;--border:#e8c97a;--gold:#b8923f;--label:#df88cc;--pink:#ffcdf4;--sidebar-bg:#DF88B7;--sidebar:0px;--sidebar-w:272px;--topbar:58px;--marquee:38px;
+  /* ── "IT WORKED" COLOURS: paid, done, applied, copied, signed in. NO GREEN anywhere on the site
+     (Andy, 2026-11-22: "i do not like the green no green on the sile maybe soft lilac or violet but no
+     green"). Two choices from the site's plum family, for Andy to pick by eye, A "soft lilac" and B "violet":
+       --ok        words, on white or on the tint (A 6.2:1, B 9.0:1), and a fill under white words
+       --ok-light  Paid's chip under ink words (A 6.9:1, B 5.8:1), and words on a dark page
+       --ok-line   a line             --ok-tint   a pale fill
+     The LAST of the three lines picks one. To switch, change its four "ok-a" to "ok-b", and OK_PICK in
+     api/_lib/emails.js to "B": tests/noGreen.test.js checks every colour, and that the two agree. */
+  --ok-a:#765389;--ok-a-light:#b996cc;--ok-a-line:#dccae6;--ok-a-tint:#f8f3fa;
+  --ok-b:#5b2f9e;--ok-b-light:#a585e0;--ok-b-line:#c7b4ee;--ok-b-tint:#f4effd;
+  --ok:var(--ok-a);--ok-light:var(--ok-a-light);--ok-line:var(--ok-a-line);--ok-tint:var(--ok-a-tint);
   /* ── TYPE SCALE — use these for new/updated font-sizes instead of one-off px values ── */
   --fs-xs:12px;    /* fine print, badges, micro-labels */
   --fs-sm:13px;    /* secondary/meta text */
@@ -293,7 +304,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .btn-s:hover { border-color:var(--ink);color:var(--ink); }
 .btn-d { background:transparent;color:#c0392b;border:1px solid #e8c0bd;padding:6px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;letter-spacing:.08em;text-transform:uppercase;transition:all .2s; }
 .btn-d:hover { background:#c0392b;color:#fff;border-color:#c0392b; }
-.ok-msg { background:#f0faf5;border:1px solid #b7e4c7;color:#2d6a4f;padding:10px 14px;font-size:16px;line-height:1.5;margin-bottom:14px; }
+.ok-msg { background:var(--ok-tint);border:1px solid var(--ok-line);color:var(--ok);padding:10px 14px;font-size:16px;line-height:1.5;margin-bottom:14px; }
 .warn-msg { background:#fff8f0;border:1px solid #f0d5a8;color:#7a4f00;padding:9px 14px;font-size:16px;margin-bottom:14px; }
 /* My Account: where an order is (BuyerDashboard.jsx, OrderSteps). Each word sits at its dot. On a
    narrow card they take turns above and below the line so all five fit; from 440px wide, one row. */
@@ -694,7 +705,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .invoice-pay-option { background:var(--cream);border:1px solid var(--border);padding:20px 24px;margin-bottom:12px; }
 .invoice-pay-title { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
 .invoice-pay-value { font-size:calc(var(--inv-text) + 3px);color:var(--ink);font-weight:500; }
-.invoice-approved-banner { background:#f0f9f4;border:1px solid #a3d4b3;padding:20px 24px;text-align:center;margin-top:20px; }
+.invoice-approved-banner { background:var(--ok-tint);border:1px solid var(--ok-line);padding:20px 24px;text-align:center;margin-top:20px; }
 /* Pay by card on the invoice: the piece, then Stripe's form, right under the banner (InvoicePage). */
 .inv-card-panel { --inv-small:16px;--inv-text:17px;margin-top:16px;padding-top:4px;text-align:left; }
 .invoice-card { scroll-margin-top:84px; }
@@ -933,7 +944,7 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
 /* The copy button beside an invoice number (src/components/CopyButton.jsx). */
 .copy-btn { display:inline-flex;align-items:center;justify-content:center;gap:4px;vertical-align:middle;min-width:28px;min-height:28px;padding:4px 6px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:inherit;font-size:16px;letter-spacing:.06em;line-height:1; }
 .copy-btn:hover, .copy-btn:focus-visible { color:var(--ink);border-color:var(--gold); }
-.copy-btn.is-copied { color:#2d6a4f;border-color:#a3d4b3;background:#e8f5ee; }
+.copy-btn.is-copied { color:var(--ok);border-color:var(--ok-line);background:var(--ok-tint); }
 p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 /* The pay lines: "Tap here to copy to your clipboard [icon]" on its own line (Andy, 2026-11-17). */
 .copy-btn.copy-btn-line { display:flex;width:100%;gap:6px;margin-top:6px;padding:7px 6px;min-height:34px;font-size:16px;line-height:1.3;letter-spacing:0;color:var(--ink);background:rgba(255,255,255,.6); }
@@ -1003,7 +1014,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .o-pill select { -webkit-appearance:none;appearance:none;margin:0;padding:4px 34px 4px 29px;font-family:inherit;font-size:16px;color:var(--ink);background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a5f7c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center;border:0;border-radius:999px;cursor:pointer; }
 .orders-tab .o-pill select:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 .orders-tab .o-pill[data-status="confirmed"] { --o-dot:#b8923f;background:#fff8ec;border-color:#e8d5a0; }
-.orders-tab .o-pill[data-status="paid"] { --o-dot:#2d6a4f;background:#e8f5ee;border-color:#a3d4b3; }
+.orders-tab .o-pill[data-status="paid"] { --o-dot:var(--ok);background:var(--ok-tint);border-color:var(--ok-line); }
 .orders-tab .o-pill[data-status="shipped"] { --o-dot:#DF88B7;background:rgba(223,136,183,.1);border-color:rgba(223,136,183,.5); }
 .orders-tab .o-pill[data-status="delivered"] { --o-dot:var(--ink);background:rgba(28,26,24,.04);border-color:rgba(28,26,24,.2); }
 .orders-tab .o-note { margin-top:4px;font-size:16px;line-height:1.35;color:var(--muted); }
@@ -1038,7 +1049,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .o-shipping .track-tick { gap:8px;font-size:16px;line-height:1.35; }
 .orders-tab .o-inline-btns { display:inline-flex;flex-wrap:wrap;gap:4px 14px; }
 .orders-tab input[type=checkbox] { -webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;flex:none;width:20px;height:20px;margin:0;background:#fff;border:1.5px solid var(--o-money);border-radius:5px;cursor:pointer; }
-.orders-tab input[type=checkbox]:checked { background:#2d6a4f;border-color:#2d6a4f; }
+.orders-tab input[type=checkbox]:checked { background:var(--ok);border-color:var(--ok); }
 .orders-tab input[type=checkbox]:checked::before { content:"";width:10px;height:5px;margin-top:-2px;border:2px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg); }
 .orders-tab input[type=checkbox]:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 /* Open, More (its menu: Link, Resend, Delete last and red) and Notes, stacked. */
@@ -1060,9 +1071,9 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .o-notes-text { margin:6px 0 0;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere; }
 /* The questions: "Money arrived? Paid by:", "How did it go out?", Resend, Link, Delete, Remove.
    Never a browser pop-up (Andy's standing rule). 17px for the question, 16px for its buttons. */
-.mark-paid { display:block;margin-top:6px;padding:4px 10px;background:#e8f5ee;border:1px solid #a3d4b3;color:#2d6a4f;cursor:pointer;font-size:16px;letter-spacing:.04em;white-space:nowrap; }
+.mark-paid { display:block;margin-top:6px;padding:4px 10px;background:var(--ok-tint);border:1px solid var(--ok-line);color:var(--ok);cursor:pointer;font-size:16px;letter-spacing:.04em;white-space:nowrap; }
 .mark-paid-ask { display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:17px;color:var(--ink); }
-.mark-paid-yes { padding:4px 10px;background:#2d6a4f;border:1px solid #2d6a4f;color:#fff;cursor:pointer;font-size:16px; }
+.mark-paid-yes { padding:4px 10px;background:var(--ok);border:1px solid var(--ok);color:#fff;cursor:pointer;font-size:16px; }
 .mark-paid-no { padding:4px 10px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px; }
 .ask-danger { padding:4px 10px;background:#c0392b;border:1px solid #c0392b;color:#fff;cursor:pointer;font-size:16px; }
 .orders-tab .mark-paid { margin-top:6px;padding:2px 12px;font-family:inherit;border-radius:999px;letter-spacing:.02em; }
@@ -1087,7 +1098,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .track-link { color:#7a5b14;font-weight:600;overflow-wrap:anywhere; }
 .track-btn { padding:4px 10px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px; }
 .track-ok, .track-err { margin:0;font-size:16px;line-height:1.5; }
-.track-ok { color:#2d6a4f; }
+.track-ok { color:var(--ok); }
 .track-err { color:#c0392b; }
 .track .mark-paid-ask { margin-top:0; }
 /* The forms on the tab (Send Invoice, New Order): Andy's sizes and the rounded, quiet boxes. */
@@ -1223,7 +1234,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .inv-ship-btn { background:var(--sidebar-bg);color:#fff;border:none;padding:12px 26px;font-size:var(--inv-text);letter-spacing:.06em;font-family:'DM Sans',sans-serif;cursor:pointer; }
 .inv-ship-link { background:none;border:1px solid var(--border);color:var(--muted);padding:8px 18px;font-size:var(--inv-small);font-family:'DM Sans',sans-serif;cursor:pointer; }
 .inv-ship-ok, .inv-ship-err { font-size:var(--inv-text);line-height:1.6;margin-top:10px; }
-.inv-ship-ok { color:#2d6a4f; }
+.inv-ship-ok { color:var(--ok); }
 .inv-ship-err { color:#c0392b; }
 @media (max-width:520px) { .inv-ship-form { grid-template-columns:1fr; } .inv-ship { padding:16px 14px; } }
 /* The shop's checkout (src/components/CheckoutModal.jsx), Andy's text sizes: nothing under 16px
@@ -1264,8 +1275,8 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .pay-return-ref-label { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px; }
 .pay-return-ref-value { font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:600;letter-spacing:.06em;color:var(--ink);font-variant-numeric:lining-nums; }
 .pay-return-ref-note { font-size:var(--inv-small);color:var(--muted);margin-top:2px; }
-.pay-return-thanks { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;line-height:1.3;color:#2d6a4f; }
-.pay-return-by { font-size:var(--inv-text);font-weight:600;color:#2d6a4f;margin-top:4px; }
+.pay-return-thanks { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;line-height:1.3;color:var(--ok); }
+.pay-return-by { font-size:var(--inv-text);font-weight:600;color:var(--ok);margin-top:4px; }
 .pay-return-note { font-size:var(--inv-small);line-height:1.6;color:var(--muted);margin-top:8px; }
 .pay-return .pay-return-go { margin-top:22px; }
 .pay-return-actions { display:flex;flex-direction:column;gap:10px;margin-top:4px; }
@@ -1310,9 +1321,10 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .checkout-piece-title { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:500;line-height:1.2;color:var(--ink);overflow-wrap:anywhere;text-wrap:balance; }
 .checkout-piece-meta { font-size:16px;line-height:1.5;color:var(--quiet);margin-top:4px; }
 .checkout-piece-price { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums;margin-top:6px; }
-.checkout-off { font-size:16px;color:#2d6a4f;margin-top:2px; }
-/* Once the Klarna page is open at the offer's lower price: "✓ $200 off for Klarna" (plum-grey). */
-.checkout-klarna-off { font-size:16px;color:#5b4a5c;margin-top:2px; }
+.checkout-off { font-size:16px;color:var(--ok);margin-top:2px; }
+/* Once the Klarna page is open at the offer's lower price: "✓ $200 off for Klarna", in the same
+   "it worked" colour as the coupon line above (was plum-grey until the no-green change landed). */
+.checkout-klarna-off { font-size:16px;color:var(--ok);margin-top:2px; }
 .checkout-wall-total { display:flex;justify-content:center;align-items:baseline;gap:14px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line); }
 .checkout-wall-total-label { font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet); }
 .checkout-wall-total-sum { font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums; }
@@ -1449,7 +1461,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 /* Admin -> Settings -> Stripe: is card payment working? */
 .card-status { display:flex;flex-direction:column;align-items:flex-start;gap:8px; }
 .card-status-line { margin:0;font-weight:600;color:var(--muted); }
-.card-status-line.is-on { color:#2d6a4f; }
+.card-status-line.is-on { color:var(--ok); }
 .card-status-line.is-off { color:#c0392b; }
 .card-status-help { margin:0;color:var(--muted);line-height:1.7; }
 

@@ -76,7 +76,7 @@ export default function DashboardTab({ goToTab, goToSettings }) {
         <Stat label="Revenue (This Month)" value={`$${stats.monthRevenue.toLocaleString()}`} sub={`Paid, shipped + delivered · ${new Date().toLocaleString("default",{month:"long",year:"numeric"})}`} color="#a07a3a" />
         <Stat label="Waiting for Payment" value={`$${stats.awaiting.toLocaleString()}`} sub={`${stats.confirmed} client-approved, not paid yet`} color="#b5651d" />
         <Stat label="Total Orders" value={stats.orders} sub={`${stats.pending} pending · ${stats.confirmed} confirmed · ${stats.paidCount} paid`} color="#1e3a52" />
-        <Stat label="Clients" value={stats.clients} color="#2d6a4f" />
+        <Stat label="Clients" value={stats.clients} color="var(--ok)" />
         <Stat label="Leads" value={stats.leads} sub="Email subscribers" color="#7a4f00" />
         {stats.newRequests > 0 && <Stat label="New Requests" value={stats.newRequests} sub="Need attention" color="#c0392b" />}
       </div>

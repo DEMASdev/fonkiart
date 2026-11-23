@@ -507,7 +507,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     <div className="pay-detail">
       <h2 className="checkout-q">Send via {name}</h2>
       <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
-      {couponStatus==="valid" && <p style={{fontSize:16,color:"#2d6a4f",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+      {couponStatus==="valid" && <p style={{fontSize:16,color:"var(--ok)",marginBottom:8}}>✓ {discount}% coupon applied</p>}
       {to}
       <div className="zelle-steps">{how}</div>
     </div>
@@ -543,7 +543,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
                 <div className="checkout-coupon-row">
                   <input className="checkout-coupon-input" autoCapitalize="characters" autoComplete="off" value={couponCode} onChange={e=>{ setCouponCode(e.target.value.toUpperCase()); if(couponStatus!=="valid"){setCouponStatus(null);} }}
                     placeholder="FK-XXXX-XXXX" disabled={couponStatus==="valid"}
-                    style={{ borderBottomColor:couponStatus==="valid"?"#2d6a4f":couponStatus&&couponStatus!=="checking"?"#c0392b":undefined, background:couponStatus==="valid"?"#f0faf5":undefined }}
+                    style={{ borderBottomColor:couponStatus==="valid"?"var(--ok)":couponStatus&&couponStatus!=="checking"?"#c0392b":undefined, background:couponStatus==="valid"?"var(--ok-tint)":undefined }}
                   />
                   {/* The coupon of a card payment already started is part of its price, set then: it stays, with no Remove. */}
                   {couponStatus !== "valid"
@@ -552,7 +552,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
                   }
                 </div>
                 {/* A started card payment's own coupon: its saving is in the server's prices beside it, so no sum is made here. */}
-                {couponStatus==="valid"       && <p style={{fontSize:16,color:"#2d6a4f",marginTop:6}}>✓ {discount}% discount applied{saved ? null : <> — you save ${(basePrice-effectivePrice).toLocaleString()}</>}</p>}
+                {couponStatus==="valid"       && <p style={{fontSize:16,color:"var(--ok)",marginTop:6}}>✓ {discount}% discount applied{saved ? null : <> — you save ${(basePrice-effectivePrice).toLocaleString()}</>}</p>}
                 {couponStatus==="too-late"    && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>A coupon can&apos;t be added now: the card payment already started at this price. Please contact Fonkiart to use it.</p>}
                 {couponStatus==="invalid"     && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
                 {couponStatus==="used"        && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}

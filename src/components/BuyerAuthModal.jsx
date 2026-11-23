@@ -169,7 +169,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
         {/* ══════════════ LOGIN TAB ══════════════ */}
         {tab === "login" && step === "form" && (
           <>
-            {notice && <p style={{ color:"#2d6a4f", fontSize:16, lineHeight:1.5, marginBottom:14 }}>✓ {notice}</p>}
+            {notice && <p style={{ color:"var(--ok)", fontSize:16, lineHeight:1.5, marginBottom:14 }}>✓ {notice}</p>}
             <div className="fld">
               <label>Email</label>
               <input type="email" value={loginEmail} onChange={e=>{ setLoginEmail(e.target.value); setLoginErr(""); setReset(""); }}
@@ -182,7 +182,7 @@ export default function BuyerAuthModal({ onClose, onAdminLogin, onClientLogin, i
             </div>
             <p style={{ fontSize:16, lineHeight:1.5, color:"var(--muted)", marginTop:-4, marginBottom:14, textAlign:"right" }}>
               {reset === "sent"
-                ? <span style={{ color:"#2d6a4f" }}>{isAdminEmail
+                ? <span style={{ color:"var(--ok)" }}>{isAdminEmail
                     ? `✓ Reset link sent to ${ADMIN_EMAIL}. It works once, for 30 minutes.`
                     : "✓ If that email has an account, a reset link is on its way. It works once, for 30 minutes."}</span>
                 : <button className="tap" onClick={handleForgot} disabled={reset === "sending"} style={linkBtn}>

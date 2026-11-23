@@ -25,7 +25,7 @@ export default function AdminPanel({ data, updateData, addArtwork, editArtwork, 
   const [ordersHover, setOrdersHover] = useState(false);
   const [ordersAction, setOrdersAction] = useState(null);
   const isCRM = ["dashboard","leads","orders","requests","clients"].includes(tab);
-  const SETTINGS_SECTIONS = [...SETTINGS_FORM_SECTIONS, ["tasks","✅ Pending Tasks"]];
+  const SETTINGS_SECTIONS = [...SETTINGS_FORM_SECTIONS, ["tasks","☑️ Pending Tasks"]];
 
   useEffect(() => {
     if (!supabase) return;

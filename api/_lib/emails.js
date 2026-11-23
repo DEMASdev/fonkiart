@@ -17,7 +17,13 @@ const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
 const multiline = (s) => e(s).replace(/\r?\n/g, "<br/>");
 
-const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", pink: "#DF88B7", red: "#c0392b", green: "#2d6a4f" };
+// "It worked" words (a coupon applied): never green (Andy, 2026-11-22: "no green on the sile maybe soft
+// lilac or violet"). An email can't read the site's CSS, so its two choices sit here too, the same as
+// --ok-a and --ok-b in src/index.css. OK_PICK is the one to change, with the site's pick there
+// (tests/noGreen.test.js checks the two agree).
+const OK_CHOICES = { A: "#765389", B: "#5b2f9e" }; // A "soft lilac", B "violet"
+const OK_PICK = "A";
+const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a", pink: "#DF88B7", red: "#c0392b", ok: OK_CHOICES[OK_PICK] };
 const SERIF = "Georgia,'Times New Roman',serif";
 const SANS = "Arial,Helvetica,sans-serif";
 const SITE = "https://fonkiart.com";
@@ -168,7 +174,7 @@ export function orderBuyer({ firstName, orderRef, items, total, couponApplied, d
   const rows = items.map(i => `<p style="margin:0 0 4px;font-size:19px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
   const summary = (orderRef ? `<p style="margin:0 0 8px;font-size:16px;color:${C.muted};">Reference: <strong style="font-family:monospace;letter-spacing:.05em;color:${C.ink};">${e(orderRef)}</strong></p>` : "")
     + rows
-    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:16px;color:${C.green};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
+    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:16px;color:${C.ok};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
     + (addr ? `<p style="margin:10px 0 0;font-size:16px;color:${C.muted};"><strong>Ship to:</strong> ${e(addr)}</p>` : "");
   return frame(`Thank you, ${e(firstName)}!`,
     p("Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.")

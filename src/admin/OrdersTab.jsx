@@ -694,7 +694,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <div>
                   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_zelle} onChange={e=>iv("pay_zelle",e.target.checked)} />
-                    💚 Zelle
+                    💜 Zelle
                   </label>
                   {inv.pay_zelle && (
                     <div className="fld" style={{marginTop:6,marginLeft:24}}>
@@ -714,7 +714,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
                 <div>
                   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:500,color:"var(--ink)"}}>
                     <input type="checkbox" checked={inv.pay_cashapp} onChange={e=>iv("pay_cashapp",e.target.checked)} />
-                    💵 Cash App
+                    💰 Cash App
                     <span style={{color:"var(--muted)",fontWeight:400}}>(cashtag from Settings)</span>
                   </label>
                 </div>

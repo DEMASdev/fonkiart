@@ -100,7 +100,7 @@ export default function ClientsTab() {
                   <td data-label="Email" className="crm-wide">{c.email}</td>
                   <td data-label="Phone">{c.phone||"—"}</td>
                   <td data-label="Notes" style={{maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.notes||"—"}</td>
-                  <td data-label="Login">{c.password ? <span style={{color:"#2d6a4f",fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa"}}>—</span>}</td>
+                  <td data-label="Login">{c.password ? <span style={{color:"var(--ok)",fontWeight:600}}>✓ Set</span> : <span style={{color:"#aaa"}}>—</span>}</td>
                   <td data-label="Date Added">{c.created_at?new Date(c.created_at).toLocaleDateString():"—"}</td>
                   <td className="crm-wide">
                     <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>

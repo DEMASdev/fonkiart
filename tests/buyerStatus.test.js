@@ -19,8 +19,8 @@ const look = (s) => {
 test("a paid order reads Paid, on the paid colour, at step 3 of 5", () => {
   const paid = look("paid");
   assert.equal(paid.label, "Paid");
-  assert.equal(paid.bg, "#52b788");
-  assert.equal(paid.fg, "var(--ink)", "dark ink words: white read at 2.5:1 on the green");
+  assert.equal(paid.bg, "var(--ok-light)", "the light lilac, never green (Andy, 2026-11-22: \"no green on the sile\")");
+  assert.equal(paid.fg, "var(--ink)", "dark ink words: white reads under 4.5:1 on a light chip");
   assert.equal(paid.step, 2);
 });
 
@@ -47,7 +47,7 @@ test("a status the list doesn't know: its own word on a plain chip, nothing lit"
 });
 
 test("My Account and Track my order read the one table: no status colours, names or words of their own", () => {
-  const COLOURS = ["#52b788", "#1e3a52", "#2d6a4f", "#f0d5a8", "#c9a96e"];
+  const COLOURS = ["var(--ok-light)", "#1e3a52", "var(--ok)", "#f0d5a8", "#c9a96e"];
   for (const [name, file] of Object.entries(VIEWS)) {
     const code = read(file);
     assert.match(code, /import \{[^}]*\bstatusLook\b[^}]*\} from "\.\.\/lib\/orderStatus"/, `${name} reads statusLook from lib/orderStatus`);
@@ -66,12 +66,13 @@ test("My Account's line walks the shared list: a dot and a word for every status
   assert.ok(!/indexOf\(o\.status\)/.test(code), "no step counting of its own");
 });
 
-// A colour from the table as #rrggbb: var(--x) is read from src/index.css's :root, #abc is spelled out.
-const css = read("src/index.css");
+// A colour from the table as #rrggbb: var(--x) is read from src/index.css's :root (comments taken out),
+// and so is a var() it names in turn (--ok-light is var(--ok-a-light) or var(--ok-b-light)); #abc is spelled out.
+const css = read("src/index.css").replace(/\/\*[\s\S]*?\*\//g, "");
 const hex = (c) => {
   const v = /^var\(--([a-z-]+)\)$/.exec(c);
-  const h = v ? (css.match(new RegExp(`--${v[1]}:(#[0-9a-fA-F]{3,6})\\b`)) || [])[1] : c;
-  return /^#[0-9a-f]{3}$/i.test(h || "") ? "#" + [...h.slice(1)].map(x => x + x).join("") : h;
+  if (v) return hex((css.match(new RegExp(`(?<![\\w-])--${v[1]}:([^;]+);`)) || [])[1]?.trim());
+  return /^#[0-9a-f]{3}$/i.test(c || "") ? "#" + [...c.slice(1)].map(x => x + x).join("") : c;
 };
 const lum = (h) => {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
@@ -93,6 +94,6 @@ test("Admin -> Dashboard's Orders by Status reads the one table too: no status l
   const code = read("src/admin/DashboardTab.jsx");
   assert.match(code, /import \{[^}]*\bstatusLook\b[^}]*\} from "\.\.\/lib\/orderStatus"/, "it reads statusLook from lib/orderStatus");
   assert.match(code, /ORDER_STATUSES\.map\(/, "it walks the shared list");
-  for (const c of ["#f0d5a8", "#52b788", "#c9a96e"]) assert.ok(!code.toLowerCase().includes(c), `it has a status colour of its own: ${c}`);
+  for (const c of ["#f0d5a8", "var(--ok-light)", "#c9a96e"]) assert.ok(!code.toLowerCase().includes(c), `it has a status colour of its own: ${c}`);
   assert.ok(!/label:"(Pending|Confirmed|Paid|Shipped|Delivered)"/.test(code), "it spells the status words itself");
 });

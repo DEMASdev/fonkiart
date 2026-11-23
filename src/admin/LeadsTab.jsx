@@ -110,7 +110,7 @@ export default function LeadsTab({ discount = 15 }) {
                 <td data-label="Used">
                   {l.coupon_used
                     ? <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{color:"#2d6a4f",fontWeight:500}}>✓ Used</span>
+                        <span style={{color:"var(--ok)",fontWeight:500}}>✓ Used</span>
                         <button className="btn-s" style={{fontSize:16,padding:"4px 12px"}} onClick={()=>resetCoupon(l)}>Reset</button>
                       </div>
                     : <span style={{color:"var(--muted)"}}>No</span>}

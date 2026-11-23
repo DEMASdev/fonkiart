@@ -39,7 +39,7 @@ export default function AdminTasksWidget({ goToTab, goToSettings }) {
         <p style={{ letterSpacing:".14em", textTransform:"uppercase", color:"var(--muted)", margin:0 }}>Pending Tasks</p>
         <span style={{ display:"flex", alignItems:"center", gap:14 }}>
           {remaining === 0
-            ? <span style={{ color:"#2d6a4f", fontWeight:500 }}>✓ All done!</span>
+            ? <span style={{ color:"var(--ok)", fontWeight:500 }}>✓ All done!</span>
             : <span style={{ color:"var(--muted)" }}>{remaining} remaining</span>}
           {doneCount > 0 && (
             <button type="button" onClick={() => setShowDone(s => !s)}
@@ -52,8 +52,8 @@ export default function AdminTasksWidget({ goToTab, goToSettings }) {
       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
         {shown.map(t => (
           <div key={t.id} style={{ position:"relative" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", background:done[t.id]?"#f5f9f5":"#fafafa", border:`1px solid ${done[t.id]?"#c3ddc9":"var(--border)"}`, cursor:"pointer", transition:"all .15s" }}>
-              <div onClick={() => toggle(t.id)} style={{ width:18, height:18, border:`2px solid ${done[t.id]?"#2d6a4f":"var(--border)"}`, borderRadius:3, background:done[t.id]?"#2d6a4f":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", background:done[t.id]?"var(--ok-tint)":"#fafafa", border:`1px solid ${done[t.id]?"var(--ok-line)":"var(--border)"}`, cursor:"pointer", transition:"all .15s" }}>
+              <div onClick={() => toggle(t.id)} style={{ width:18, height:18, border:`2px solid ${done[t.id]?"var(--ok)":"var(--border)"}`, borderRadius:3, background:done[t.id]?"var(--ok)":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all .15s" }}>
                 {done[t.id] && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </div>
               <span onClick={() => handleClick(t)} style={{ color:done[t.id]?"var(--muted)":"var(--ink)", textDecoration:done[t.id]?"line-through":"none", flex:1, lineHeight:1.4 }}>

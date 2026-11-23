@@ -86,13 +86,14 @@ export function paidPick(order, status) {
 // The colours are Track my order's; Admin -> Dashboard reads them too. bg = the chip, fg = its
 // words, dot = its dot on a line where that differs from the chip: Pending's light chip colour
 // would be lost as a small dot on white. Every chip's words read at 4.5:1 or more (Andy's rule is
-// for people who can't see well): white was 2.5:1 on Paid's green and 2.9:1 on Delivered's gold,
-// so those two have dark ink words (7.0:1 and 6.0:1).
+// for people who can't see well). Paid takes --ok-light and Shipped --ok (src/index.css): lilac or
+// violet, never green (Andy, 2026-11-22: "no green on the sile"). Paid and Delivered's gold have dark
+// ink words (5.8:1 or more, and 6.0:1); Shipped has white words (6.2:1 or more).
 export const STATUS_LOOK = {
   pending: { bg: "#f0d5a8", fg: "var(--ink)", dot: "#c9a96e" },
   confirmed: { bg: "#1e3a52", fg: "#fff" },
-  paid: { bg: "#52b788", fg: "var(--ink)" },
-  shipped: { bg: "#2d6a4f", fg: "#fff" },
+  paid: { bg: "var(--ok-light)", fg: "var(--ink)" },
+  shipped: { bg: "var(--ok)", fg: "#fff" },
   delivered: { bg: "var(--gold)", fg: "var(--ink)" },
 };
 

@@ -21,7 +21,7 @@
 .rq-chip { align-self:flex-start;font-size:16px;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border:1px solid var(--border);color:var(--muted); }
 .rq-chip-new { border-color:var(--label);color:#b0479a;background:#fff4fc; }
 .rq-chip-in_progress { border-color:var(--gold);color:var(--ink); }
-.rq-chip-completed { border-color:#a3d4b3;color:#3d7a52;background:#f0f9f4; }
+.rq-chip-completed { border-color:var(--ok-line);color:var(--ok);background:var(--ok-tint); }
 
 .rq-detail { background:#fff;border:1px solid var(--border);padding:24px;min-width:0; }
 .rq-detail-empty { display:flex;align-items:center;justify-content:center;min-height:240px; }
@@ -45,7 +45,7 @@
 .rq-reply-row .btn-p { flex-shrink:0;min-height:44px;font-size:16px; }
 .rq-reply-row .btn-p:disabled { opacity:.45;cursor:default; }
 .rq-result { font-size:16px;line-height:1.5;color:#c0392b; }
-.rq-result.ok { color:#3d7a52; }
+.rq-result.ok { color:var(--ok); }
 .rq-muted { font-size:16px;color:var(--muted);line-height:1.55; }
 
 .rq-page-card { max-width:640px; }

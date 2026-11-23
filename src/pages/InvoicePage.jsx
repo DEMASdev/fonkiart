@@ -396,33 +396,33 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           still said "not paid yet, please send"). */}
       {paid ? (
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:6,textWrap:"balance"}}>Thank you for your payment!</p>
-          <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginBottom:6}}>{paidBy ? `Paid by ${paidBy} ✓` : "Paid ✓"}</p>
-          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6}}>{paidNote}</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"var(--ok)",marginBottom:6,textWrap:"balance"}}>Thank you for your payment!</p>
+          <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"var(--ok)",marginBottom:6}}>{paidBy ? `Paid by ${paidBy} ✓` : "Paid ✓"}</p>
+          <p style={{fontSize:"var(--inv-text)",color:"var(--ok)",lineHeight:1.6}}>{paidNote}</p>
           {trackHref && (
             <div style={{marginTop:16}}>
               <a className="tap" href={trackHref} target="_blank" rel="noopener noreferrer"
-                style={{display:"inline-block",background:"#2d6a4f",color:"#fff",padding:"12px 28px",fontSize:"var(--inv-text)",letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",textDecoration:"none"}}>
+                style={{display:"inline-block",background:"var(--ok)",color:"#fff",padding:"12px 28px",fontSize:"var(--inv-text)",letterSpacing:".08em",fontFamily:"'DM Sans',sans-serif",textDecoration:"none"}}>
                 Track your package →
               </a>
               {trackCarrier !== "other" && trackNumber && (
-                <p style={{fontSize:"var(--inv-small)",color:"#4a8c6a",lineHeight:1.6,marginTop:8,overflowWrap:"anywhere"}}>{carrierLabel(trackCarrier)} tracking number: {trackNumber}</p>
+                <p style={{fontSize:"var(--inv-small)",color:"var(--ok)",lineHeight:1.6,marginTop:8,overflowWrap:"anywhere"}}>{carrierLabel(trackCarrier)} tracking number: {trackNumber}</p>
               )}
             </div>
           )}
-          {pickup && <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"#2d6a4f",marginTop:14}}>{PICKUP_LABEL}</p>}
+          {pickup && <p style={{fontSize:"var(--inv-text)",fontWeight:600,color:"var(--ok)",marginTop:14}}>{PICKUP_LABEL}</p>}
         </div>
       ) : clearing ? (
         // A bank payment made, still clearing: never asked for money again, nor offered another
         // way to pay; the same words as the Cart's thank-you (src/lib/invoiceView.js BANK_CLEARING).
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:6,textWrap:"balance"}}>{BANK_CLEARING.title}</p>
-          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6}}>{BANK_CLEARING.note}</p>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"var(--ok)",marginBottom:6,textWrap:"balance"}}>{BANK_CLEARING.title}</p>
+          <p style={{fontSize:"var(--inv-text)",color:"var(--ok)",lineHeight:1.6}}>{BANK_CLEARING.note}</p>
         </div>
       ) : approved ? (<>
         <div className="invoice-approved-banner">
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"#2d6a4f",marginBottom:8,textWrap:"balance"}}>Order Confirmed ✓</p>
-          <p style={{fontSize:"var(--inv-text)",color:"#4a8c6a",lineHeight:1.6,marginBottom:hasAnyPayment&&!pay?20:0}}>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:29,fontWeight:600,color:"var(--ok)",marginBottom:8,textWrap:"balance"}}>Order Confirmed ✓</p>
+          <p style={{fontSize:"var(--inv-text)",color:"var(--ok)",lineHeight:1.6,marginBottom:hasAnyPayment&&!pay?20:0}}>
             {pay ? `Your order is confirmed. Pay ${amountText} by card, right here.`
               : hasAnyPayment
               ? `Your order is confirmed. It is not paid yet. Please send ${amountText} using one of these:`
@@ -435,8 +435,8 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
           )}
           {/* The card form, while open, takes the place of this list (below the banner). */}
           {hasAnyPayment && !pay && (
-            <div ref={waysTop} style={{borderTop:"1px solid #a3d4b3",paddingTop:20}}>
-              <p style={{fontSize:"var(--inv-small)",letterSpacing:".12em",textTransform:"uppercase",color:"#4a8c6a",marginBottom:14}}>Send Payment To</p>
+            <div ref={waysTop} style={{borderTop:"1px solid var(--ok-line)",paddingTop:20}}>
+              <p style={{fontSize:"var(--inv-small)",letterSpacing:".12em",textTransform:"uppercase",color:"var(--ok)",marginBottom:14}}>Send Payment To</p>
               {/* The ways to pay as rows, the same as the Cart's checkout (src/components/PayRows.jsx).
                   Tapped, a row opens right under it: where to send it (Zelle, Venmo, Cash App), or the
                   button that opens Stripe's form right here on this page, with the exact amount (Card,

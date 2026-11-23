@@ -3,9 +3,9 @@ import { NAV_ITEMS } from "../constants";
 import CardStatus from "./CardStatus";
 
 export const SETTINGS_SECTIONS = [
-  ["zelle",   "💚 Zelle"],
+  ["zelle",   "💜 Zelle"],
   ["venmo",   "🔵 Venmo"],
-  ["cashapp", "💵 Cash App"],
+  ["cashapp", "💰 Cash App"],
   ["coupon",  "🎟 Coupon Discount"],
   ["stripe",  "💳 Stripe"],
   ["social",  "📱 Social Media"],
@@ -64,7 +64,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
 
       {section === "zelle" && (
         <div className="settings-box">
-          <h3>💚 Zelle</h3>
+          <h3>💜 Zelle</h3>
           <div className="fld"><label>Zelle Email or Phone</label><input value={s.zelleContact} onChange={e=>setS({...s,zelleContact:e.target.value})} /></div>
           <div className="fld"><label>Contact Type</label>
             <select value={s.zelleLabel} onChange={e=>setS({...s,zelleLabel:e.target.value})}>
@@ -85,7 +85,7 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
 
       {section === "cashapp" && (
         <div className="settings-box">
-          <h3>💵 Cash App</h3>
+          <h3>💰 Cash App</h3>
           <div className="fld"><label>Cash App Cashtag</label><input value={s.cashAppHandle||""} onChange={e=>setS({...s,cashAppHandle:e.target.value})} placeholder="$fonkiart" /></div>
           <p style={{color:"var(--muted)",lineHeight:1.7}}>Leave blank to hide Cash App as a payment option on checkout and invoices.</p>
         </div>
