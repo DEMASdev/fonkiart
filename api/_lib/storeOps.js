@@ -5,7 +5,7 @@ import { bearer } from "./adminToken.js";
 import { checkPassword } from "./adminSecret.js";
 import { opCustomerResetRequest, opCustomerResetSet } from "./customerReset.js";
 import { siteUrl } from "./site.js";
-import { cardPicture, holdArtForOrder, markSoldForOrder, otherPageClearing, releaseArtForOrder } from "./artworks.js";
+import { artPrice, cardPicture, findPricedArtwork, holdArtForOrder, markSoldForOrder, otherPageClearing, releaseArtForOrder } from "./artworks.js";
 import { opThread, opThreadReply, opInbound } from "./threads.js";
 import { opReminders } from "./reminders.js";
 import { invoiceNumber } from "./invoiceNumber.js";
@@ -15,6 +15,7 @@ import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPa
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } from "./cartEmails.js";
 import { buyerSignInLink } from "./verifyLink.js";
 import { opCartSaving, opRememberCart } from "./cartMemory.js";
+import { appliedWords, couponPrices, ownSizes, sizesOf, sizeWords } from "../../src/lib/couponSize.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
 // database itself can stay locked to the public key. Each one does exactly what the
@@ -57,7 +58,8 @@ export const formatOrderRef = (id) => `FA-${Number(id) + ORDER_REF_OFFSET}`;
 
 export const sha256hex = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
 
-// The shop's coupon % (Admin -> Settings), the one the welcome popup offers.
+// The shop's coupon % (Admin -> Settings), the one the welcome popup offers, and what every code gives
+// that has no size of its own (src/lib/couponSize.js).
 export async function couponDiscount(db) {
   const { data } = await db.from("Settings").select("*").eq("id", 1).maybeSingle();
   return data?.couponDiscount ?? 15;
@@ -71,25 +73,29 @@ async function findCoupon(db, code) {
 // The one coupon an email has (Leads coupon_code): its own code when it has one (used or not),
 // else a new code saved on its Leads row, the row made when there is none. source: where a new
 // row came from. The welcome popup and the coupon after an unfinished checkout (Admin -> Orders,
-// unfinishedCoupon.js) both get theirs here. email: already lower case.
+// unfinishedCoupon.js) both get theirs here. email: already lower case. size: what its row says the
+// code gives (Leads.coupon_size), null for the shop's %. Every column is read ("*"), never that one
+// by name: it may not be there yet (db/2026-11-23-coupon-size.sql).
 export async function leadCoupon(db, email, source) {
-  const { data: rows, error } = await db.from("Leads").select("id,coupon_code,coupon_used").eq("email", email).limit(1);
+  const { data: rows, error } = await db.from("Leads").select("*").eq("email", email).limit(1);
   if (error) throw error;
   const existing = rows?.[0];
-  if (existing?.coupon_code) return { code: existing.coupon_code, used: !!existing.coupon_used, made: false };
+  if (existing?.coupon_code) return { code: existing.coupon_code, used: !!existing.coupon_used, made: false, size: existing.coupon_size ?? null };
   const code = newCouponCode();
   const write = existing
     ? db.from("Leads").update({ coupon_code: code, coupon_used: false }).eq("id", existing.id)
     : db.from("Leads").insert([{ email, source, coupon_code: code, coupon_used: false }]);
   const { error: writeErr } = await write;
   if (writeErr) throw writeErr;
-  return { code, used: false, made: true };
+  return { code, used: false, made: true, size: null };
 }
 
 export async function opWelcome(db, body, mail) {
   const email = emailField(body.email).toLowerCase();
-  const { code, used, made } = await leadCoupon(db, email, "welcome-popup");
-  if (!made) return { returning: true, code, used };
+  const { code, used, made, size } = await leadCoupon(db, email, "welcome-popup");
+  // Their own code back: with what it gives when that is not the shop's %, so the popup says the truth.
+  const sizes = used ? [] : ownSizes(size);
+  if (!made) return { returning: true, code, used, ...(sizes.length ? { sizes } : {}) };
   const discount = await couponDiscount(db);
   // "Verify my email" beside the code: it signs them in as a buyer (verifyLink.js), or is null.
   const verifyLink = await buyerSignInLink(db, email);
@@ -165,20 +171,39 @@ export async function opCoupon(db, body) {
   if (!lead) return { status: "invalid" };
   if (lead.coupon_used) return { status: "used" };
   if (String(lead.email || "").toLowerCase() !== email) return { status: "wrong-email" };
-  return { status: "valid" };
+  // sizes: what this code gives (src/lib/couponSize.js), so the checkout shows what will be charged.
+  // Nothing else about the person.
+  return { status: "valid", sizes: sizesOf(lead.coupon_size, await couponDiscount(db)) };
+}
+
+// What a coupon takes off an order paid with Zelle, Venmo or Cash App, for its WORDS only (the
+// amounts are the browser's, as before): { size, off }. A % says itself. Dollars depend on the
+// cart, so they are worked out from the shop's own prices when every piece has one; if not, the
+// code's newest size speaks for itself.
+async function couponCut(db, items, sizes) {
+  const newest = { size: sizes.at(-1) };
+  if (sizes.every(s => s.dollars === undefined)) return newest;
+  try {
+    const prices = (await Promise.all(items.map(i => findPricedArtwork(db, i.title)))).map(artPrice);
+    return prices.every(p => p !== null) ? couponPrices(prices, sizes) : newest;
+  } catch (e) {
+    console.warn("store order: couldn't price the pieces for the coupon's words:", e?.message || e);
+    return newest;
+  }
 }
 
 // The two "order received" emails, to the buyer and to the shop, about exactly these pieces (each
 // shows their pictures: emails.js). Sent as an order is placed, except for a Cart card order:
 // its confirmation is the paid pair (cartCheckout.js settleCart), or these two once it is paid
 // another way after all (cartCheckout.js opCartOther).
-export function orderReceived(mail, { firstName, orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed = false }) {
+// applied: the coupon's words ("20% coupon applied", "$300 coupon applied"), or "" when there is none.
+export function orderReceived(mail, { firstName, orderRef, items, total, applied, fullName, email, phone, addr, saveFailed = false }) {
   const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
   return [
     mail.send({ to: email, subject: `Order Received — ${itemsLabel} · Fonkiart`,
-      htmlContent: T.orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender: mail.sender }) }),
+      htmlContent: T.orderBuyer({ firstName, orderRef, items, total, applied, addr, sender: mail.sender }) }),
     mail.send({ to: mail.sender, subject: `🎨 New Order ${orderRef}: ${itemsLabel} — ${fullName}`,
-      htmlContent: T.orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) }),
+      htmlContent: T.orderStore({ orderRef, items, total, applied, fullName, email, phone, addr, saveFailed }) }),
   ];
 }
 
@@ -218,9 +243,9 @@ export async function clientOnce(db, d) {
 // is saved; the order rows and Stripe then use its prices, never the browser's. A piece it
 // can't price refuses the order, and nothing is saved. With it, the answer also carries what
 // the card payment needs (the new rows' ids, the prices, the reference, and the coupon when it
-// counted), and the two "order received" emails WAIT (Andy, 2026-11-18: a card order's emails
-// only once it is paid): the rows' notes end with CARD_NOTE until it is paid, by card or
-// another way.
+// counted: its code, and in words what it took off), and the two "order received" emails WAIT
+// (Andy, 2026-11-18: a card order's emails only once it is paid): the rows' notes end with
+// CARD_NOTE until it is paid, by card or another way.
 export async function opOrder(db, body, mail, { price } = {}) {
   const d = checkoutDetails(body.customer || {});
   const { firstName, email, phone, fullName, addr, ship } = d;
@@ -240,23 +265,26 @@ export async function opOrder(db, body, mail, { price } = {}) {
     const lead = await findCoupon(db, code);
     if (lead && !lead.coupon_used && String(lead.email || "").toLowerCase() === email.toLowerCase()) couponLead = lead;
   }
-  const discount = await couponDiscount(db);
-  if (price) ({ items, total } = await price(items, couponLead ? discount : 0));
-  const notes = [`Order Ref: ${orderRef}`, d.words].filter(Boolean).join(" · ") + (couponLead ? ` · ${discount}% coupon applied` : "") + (price ? CARD_NOTE : "");
+  // What THAT code gives, from its own row: a browser sends only a code (src/lib/couponSize.js).
+  const sizes = couponLead ? sizesOf(couponLead.coupon_size, await couponDiscount(db)) : [];
+  let cut = null;
+  if (price) { cut = await price(items, sizes); ({ items, total } = cut); }
+  else if (couponLead) cut = await couponCut(db, items, sizes);
+  const applied = couponLead ? appliedWords(cut.size, cut.off) : "";
+  const notes = [`Order Ref: ${orderRef}`, d.words].filter(Boolean).join(" · ") + (applied ? ` · ${applied}` : "") + (price ? CARD_NOTE : "");
 
   const insert = db.from("Orders").insert(items.map(i => ({ client_email: email, item_title: i.title, amount: i.amount, status: "pending", notes, ...ship })));
   const { data: savedRows, error: orderErr } = await (price ? insert.select("id") : insert);
   if (orderErr) console.error("store order insert:", orderErr.message);
 
-  const couponApplied = !!couponLead;
   await Promise.allSettled([
     clientOnce(db, d),
     couponLead ? db.from("Leads").update({ coupon_used: true }).eq("id", couponLead.id) : null,
-    ...(price ? [] : orderReceived(mail, { firstName, orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed: !!orderErr })),
+    ...(price ? [] : orderReceived(mail, { firstName, orderRef, items, total, applied, fullName, email, phone, addr, saveFailed: !!orderErr })),
   ]);
   if (!price) return { ok: true, saved: !orderErr };
   const ids = (savedRows || []).map(r => r.id).filter(id => Number.isSafeInteger(id));
-  return { ok: true, saved: !orderErr && ids.length === items.length, ids, items, total, orderRef, email, ...(couponApplied ? { coupon: code } : {}) };
+  return { ok: true, saved: !orderErr && ids.length === items.length, ids, items, total, orderRef, email, ...(couponLead ? { coupon: code, couponWords: sizeWords(cut.size, cut.off) } : {}) };
 }
 
 function invoiceToken(value) {

@@ -93,8 +93,8 @@ async function adminSent(body) {
   return sent[0].htmlContent;
 }
 const ABOUT_PIECES = {
-  "Order received (buyer)": (ts) => T.orderBuyer({ firstName: "Ana", orderRef: "FA-1752", items: ts.map(title => ({ title, amount: 950 })), total: 950, couponApplied: false, discount: 15, addr: "", sender: "shop@fonkiart.com" }),
-  "New order (shop)": (ts) => T.orderStore({ orderRef: "FA-1752", items: ts.map(title => ({ title, amount: 950 })), total: 950, couponApplied: false, discount: 15, fullName: "Ana Test", email: "ana@example.com", phone: "", addr: "", saveFailed: false }),
+  "Order received (buyer)": (ts) => T.orderBuyer({ firstName: "Ana", orderRef: "FA-1752", items: ts.map(title => ({ title, amount: 950 })), total: 950, applied: "", addr: "", sender: "shop@fonkiart.com" }),
+  "New order (shop)": (ts) => T.orderStore({ orderRef: "FA-1752", items: ts.map(title => ({ title, amount: 950 })), total: 950, applied: "", fullName: "Ana Test", email: "ana@example.com", phone: "", addr: "", saveFailed: false }),
   "Cart paid by card (shop)": (ts) => CE.cartPaidShop({ ...cartView(ts), who: "Ana Test", email: "ana@example.com" }),
   "Cart payment received (buyer)": (ts) => CE.cartReceived(cartView(ts)),
   "Bank payment didn't go through (buyer)": (ts) => CE.bankFailed(cartView(ts)),
@@ -315,7 +315,7 @@ test("control: the check catches today's random picture (it lands on another pie
 });
 
 // The coupon to a buyer who didn't finish paying (Andy, 2026-11-22): their own pieces, BIG and whole.
-const coupon = (titles) => T.unfinishedCoupon({ firstName: "Ana", titles, code: "FK-AAAA-BBBB", discount: 15 });
+const coupon = (titles) => T.unfinishedCoupon({ firstName: "Ana", titles, code: "FK-AAAA-BBBB", words: "15% off" });
 const imgTags = (html) => [...String(html).matchAll(/<img [^>]*>/g)].map(m => m[0]);
 
 test("the coupon after an unfinished checkout shows the buyer's own pieces, big and whole, and never another", async () => {

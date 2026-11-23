@@ -243,6 +243,7 @@ test("the coupon only counts as the server checks it: right code, right email, n
   assert.equal(db.tables.Leads[0].coupon_used, true);
   assert.match(cartRows(db)[0].notes, /15% coupon applied/);
   assert.equal(out.coupon, "FK-1111-2222", "the code the server took, so the checkout shows it again coming back");
+  assert.equal(out.couponWords, "15% off", "...with what it took off, in words");
 
   // Not valid: full price, whatever the browser claims, and the coupon stays unused.
   for (const [label, over, leads] of [
@@ -257,7 +258,7 @@ test("the coupon only counts as the server checks it: right code, right email, n
     assert.equal(out.total, 800, label);
     assert.equal(stripe.last().amount_total, 80000, label);
     assert.deepEqual(cartRows(db).map(r => r.amount), [500, 300], label);
-    assert.equal("coupon" in out, false, `${label}: no coupon to show again`);
+    assert.equal("coupon" in out || "couponWords" in out, false, `${label}: no coupon to show again`);
     if (!leads) assert.equal(db.tables.Leads[0].coupon_used, false, label);
   }
 });

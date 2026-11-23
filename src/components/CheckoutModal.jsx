@@ -3,6 +3,7 @@ import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { stripeJsReady } from "../lib/stripeJs";
 import { readCardOrder, saveCardOrder, dropCardOrder, matchesCart, cardOrderBody, CARD_FORM_DOWN } from "../lib/cartOrder";
+import { couponPrices, moneyWords, sizesOf, sizeWords } from "../lib/couponSize";
 import { payTries } from "../lib/payTries";
 import { holdBack } from "../lib/backInside";
 import CardCheckout from "./CardCheckout";
@@ -17,6 +18,16 @@ import { payRows, stripeRows, isStripe, serverWays } from "../lib/payWays";
 const GONE = "This checkout had to start over. Your details are still filled in: please check them and tap Continue again.";
 // The card payment didn't open, for a reason the buyer can't act on: try again, or pay another way.
 const CARD_DIDNT_OPEN = "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay.";
+
+// The amounts the server gave a saved order, for the cart's pieces in their own order: each of the
+// order's lines once (two copies of a print can differ by a dollar, a coupon's dollars being split).
+function savedAmounts(order, items) {
+  const left = [...order.lines];
+  return items.map((i) => {
+    const n = left.findIndex(l => String(l.title).trim() === String(i.title).trim());
+    return n < 0 ? undefined : left.splice(n, 1)[0].amount;
+  });
+}
 
 // onSuccess: an order placed to be paid by Zelle, Venmo or Cash App (the Cart page empties the
 // cart then). onPaid(titles): a card payment is in (the Cart page empties those pieces). Card
@@ -45,6 +56,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [customer, setCustomer] = useState(() => saved ? { ...blank, email: saved.email, ...saved.customer } : blank);
   const [couponCode, setCouponCode] = useState(() => saved?.coupon || "");
   const [couponStatus, setCouponStatus] = useState(() => saved?.coupon ? "valid" : null);
+  const [sizes, setSizes] = useState(null); // what that code gives, as the server says (src/lib/couponSize.js); null: the shop's %
   const [checkoutError, setCheckoutError] = useState("");
   const [orderRef, setOrderRef] = useState("");
   const [savedAtOpen] = useState(() => saved && cardOrderBody(saved, items));
@@ -98,21 +110,27 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const fullName = `${customer.firstName} ${customer.lastName}`.trim();
   const discount = settings.couponDiscount ?? 15;
   const itemPrice = (i) => Number(i.salePrice || i.price || 0);
-  const itemEffective = (i) => couponStatus === "valid" ? Math.round(itemPrice(i) * (1 - discount / 100)) : itemPrice(i);
-  const basePrice = items.reduce((sum,i) => sum + itemPrice(i), 0);
-  const effectivePrice = couponStatus === "valid" ? Math.round(basePrice * (1 - discount / 100)) : basePrice;
+  const couponOn = couponStatus === "valid"; // this checkout's coupon, or the saved order's own (kept)
+  // Each piece's amount, what they add up to, and what the coupon takes off: the server works them
+  // out with the same sums (src/lib/couponSize.js), so what is shown here is what is charged.
+  const prices = items.map(itemPrice);
+  const basePrice = couponPrices(prices, []).total;
+  const cut = couponPrices(prices, couponOn ? sizesOf(sizes, discount) : []);
   const itemsLabel = items.length === 1 ? items[0].title : `${items.length} items`;
   // A saved order shows the amounts the server gave it; its reference shows on the thank-you only.
-  const savedAmount = (i) => saved?.lines.find(l => String(l.title).trim() === String(i.title).trim())?.amount;
-  const shownAmount = (i) => (saved ? savedAmount(i) : undefined) ?? itemEffective(i);
-  const amountDue = saved ? saved.total : effectivePrice;
+  const shown = saved ? savedAmounts(saved, items).map((amount, n) => amount ?? cut.amounts[n]) : cut.amounts;
+  const amountDue = saved ? saved.total : cut.total;
   const refShown = saved ? saved.ref : orderRef;
+  // What the coupon takes off, in words: "15% off", "$300 off". A saved order's are the server's; one
+  // kept before its words were has the shop's %, as it did then.
+  const offWords = !couponOn ? "" : saved ? saved.couponWords || `${discount}% off` : sizeWords(cut.size, cut.off);
+  const offAmount = offWords.replace(/ off$/, "");
+  const offInDollars = offWords.startsWith("$");
   // Step 1 (where to send it) is done with a name and an email; step 2 (how to pay) with a way to
   // pay, once the server has said what became of a saved order.
   const detailsOk = fullName && customer.email.includes("@");
   const canNext = method && checked && detailsOk;
   const money = (n) => `$${Number(n).toLocaleString()}`;
-  const couponOn = couponStatus === "valid"; // this checkout's coupon, or the saved order's own (kept)
   const couponKept = !!saved?.coupon; // the saved order's own coupon: applied, and it stays
   // Zelle, Venmo, Cash App: what the buyer writes in the payment's memo or note, so Fonkiart can
   // match it (the order's number shows once they tap "I've Sent the Payment").
@@ -145,7 +163,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     if (!customer.email || !customer.email.includes("@")) { setCouponStatus("need-email"); return; }
     setCouponStatus("checking");
     try {
-      const { status } = await storeCall("coupon", { code, email: customer.email });
+      const { status, sizes: gives } = await storeCall("coupon", { code, email: customer.email });
+      setSizes(gives ?? null);
       // A card payment already started for this cart: its price is the server's, set then, and
       // a coupon can't change it now. Said plainly, and nothing is taken off. (savedNow: it may have
       // been saved while the coupon was asked about.)
@@ -157,9 +176,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const orderPayload = () => ({
     customer,
     orderRef,
-    total: effectivePrice,
+    total: cut.total,
     couponCode: couponStatus === "valid" ? couponCode.trim().toUpperCase() : "",
-    items: items.map(i => ({ title: i.title, amount: itemEffective(i) })),
+    items: items.map((i, n) => ({ title: i.title, amount: cut.amounts[n] })),
   });
 
   // The server saves the order, marks the coupon used and sends both emails.
@@ -279,11 +298,12 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
       if (order.paid) { paidNow(order); return; }
       // Kept BEFORE the form opens, so the next attempt names this page. Kept even if the checkout
       // closed meanwhile, so opening it again pays THIS order, never a second one. With it, the
-      // details as typed and the coupon the server took, for coming back to a filled-in checkout.
+      // details as typed and the coupon the server took, with its words, for coming back to a
+      // filled-in checkout.
       const kept = saveCardOrder({
         ref: order.ref, ids: order.ids, email: was ? (order.email || was.email) : customer.email.trim(),
         lines: order.lines, total: order.total, session: order.session || was?.session,
-        customer, coupon: was ? was.coupon : order.coupon,
+        customer, coupon: was ? was.coupon : order.coupon, couponWords: was ? was.couponWords : order.couponWords,
       });
       if (closed.current) return; // no card form in a checkout that is gone
       keep(kept);
@@ -483,19 +503,21 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // (several pieces side by side, to swipe). The steps ask one thing each: where to send it, how to
   // pay, then the payment. The card form repeats no pictures (CardCheckout art={false}).
   // src/index.css ("The checkout as a gallery wall") draws it; tests/checkout-layout.test.js holds it.
-  const pieceOff = (i) => couponOn && itemPrice(i) !== itemEffective(i);
   const many = items.length > 1;
+  // "✓ 15% off" on each piece it comes off. Dollars come off the ORDER ("✓ $300 off"), so with several
+  // pieces they are said once, under the total.
+  const pieceOff = (n) => couponOn && shown[n] < prices[n] && !(many && offInDollars);
   const wall = (
     <section ref={wallBox} className={`checkout-wall${many ? " is-many" : ""}${wallH ? " is-measured" : ""}`} style={wallH ? { "--wall-h": `${wallH}px` } : undefined} aria-label="Your order">
       <ul className="checkout-wall-list">
-        {items.map(i => (
+        {items.map((i, n) => (
           <li key={i.id} className="checkout-piece">
             {i.image && <div className="checkout-frame"><Pic src={i.image} w={1080} alt={i.title} className="checkout-piece-pic" /></div>}
             <div className="checkout-piece-label">
               <p className="checkout-piece-title">{i.title}</p>
               {(i.medium || i.dimensions) && <p className="checkout-piece-meta">{[i.medium, i.dimensions].filter(Boolean).join(" · ")}</p>}
-              {shownAmount(i) ? <p className="checkout-piece-price">{money(shownAmount(i))}</p> : null}
-              {pieceOff(i) && <p className="checkout-off">✓ {discount}% off</p>}
+              {shown[n] ? <p className="checkout-piece-price">{money(shown[n])}</p> : null}
+              {pieceOff(n) && <p className="checkout-off">✓ {offWords}</p>}
             </div>
           </li>
         ))}
@@ -506,7 +528,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
           <span className="checkout-wall-total-sum">{money(amountDue)}</span>
         </div>
       ) : null}
-      {many && couponOn && basePrice !== effectivePrice && <p className="checkout-off checkout-wall-total-off">✓ {discount}% off</p>}
+      {many && couponOn && amountDue < basePrice && <p className="checkout-off checkout-wall-total-off">✓ {offWords}</p>}
     </section>
   );
   // How to pay: one row each (src/components/PayRows.jsx), Stripe's only for the ways the server
@@ -528,7 +550,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     <div className="pay-detail">
       <h2 className="checkout-q">Send via {name}</h2>
       <div className="zelle-amount">${Number(amountDue||0).toLocaleString()}</div>
-      {couponStatus==="valid" && <p style={{fontSize:16,color:"var(--ok)",marginBottom:8}}>✓ {discount}% coupon applied</p>}
+      {couponOn && <p style={{fontSize:16,color:"var(--ok)",marginBottom:8}}>✓ {offAmount} coupon applied</p>}
       {to}
       <div className="zelle-steps">{how}</div>
     </div>
@@ -572,11 +594,11 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
                   {/* The coupon of a card payment already started is part of its price, set then: it stays, with no Remove. */}
                   {couponStatus !== "valid"
                     ? <button className="btn-s" onClick={applyCoupon} disabled={couponStatus==="checking"||!couponCode.trim()} style={{whiteSpace:"nowrap"}}>{couponStatus==="checking"?"Checking…":"Apply"}</button>
-                    : !couponKept && <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
+                    : !couponKept && <button className="btn-s" onClick={()=>{setCouponStatus(null);setCouponCode("");setSizes(null);}} style={{whiteSpace:"nowrap",color:"var(--muted)"}}>Remove</button>
                   }
                 </div>
                 {/* A started card payment's own coupon: its saving is in the server's prices beside it, so no sum is made here. */}
-                {couponStatus==="valid"       && <p style={{fontSize:16,color:"var(--ok)",marginTop:6}}>✓ {discount}% discount applied{saved ? null : <> — you save ${(basePrice-effectivePrice).toLocaleString()}</>}</p>}
+                {couponOn                     && <p style={{fontSize:16,color:"var(--ok)",marginTop:6}}>✓ {offInDollars ? `${offWords} applied` : `${offAmount} discount applied`}{saved ? null : <> — you save {moneyWords(cut.off)}</>}</p>}
                 {couponStatus==="too-late"    && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>A coupon can&apos;t be added now: the card payment already started at this price. Please contact Fonkiart to use it.</p>}
                 {couponStatus==="invalid"     && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>Code not found. Check the spelling and try again.</p>}
                 {couponStatus==="used"        && <p style={{fontSize:16,color:"#c0392b",marginTop:6}}>This coupon has already been used.</p>}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { storeCall } from "../lib/store";
 import { remember } from "../lib/cartMemory";
+import { ownSizes, sizesWords } from "../lib/couponSize";
 import Pic from "./Pic";
 
 // saving: whether cart saving is on (App.jsx). Only then does the small print say the cart is
@@ -14,6 +15,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
   const [generatedCode, setGeneratedCode] = useState("");
   const [returning, setReturning] = useState(false);
   const [alreadyUsed, setAlreadyUsed] = useState(false);
+  const [sizes, setSizes] = useState([]); // what their own code gives, when that is not the shop's % (src/lib/couponSize.js)
 
   const handleSubmit = async () => {
     if (!email || !email.includes("@")) { setErr("Please enter a valid email."); return; }
@@ -24,6 +26,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
       setGeneratedCode(r.code);
       setReturning(!!r.returning);
       setAlreadyUsed(!!r.used);
+      setSizes(ownSizes(r.sizes));
     } catch(e) { console.error("Error:", e); setErr("Error: " + e.message); setLoading(false); return; }
     setLoading(false);
     setSubmitted(true);
@@ -88,7 +91,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
                       <span className="coupon-code">{generatedCode}</span>
                       <button className="coupon-copy" onClick={copy}>{copied ? "✓ Copied!" : "Copy"}</button>
                     </div>
-                    <p style={{ fontSize:16, color:"var(--muted)", marginBottom:10 }}>One use only · {discount}% off · tied to your email.</p>
+                    <p style={{ fontSize:16, color:"var(--muted)", marginBottom:10 }}>One use only · {sizes.length ? sizesWords(sizes, { upTo: true }) : `${discount}% off`} · tied to your email.</p>
                     <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:16 }} onClick={onClose}>Browse the Collection</button>
                   </>
                 )}

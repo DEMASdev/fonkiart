@@ -572,7 +572,8 @@ test("the words that say a cart is saved show only while cart saving is on (draw
   const draw = (C, props) => renderToStaticMarkup(React.createElement(C, props)).replace(/<[^>]+>/g, " ")
     .replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ").replace(/ ([.,!?])/g, "$1").trim();
   const memory = (told) => ({ remember: () => true, toldEmail: () => told, onRemembered: () => () => {}, forget: () => {}, isBuyer: () => false });
-  const given = (told) => ({ react: React, "react/jsx-runtime": runtime, "../lib/store": { storeCall: async () => ({}) }, "./Pic": { default: () => null }, "../lib/cartMemory": memory(told) });
+  const sizes = await load("src/lib/couponSize.js"); // what a code gives, for the welcome window
+  const given = (told) => ({ react: React, "react/jsx-runtime": runtime, "../lib/store": { storeCall: async () => ({}) }, "./Pic": { default: () => null }, "../lib/cartMemory": memory(told), "../lib/couponSize": sizes });
   // Control: the drawing shows what a component says.
   assert.equal(draw(() => React.createElement("p", null, "We'll ", "say ", false, "it."), {}), "We'll say it.");
 

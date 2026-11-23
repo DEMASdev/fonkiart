@@ -35,6 +35,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transformWithOxc } from "vite";
 import * as cartOrder from "../src/lib/cartOrder.js";
+import * as couponSize from "../src/lib/couponSize.js";
 import * as invoiceView from "../src/lib/invoiceView.js";
 import { CARD_FORM_DOWN } from "../api/_lib/cartCheckout.js";
 
@@ -415,7 +416,7 @@ const CardCheckout = await load("components/CardCheckout.jsx", { react: React, "
 const CheckoutModal = await load("components/CheckoutModal.jsx", {
   react: React, "react/jsx-runtime": runtime,
   "../lib/supabase": { BREVO_SENDER: "shop@example.com" },
-  "../lib/store": store, "../lib/stripeJs": stripeJs, "../lib/cartOrder": cartOrder,
+  "../lib/store": store, "../lib/stripeJs": stripeJs, "../lib/cartOrder": cartOrder, "../lib/couponSize": couponSize,
   "./CardCheckout": { default: CardCheckout }, "./PaidThanks": { default: PaidThanks }, "./Pic": { default: Pic },
   "./PayRows": { default: PayRows }, "../lib/payWays": payWays,
   "./WayBack": { default: WayBack }, "../lib/payTries": payTries, "../lib/backInside": backInside,
@@ -2301,6 +2302,120 @@ test("COMING BACK with a coupon: shown applied as it was, and kept (no Remove: i
     assert.match(screen(late.root), /A coupon can't be added now: the card payment already started at this price\. Please contact Fonkiart to use it\./);
     assert.match(screen(late.root), /^✕Test Print Z\$1,000Test Print Y\$120Total\$1,120Purchase/, "the price stays the order's own");
     assert.doesNotMatch(screen(late.root), /discount applied|% off/);
+  });
+});
+
+// ── a coupon with a size of its own ─────────────────────────
+// Andy, 2026-11-22: "maybe we can discount $300 or something if we know the acquisition power of the
+// person !!". The server's "coupon" answer says what that code gives (src/lib/couponSize.js); the
+// checkout shows it, says it and sends it, and what is shown is what is charged.
+const couponGives = (sizes) => {
+  const call = server.call;
+  server.call = async (op, payload) => op === "coupon" ? (server.calls.push({ op, payload }), { status: "valid", sizes }) : call(op, payload);
+};
+// The checkout open on these pieces, the coupon typed and applied.
+async function withCoupon(cart, sizes) {
+  freshWorld();
+  if (sizes !== "none") couponGives(sizes); else couponsValid();
+  const { root } = openShop(cart);
+  click(button(root, "Checkout →")); await settle();
+  await details(root);
+  typeIn(couponField(root), "FK-TEST-0300"); await settle();
+  click(button(root, "Apply")); await settle();
+  return root;
+}
+const sentOrder = () => { const o = server.orders().at(-1); return { total: o.total, amounts: o.items.map(i => i.amount), couponCode: o.couponCode }; };
+
+test("COUPON SIZE, one piece: $300 off shows on it, on step 1 and for Zelle, and the order takes exactly that", async () => {
+  const root = await withCoupon([PRINT], [{ dollars: 300, of: 1111 }]);
+  assert.match(screen(root), /^✕Test Print Z\$811✓ \$300 offPurchase/, "on the art wall");
+  assert.match(screen(root), /✓ \$300 off applied — you save \$300/, "on step 1");
+  assert.doesNotMatch(screen(root), /%/, "never a percent");
+  await choose(root, "Zelle");
+  assert.match(textOf(steps(root)), /Send via Zelle\$811✓ \$300 coupon applied/);
+  click(button(root, "✓ I've Sent the Payment")); await settle();
+  assert.deepEqual(sentOrder(), { total: 811, amounts: [811], couponCode: "FK-TEST-0300" });
+  assert.deepEqual(Object.keys(server.orders()[0]).sort(), ["couponCode", "customer", "items", "orderRef", "total"], "only the code goes to the server, never how much it gives");
+});
+
+test("COUPON SIZE, several pieces: $300 comes off the ORDER, said once under the total; the prices shown add up to it, and are what is sent", async () => {
+  const root = await withCoupon([PRINT, PRINT2], [{ percent: 15 }, { dollars: 300, of: 1111 }]);
+  assert.match(screen(root), /^✕Test Print Z\$840Test Print Y\$91Total\$931✓ \$300 offPurchase/, "1,231 less 300: each piece its share, the words once");
+  assert.match(screen(root), /✓ \$300 off applied — you save \$300/);
+  await choose(root, "Venmo");
+  assert.match(textOf(steps(root)), /Send via Venmo\$931✓ \$300 coupon applied/);
+  click(button(root, "✓ I've Sent the Payment")); await settle();
+  assert.deepEqual(sentOrder(), { total: 931, amounts: [840, 91], couponCode: "FK-TEST-0300" });
+});
+
+test("COUPON SIZE: the best of a code's sizes for THIS cart: on a small piece its 20% beats $300's share, and shows as a %", async () => {
+  const root = await withCoupon([PRINT2], [{ percent: 20 }, { dollars: 150, of: 1111 }]);
+  assert.match(screen(root), /^✕Test Print Y\$96✓ 20% offPurchase/, "20% off 120 is 24; $150's share of 120 is 16");
+  assert.match(screen(root), /✓ 20% discount applied — you save \$24/);
+});
+
+test("COUPON SIZE: the total shown is the sum of the prices shown, never rounded on its own", async () => {
+  const root = await withCoupon([{ ...PRINT, price: 10 }, { ...PRINT2, price: 10 }], "none");
+  assert.match(screen(root), /^✕Test Print Z\$9✓ 15% offTest Print Y\$9✓ 15% offTotal\$18✓ 15% offPurchase/, "8.50 rounds to 9 on each; 15% off 20 alone would say 17");
+  assert.match(screen(root), /you save \$2(?!\d)/);
+  await choose(root, "Zelle");
+  click(button(root, "✓ I've Sent the Payment")); await settle();
+  assert.deepEqual(sentOrder(), { total: 18, amounts: [9, 9], couponCode: "FK-TEST-0300" });
+});
+
+test("control, COUPON SIZE: an answer with no sizes (an older server), or with nothing that is one, gives the shop's % as before; Remove takes it all off again", async () => {
+  for (const sizes of ["none", null, [], "20", [{ percent: 200 }, { dollars: 5 }, null]]) {
+    const root = await withCoupon([PRINT], sizes);
+    assert.match(screen(root), /^✕Test Print Z\$944✓ 15% offPurchase/, JSON.stringify(sizes));
+    assert.match(screen(root), /✓ 15% discount applied — you save \$167/);
+    click(button(root, "Remove")); await settle();
+    assert.match(screen(root), /^✕Test Print Z\$1,111Purchase/, "the full price again");
+    assert.doesNotMatch(screen(root), /% off|applied/);
+  }
+});
+
+test("COMING BACK with a $300 coupon: the server's amounts and its words, on the wall, on step 1 and for Zelle; two copies of a piece keep their own amounts", async () => {
+  await quiet(async () => {
+    freshWorld();
+    couponGives([{ dollars: 300, of: 1111 }]);
+    const stripe = fakeStripeJs();
+    // As the server prices it: 1,000 + 120, less $300.
+    server.world.cardAnswer = (o) => {
+      o.lines = [{ title: "Test Print Z", amount: 732 }, { title: "Test Print Y", amount: 88 }];
+      o.total = 820;
+      server.world.pages.set(page(1), { id: page(1), status: "open", ref: o.ref });
+      return { ref: o.ref, ids: o.ids, lines: o.lines, total: 820, coupon: "FK-TEST-0300", couponWords: "$300 off", session: page(1), clientSecret: "cs_FAKE", publishableKey: FAKE_PK };
+    };
+    const first = openShop([PRINT, PRINT2]);
+    click(button(first.root, "Checkout →")); await settle();
+    await details(first.root);
+    typeIn(couponField(first.root), "FK-TEST-0300"); await settle();
+    click(button(first.root, "Apply")); await settle();
+    await choose(first.root, "Card");
+    assert.deepEqual(stripe.at(-1), { mount: "string" }, "the card form");
+    assert.match(screen(first.root), /^✕Test Print Z\$732Test Print Y\$88Total\$820✓ \$300 offPurchase/, "the amounts the card is charged");
+    assert.deepEqual([kept().coupon, kept().couponWords], ["FK-TEST-0300", "$300 off"], "kept with the order");
+    click(button(first.root, "✕")); await settle();
+
+    const back = openShop([PRINT, PRINT2]);
+    click(button(back.root, "Checkout →")); await settle();
+    assert.match(screen(back.root), /^✕Test Print Z\$732Test Print Y\$88Total\$820✓ \$300 offPurchase/);
+    assert.match(screen(back.root), /✓ \$300 off applied/);
+    assert.doesNotMatch(screen(back.root), /you save|%/, "no sum of the browser's own, and never a percent");
+    await choose(back.root, "Zelle");
+    assert.match(textOf(steps(back.root)), /Send via Zelle\$820✓ \$300 coupon applied/);
+    assert.equal(kept().couponWords, "$300 off", "still kept, after the server was asked about the order");
+
+    // Two copies of a print: each line of the order once, never the first one twice.
+    freshWorld();
+    fakeStripeJs();
+    const copies = [PRINT, { ...PRINT, id: "t9" }];
+    const o = { ref: "FA-1739", ids: [5001, 5002], email: "jane@example.com", total: 1001, status: "pending", lines: [{ title: "Test Print Z", amount: 501 }, { title: "Test Print Z", amount: 500 }] };
+    server.world.orders.push(o);
+    cartOrder.saveCardOrder({ ...o, customer: SAVED_DETAILS, coupon: "FK-TEST-0300", couponWords: "$999 off" });
+    const two = openShop(copies);
+    click(button(two.root, "Checkout →")); await settle();
+    assert.match(screen(two.root), /^✕Test Print Z\$501Test Print Z\$500Total\$1,001✓ \$999 offPurchase/);
   });
 });
 

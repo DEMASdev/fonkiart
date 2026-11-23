@@ -50,6 +50,7 @@ import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, holdArtForOrder, markSoldForOrder, otherPageClearing, PAID_STATUSES, releaseArtForOrder } from "./artworks.js";
 import { bankClearing, bankState, cardKeys, cardReady, createCartCheckout, expireCheckout, getCheckout, isSessionId, paidWith, publishableKey, StripeError, toCents, WAY_REFUSED } from "./stripe.js";
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject, cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
+import { couponPrices } from "../../src/lib/couponSize.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
 export const CARD_SOON = "Card payment is being set up. Please use Zelle or contact Fonkiart directly.";
@@ -64,7 +65,12 @@ export const CARD_FORM_DOWN = "The secure card form couldn't open right now. Not
 export const CARD_NOTE = " · Paying by card";
 // A Map, so only these three count (an object would also answer "toString" or "__proto__").
 const OTHER_WAYS = new Map([["zelle", "Zelle"], ["venmo", "Venmo"], ["cashapp", "Cash App"]]);
-const COUPON_RE = / · (\d{1,2})% coupon applied\b/;
+// A coupon's words in an order's notes, as storeOps.js opOrder writes them (src/lib/couponSize.js
+// appliedWords): "20% coupon applied", "12.5% coupon applied", "$300 coupon applied", "$1,200 coupon
+// applied". COUPON_RE finds them for the emails, ENDING_RE reads a whole ending (withDetails).
+const COUPON_WORDS = String.raw`(?:\d{1,2}(?:\.\d+)?%|\$(?:0|[1-9]\d{0,2}(?:,\d{3})*)) coupon applied`;
+export const COUPON_RE = new RegExp(String.raw` · (${COUPON_WORDS})\b`);
+export const ENDING_RE = new RegExp(String.raw`^( · ${COUPON_WORDS})?( · Paying by (?:card|Zelle|Venmo|Cash App))?$`);
 
 const NOT_PAID = ["pending", "confirmed"]; // as storeOps.js NOT_PAID_STATUSES
 // A bank payment (ACH) on its way, as storeOps.js CLEARING: "Payment processing", not money yet.
@@ -98,22 +104,22 @@ const cartView = (ref, rows) => ({
 });
 
 // Every piece's price from the Artworks table (opOrder's `price`): the sale price when there is
-// one, else the price, less the coupon's percent (discount: 0 unless the server found the coupon
-// valid), in whole dollars like the checkout shows it.
-export async function priceCart(db, items, discount) {
-  const pct = Number(discount);
-  const off = Number.isFinite(pct) && pct > 0 && pct < 100 ? pct : 0;
+// one, else the price, less what the coupon gives (sizes: what that code gives, none unless the
+// server found it valid; src/lib/couponSize.js, the same sums the checkout shows). Answers the
+// lines, their total, and what the coupon took off ({ off, size }), for its words.
+export async function priceCart(db, items, sizes) {
   const arts = await Promise.all(items.map(i => findPricedArtwork(db, i.title)));
-  const lines = items.map(({ title }, n) => {
+  const prices = items.map(({ title }, n) => {
     const art = arts[n];
     const name = `“${title}”`;
     if (!art) throw new InputError(`We couldn't find ${name} in the shop to price it, so it can't be paid by card here. You can still order it with Zelle, Venmo or Cash App.`, 409);
     if (art.isSold === true) throw new InputError(`${name} has already been sold. Please remove it from your cart.`, 409);
     const price = artPrice(art);
     if (price === null) throw new InputError(`${name} has no price yet, so it can't be paid by card. You can still order it with Zelle, Venmo or Cash App.`, 409);
-    return { title, amount: off ? Math.round(price * (1 - off / 100)) : price, image: cardImage(art.image) };
+    return price;
   });
-  return { items: lines, total: lines.reduce((sum, l) => sum + cents(l.amount), 0) / 100 };
+  const { amounts, total, off, size } = couponPrices(prices, sizes);
+  return { items: items.map(({ title }, n) => ({ title, amount: amounts[n], image: cardImage(arts[n].image) })), total, off, size };
 }
 
 // The card form opens INSIDE fonkiart.com, or the card payment doesn't start (Andy: "i don't want
@@ -135,11 +141,13 @@ export function formKey(op, body) {
 export async function opCartCard(db, body, mail, saveOrder) {
   if (!cardReady()) throw new InputError(CARD_SOON, 409);
   const key = formKey("cart-card", body);
-  const order = await saveOrder(db, body, mail, { price: (items, discount) => priceCart(db, items, discount) });
+  const order = await saveOrder(db, body, mail, { price: (items, sizes) => priceCart(db, items, sizes) });
   if (!order.saved) throw new InputError("We couldn't save your order.", 500);
   // ids: the saved rows, which the checkout keeps to pay this same order again (cart-again);
-  // coupon: the code, when it counted, so the checkout shows it again coming back.
-  const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total, ...(order.coupon ? { coupon: order.coupon } : {}) };
+  // coupon: the code, when it counted, and in words what it took off ("$300 off"), so the checkout
+  // shows both again coming back.
+  const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total,
+    ...(order.coupon ? { coupon: order.coupon, couponWords: order.couponWords } : {}) };
   let page;
   try {
     // way: the one way to pay the buyer chose (stripe.js WAYS), or none, as before.
@@ -342,7 +350,6 @@ async function savedCart(db, body) {
 // storeOps.js checkoutDetails, with the checkout's limits. Rows changed meanwhile (another tab,
 // the shop): the guarded write passes over them, so the shop's words are never written over; the
 // buyer is asked to try again (409), and that try finishes the change.
-const ENDING_RE = /^( · \d{1,2}% coupon applied)?( · Paying by (?:card|Zelle|Venmo|Cash App))?$/;
 const wordsOf = (r) => [r.ship_name, r.ship_phone, [r.ship_address, r.ship_city, r.ship_state, r.ship_zip, r.ship_country].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
 async function withDetails(db, ref, ids, rows, checked, { clientOnce } = {}) {
   if (!checked) return rows;
@@ -532,7 +539,7 @@ export async function opCartOther(db, body, mail, orderReceived, helpers = {}) {
         firstName: firstName(r.ship_name), fullName: String(r.ship_name || "").trim(), email: r.client_email, phone: r.ship_phone || "",
         addr: [r.ship_address, r.ship_city, r.ship_state, r.ship_zip, r.ship_country].filter(Boolean).join(", "),
         orderRef: ref, items: rows.map(x => ({ title: x.item_title, amount: Number(x.amount) })), total: sumCents(rows) / 100,
-        couponApplied: !!coupon, discount: coupon ? Number(coupon[1]) : 0,
+        applied: coupon ? coupon[1] : "",
       }));
     }
   }

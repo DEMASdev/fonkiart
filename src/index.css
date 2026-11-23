@@ -893,6 +893,8 @@ html:has(.modal-bg), html:has(.cart-drawer), html:has(.lock-scroll) { overflow:h
   .crm-cards > tbody > tr > td.crm-wide, .crm-cards > tbody > tr > td[colspan] { grid-column:1 / -1; }
   .crm-cards > tbody > tr:hover td { background:none; }
   .crm-cards > tbody > tr.crm-detail { display:block;padding:0;margin-top:-11px;border-top:none; }
+  .crm-cards .lead-size { display:block; }
+  .crm-cards .lead-size-dot { display:none; }
 }
 
 /* Touch: every button and control gets a finger-sized target (about 44px). */
@@ -1081,6 +1083,22 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .orders-tab .mark-paid-ask > span:first-child { margin-right:4px; }
 .orders-tab .mark-paid-yes, .orders-tab .mark-paid-no, .orders-tab .ask-danger, .orders-tab .track-save, .orders-tab .track-btn { padding:7px 16px;border-radius:999px;font-family:inherit; }
 .orders-tab .mark-paid-no, .orders-tab .track-btn { color:var(--ink);background:#fff; }
+/* "Send a coupon": how much off (src/admin/CouponAsk.jsx). Two boxes side by side, the one that
+   counts edged in gold; beside them (under them on a phone) what the pieces come to, as money. */
+.orders-tab .o-coupon-ask { display:flex;flex-direction:column;align-items:flex-start;gap:12px;width:100%; }
+.orders-tab .o-coupon-q { margin:0;font-size:17px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere; }
+.orders-tab .o-coupon-row { display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;max-width:100%; }
+.orders-tab .o-coupon-boxes { display:flex;flex-wrap:wrap;gap:10px;min-width:0; }
+.orders-tab .o-coupon-box { display:flex;align-items:center;gap:4px;width:146px;min-width:0;min-height:44px;padding:0 14px;font-size:17px;color:var(--muted);white-space:nowrap;background:#fff;border:1px solid var(--o-line);border-radius:10px;cursor:text;transition:border-color .15s,box-shadow .15s; }
+.orders-tab .o-coupon-box.is-on { color:var(--ink);border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold); }
+.orders-tab .o-coupon-box:focus-within { border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold),0 0 0 3px rgba(184,146,63,.2); }
+.orders-tab .o-coupon-box.is-off { color:var(--muted);background:var(--o-soft);border-color:var(--o-line);box-shadow:none;cursor:default; }
+.orders-tab .o-coupon-box input { flex:1 1 0;width:0;min-width:0;height:42px;padding:0;font-family:inherit;font-size:19px;font-weight:500;font-variant-numeric:lining-nums;color:inherit;-webkit-text-fill-color:currentColor;opacity:1;background:none;border:0;outline:none; }
+.orders-tab .o-coupon-becomes { margin:0;font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;line-height:1.1;color:var(--o-money);font-variant-numeric:lining-nums;letter-spacing:.01em;white-space:nowrap; }
+.orders-tab .o-coupon-was { color:var(--muted); }
+.orders-tab .o-coupon-to { font-family:'DM Sans',sans-serif;font-size:20px;font-weight:400;color:var(--muted);padding:0 2px; }
+.orders-tab .o-coupon-line { margin:0;font-size:16px;line-height:1.5;color:#5b4a5c; }
+.orders-tab .o-coupon-ask .mark-paid-ask { align-items:stretch; }
 /* "🔗 Link": the client's link on a line of its own, then Copy link and Close. */
 .ask-link-url { flex:1 1 100%;min-width:0;overflow-wrap:anywhere;font-size:16px;color:var(--ink); }
 .ask-link .copy-btn.copy-btn-line { width:auto;margin-top:0;padding:4px 10px;min-height:0; }
@@ -1151,6 +1169,8 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .orders-tab .o-ref { flex-wrap:nowrap; }
   /* The "Needs address" flag and its Add button always share one line. */
   .orders-tab .o-shipto-flag { flex-wrap:nowrap; }
+  /* "Coupon sent Nov 23": in this narrow column, how much goes under the date. */
+  .orders-tab .o-coupon-said { display:block; }
 }
 /* Below 1280px the columns no longer fit side by side, so each order becomes a card (the
    Admin's other tables do this only on a phone; an order carries more, so earlier here). */
@@ -1169,6 +1189,8 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .orders-tab .orders-table > tbody > tr > td.o-client::before { flex-basis:100%; }
   .orders-tab .orders-table > tbody > tr > td.o-client .o-email { margin-top:0; }
   .orders-tab .o-actions-in { flex-direction:row;flex-wrap:wrap; }
+  /* "Coupon sent Nov 23 · $300 off": here the two share a line. */
+  .orders-tab .o-coupon-said::before { content:"· "; }
   .orders-tab .o-menu { right:auto;left:0; }
   .orders-tab .orders-table > tbody > tr.order-panel { display:block;margin:0 0 12px;background:var(--o-soft);border:1px solid var(--border);border-top:1px dashed var(--border);border-radius:0 0 14px 14px; }
   .orders-tab .orders-table > tbody > tr.order-panel > td { display:block;padding:12px;background:none;border:0; }
@@ -1200,6 +1222,8 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .orders-tab .o-art .order-art { width:76px;height:76px; }
   .orders-tab .o-title { font-size:23px; }
   .track-form input { max-width:none; }
+  .orders-tab .o-coupon-row, .orders-tab .o-coupon-boxes { width:100%; }
+  .orders-tab .o-coupon-box { flex:1 1 118px;width:auto;padding:0 12px; }
   /* The address pop-up fills the screen; Save and Cancel stay in reach at the bottom, and a box
      being typed in is never left hidden behind them (scroll-padding). */
   .ship-dlg-bg { align-items:stretch;padding:0; }

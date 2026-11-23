@@ -212,26 +212,28 @@ export function welcomeCoupon({ code, discount, verifyLink }) {
 // "maybe send them a coupon ?"). It goes only when Andy taps "Send a coupon" in Admin -> Orders
 // (unfinishedCoupon.js), never by itself. Their pieces big and whole, one warm line, their code,
 // the way back to the shop. A marketing email, in the same frame and footer as the welcome coupon.
+// words: how much, as Andy chose it ("20% off", "$300 off": src/lib/couponSize.js sizeWords).
 const oneLine = (s) => String(s || "").replace(/\s+/g, " ").trim();
-export function unfinishedCouponSubject({ titles, discount }) {
+export function unfinishedCouponSubject({ titles, words }) {
   const what = titles.length === 1 ? clip(oneLine(titles[0]), 60) : `your ${titles.length} pieces`;
-  return `Still thinking about ${what}? Here's ${discount}% off — Fonkiart`;
+  return `Still thinking about ${what}? Here's ${words} — Fonkiart`;
 }
-export function unfinishedCoupon({ firstName, titles, code, discount }) {
+export function unfinishedCoupon({ firstName, titles, code, words }) {
   const one = titles.length === 1;
   return frame(`Still thinking it over${firstName ? `, ${e(firstName)}` : ""}?`,
-    p(`${one ? "Your piece is" : "Your pieces are"} still here, waiting for you. Here is ${e(discount)}% off to bring ${one ? "it" : "them"} home:`)
-    + codeBox(e(code), `${e(discount)}% off your order`)
+    p(`${one ? "Your piece is" : "Your pieces are"} still here, waiting for you. Here is ${e(words)} to bring ${one ? "it" : "them"} home:`)
+    + codeBox(e(code), `${e(words)} your order`)
     + button(SITE, "Back to the shop")
     + small("Enter the code at checkout with this email address. One use.")
     + signoff, { big: titles });
 }
 
-export function orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender }) {
+// applied: the coupon's words ("20% coupon applied", "$300 coupon applied"), or "" (storeOps.js orderReceived).
+export function orderBuyer({ firstName, orderRef, items, total, applied, addr, sender }) {
   const rows = items.map(i => `<p style="margin:0 0 4px;font-size:19px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
   const summary = (orderRef ? `<p style="margin:0 0 8px;font-size:16px;color:${C.muted};">Reference: <strong style="font-family:monospace;letter-spacing:.05em;color:${C.ink};">${e(orderRef)}</strong></p>` : "")
     + rows
-    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${couponApplied ? ` &nbsp;<span style="font-family:${SANS};font-size:16px;color:${C.ok};">✓ ${e(discount)}% coupon applied</span>` : ""}</p>` : "")
+    + (total ? `<p style="margin:8px 0 0;font-family:${SERIF};font-size:25px;color:${C.gold};">Total: $${money(total)}${applied ? ` &nbsp;<span style="font-family:${SANS};font-size:16px;color:${C.ok};">✓ ${e(applied)}</span>` : ""}</p>` : "")
     + (addr ? `<p style="margin:10px 0 0;font-size:16px;color:${C.muted};"><strong>Ship to:</strong> ${e(addr)}</p>` : "");
   return frame(`Thank you, ${e(firstName)}!`,
     p("Your order has been received. Fonkiart will confirm and reach out about shipping within 24–48 hours.")
@@ -293,14 +295,14 @@ export function adminFrame(heading, content, pieces) {
 
 // ── to the shop ──────────────────────────────────────────────
 
-export function orderStore({ orderRef, items, total, couponApplied, discount, fullName, email, phone, addr, saveFailed }) {
+export function orderStore({ orderRef, items, total, applied, fullName, email, phone, addr, saveFailed }) {
   const rows = items.map(i => `<p style="margin:0 0 4px;font-size:17px;">${e(i.title)}${i.amount ? ` — $${money(i.amount)}` : ""}</p>`).join("");
   const warning = saveFailed ? `<p style="margin:0 0 16px;font-size:17px;color:${C.red};"><strong>⚠ This order could not be saved to the database. Add it by hand in the admin.</strong></p>` : "";
   return frame("New Order Received",
     warning
     + (orderRef ? `<p style="margin:0 0 16px;font-family:monospace;font-size:17px;color:${C.gold};">${e(orderRef)}</p>` : "")
     + rows
-    + (total ? `<p style="margin:6px 0 12px;font-size:17px;"><strong>Total:</strong> $${money(total)}${couponApplied ? ` (${e(discount)}% coupon applied)` : ""}</p>` : "")
+    + (total ? `<p style="margin:6px 0 12px;font-size:17px;"><strong>Total:</strong> $${money(total)}${applied ? ` (${e(applied)})` : ""}</p>` : "")
     + field("Customer", e(fullName))
     + field("Email", link(`mailto:${email}`, e(email)))
     + (phone ? field("Phone", e(phone)) : "")

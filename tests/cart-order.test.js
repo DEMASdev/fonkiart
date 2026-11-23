@@ -93,6 +93,18 @@ test("coming back: the buyer's details and the coupon are kept too, the checkout
   // Kept before the details were (no customer, no coupon): read exactly as before.
   saveCardOrder(ORDER);
   assert.deepEqual(readCardOrder(), ORDER);
+  // Beside the coupon, what it took off in the server's words, when they are real ones.
+  for (const words of ["$300 off", "$1,200 off", "15% off", "12.5% off", "$0 off"]) {
+    assert.deepEqual(saveCardOrder({ ...ORDER, coupon: "FK-1111-2222", couponWords: words }), { ...ORDER, coupon: "FK-1111-2222", couponWords: words }, words);
+    assert.deepEqual(readCardOrder(), { ...ORDER, coupon: "FK-1111-2222", couponWords: words }, words);
+  }
+  for (const words of ["", "free", "$300", "<b>$300 off</b>", "$300 off!", "$1200 off", "100% off", 300, null, { x: 1 }]) {
+    assert.deepEqual(saveCardOrder({ ...ORDER, coupon: "FK-1111-2222", couponWords: words }), { ...ORDER, coupon: "FK-1111-2222" }, `not words the shop says: ${JSON.stringify(words)}`);
+    storage.set("fonkiart-card-order", JSON.stringify({ ...ORDER, coupon: "FK-1111-2222", couponWords: words }));
+    assert.deepEqual(readCardOrder(), { ...ORDER, coupon: "FK-1111-2222" }, `nor on the way back in: ${JSON.stringify(words)}`);
+  }
+  assert.deepEqual(saveCardOrder({ ...ORDER, couponWords: "$300 off" }), ORDER, "no coupon: no words");
+  saveCardOrder(ORDER);
   // Sent back beside the order's own email.
   const items = [{ id: 1, title: "Mango" }, { id: 2, title: "Frida" }];
   assert.deepEqual(cardOrderBody({ ...ORDER, customer: typed }, items), { ref: "FA-1752", ids: [5001, 5002], email: "jane@x.co", titles: ["Mango", "Frida"], session: SESSION, customer: typed });

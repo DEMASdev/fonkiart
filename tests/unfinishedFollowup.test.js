@@ -7,7 +7,8 @@
 //     under "Orders to send".
 //  2. Each row of Admin -> Orders' "Didn't finish paying" has "Send a coupon": ONE email to the buyer,
 //     only on Andy's tap, asked on the page, behind the admin login, ONCE per checkout (then a
-//     plain line, "Coupon sent <date>", and the server refuses a second).
+//     plain line, "Coupon sent <date>", and the server refuses a second). How much off he chooses
+//     (tests/couponSend.test.js); here, what goes when he chooses nothing: the shop's %.
 // FAKE data only: every person, email, phone and code here is made up, and nothing is sent anywhere.
 // Measured: with 3d36fc7's own version of the file each test checks (one at a time), every test
 // fails there but the controls and "the daily email only ever goes to the shop", which held before.
@@ -195,19 +196,20 @@ test("Send a coupon: ONE email to the buyer, their pieces big, their new code at
   const lead = db.tables.Leads[0];
   assert.deepEqual([lead.email, lead.source, lead.coupon_used], ["ana.test@example.com", "unfinished-checkout", false], "made the welcome popup's way, on a Leads row of their own");
   assert.match(lead.coupon_code, /^FK-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-  assert.deepEqual(out, { sent: true, ref: "FA-1760", sentAt: NOW.toISOString(), to: "ana.test@example.com", code: lead.coupon_code, discount: 20, noted: true });
+  assert.deepEqual(out, { sent: true, ref: "FA-1760", sentAt: NOW.toISOString(), to: "ana.test@example.com", code: lead.coupon_code, said: "20% off", discount: 20, noted: true });
   assert.ok(m.htmlContent.includes(lead.coupon_code));
   assert.match(m.htmlContent, /20% off/);
   assert.match(m.htmlContent, /Back to the shop/);
   assert.deepEqual(T.readSlot(m.htmlContent), { slot: T.piecesSlot(["Flamingo Party", "Madame Mango"], { big: true }), titles: ["Flamingo Party", "Madame Mango"], big: true }, "both pieces of the checkout, big");
   assert.match(m.htmlContent, /FONKIART\.COM<\/a><br\/>Original art by Aliana · Isla Morada, Florida Keys/, "the shop's own footer, as on its other marketing emails");
   // Both rows of the checkout say when; the buyer's other orders don't.
-  assert.deepEqual(db.note("coupons-sent.json"), { "FA-1760": { at: NOW.toISOString(), to: "ana.test@example.com" } });
+  assert.deepEqual(db.note("coupons-sent.json"), { "FA-1760": { at: NOW.toISOString(), to: "ana.test@example.com", said: "20% off" } });
   const status = await couponStatus(db, { ids: [41, 42, 43, 47] });
+  const ana = [{ title: "Flamingo Party", price: null }, { title: "Madame Mango", price: null }];
   assert.deepEqual(status.coupons, {
-    41: { ref: "FA-1760", sentAt: NOW.toISOString(), used: false, code: lead.coupon_code },
-    42: { ref: "FA-1760", sentAt: NOW.toISOString(), used: false, code: lead.coupon_code },
-    43: { ref: "FA-1761", sentAt: null, used: false, code: null },
+    41: { ref: "FA-1760", sentAt: NOW.toISOString(), said: "20% off", used: false, code: lead.coupon_code, sizes: [{ percent: 20 }], pieces: ana },
+    42: { ref: "FA-1760", sentAt: NOW.toISOString(), said: "20% off", used: false, code: lead.coupon_code, sizes: [{ percent: 20 }], pieces: ana },
+    43: { ref: "FA-1761", sentAt: null, said: null, used: false, code: null, sizes: [{ percent: 20 }], pieces: [{ title: "Sea Turtle Dream", price: null }] },
   }, "only unfinished checkouts are answered");
 });
 
@@ -234,11 +236,11 @@ test("ONCE per checkout: a second send, from either of its rows, sends nothing a
   assert.equal((await couponSend(db, { id: 41 }, mail, NOW)).sent, true);
   const later = new Date(NOW.getTime() + DAY);
   for (const id of [41, 42]) {
-    assert.deepEqual(await couponSend(db, { id }, mail, later), { sent: false, why: "sent", ref: "FA-1760", sentAt: NOW.toISOString() }, `again, from row ${id}`);
+    assert.deepEqual(await couponSend(db, { id }, mail, later), { sent: false, why: "sent", ref: "FA-1760", sentAt: NOW.toISOString(), said: "20% off" }, `again, from row ${id}`);
   }
   assert.equal(mail.sent.length, 1, "one email in all");
   assert.equal(db.tables.Leads.length, 1, "one code");
-  assert.deepEqual(db.note("coupons-sent.json"), { "FA-1760": { at: NOW.toISOString(), to: "ana.test@example.com" } }, "the first date stays");
+  assert.deepEqual(db.note("coupons-sent.json"), { "FA-1760": { at: NOW.toISOString(), to: "ana.test@example.com", said: "20% off" } }, "the first date stays");
   // Bo's checkout is a checkout of its own: its first coupon still goes.
   assert.equal((await couponSend(db, { id: 43 }, mail, later)).sent, true);
   assert.equal(mail.sent.length, 2);
@@ -356,27 +358,31 @@ test("nothing is automatic: only Andy's tap in Admin -> Orders ever calls it", (
   const tab = read("src/admin/OrdersTab.jsx");
   assert.equal((tab.match(/adminAction\("coupon-send"/g) || []).length, 1);
   assert.equal((tab.match(/\bsendCoupon\(/g) || []).length, 1, "sendCoupon is called in one place only");
-  assert.match(tab, /<button className="tap o-btn o-btn-ink" onClick=\{\(\)=>sendCoupon\(o\)\}>/, "...the Send button of the question on the order");
+  assert.match(tab, /<CouponAsk [^>]*\n\s*onSend=\{choice => sendCoupon\(o, choice\)\}/, "...the question on the order...");
+  const asks = read("src/admin/CouponAsk.jsx");
+  assert.equal((asks.match(/=> onSend\(/g) || []).length, 1, "...which sends in one place only...");
+  assert.match(asks, /<button className="tap o-btn o-btn-ink" onClick=\{\(\) => onSend\(choice\)\} disabled=\{[^}]+\}>Send<\/button>/, "...its Send button");
   assert.deepEqual(JSON.parse(read("vercel.json")).crons.map(c => c.path), ["/api/cron/reminders"], "no new timer");
 });
 
 // The coupon's own part of OrdersTab.jsx (its button, question and sending), and the style lines.
 const couponBits = (tab) => {
   const start = tab.indexOf("// ── The coupon for a checkout that wasn't finished.");
-  return start < 0 ? "" : tab.slice(start, tab.indexOf("// The panel under an order:", start)) + tab.slice(tab.indexOf("const DONE_TEXT"), tab.indexOf("export default function OrdersTab"));
+  return start < 0 ? "" : tab.slice(start, tab.indexOf("// The panel under an order:", start)) + tab.slice(tab.indexOf("const DONE_TEXT"), tab.indexOf("export default function OrdersTab"))
+    + read("src/admin/CouponAsk.jsx");
 };
 test("Admin -> Orders: the button on the unfinished rows only, the question on the page, never a browser pop-up; once sent, a plain line", () => {
   const tab = read("src/admin/OrdersTab.jsx");
   assert.match(tab, /\{unfinishedCard\(o\) && couponCell\(o\)\}/, "only on a checkout that wasn't finished");
   assert.match(tab, /\{asking\("coupon", o\.id\) && couponAsk\(o\)\}/, "asked under the order itself");
-  assert.doesNotMatch(tab, /window\.(confirm|alert|prompt)|\b(confirm|alert|prompt)\(/, "no browser pop-up");
+  for (const src of [tab, read("src/admin/CouponAsk.jsx")]) assert.doesNotMatch(src, /window\.(confirm|alert|prompt)|\b(confirm|alert|prompt)\(/, "no browser pop-up");
   for (const words of ["✉ Send a coupon", "Coupon already used", "One per checkout, so there is nothing more to send.", "To send it, reset it under Leads first.", "Cancel"]) {
     assert.ok(tab.includes(words), words);
   }
   // ONCE per checkout: sent, the button is gone (a plain line, nothing to tap), and nothing in the
   // coupon's part can send a second (the invoice's own "Send it again?" is another thing).
   const bits = couponBits(tab);
-  assert.match(bits, /if \(c\?\.sentAt\) return <span className="o-coupon-sent" style=\{SENT_LINE\}>Coupon sent \{shortDate\(c\.sentAt\)\}<\/span>;/, "a plain line once sent");
+  assert.match(bits, /if \(c\?\.sentAt\) return <span className="o-coupon-sent" style=\{SENT_LINE\}>Coupon sent \{sentDay\(c\.sentAt\)\}\{c\.said && <> <span className="o-coupon-said">\{c\.said\}<\/span><\/>\}<\/span>;/, "a plain line once sent, with how much when the note has it");
   assert.doesNotMatch(bits, /again\?|Send again/i, "no second send");
   assert.match(tab, /adminAction\("coupon-status", \{ ids:/, "the list learns what was sent, and which codes are used, from the server");
 });
@@ -419,7 +425,7 @@ test("the email's link opens Admin -> Orders with the list open, once, and leave
 const GREEN = /green|#2d6a4f|#e8f5ee|#a3d4b3|mark-paid-yes|track-ok/i;
 const WARM = /cream|sand|beige|ivory|#f3f1ee|#faf7f2|#f5f0e8/i;
 test("no green, no cream: the coupon email, the reminder's new part and the coupon's Admin parts", async () => {
-  const coupon = await withArt(shopDb(), T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party", "Madame Mango"], code: "FK-TEST-AAAA", discount: 20 }));
+  const coupon = await withArt(shopDb(), T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party", "Madame Mango"], code: "FK-TEST-AAAA", words: "20% off" }));
   const w = await collectWaiting(shopDb(), NOW);
   const part = await withArt(shopDb(), T.reminderStore({ requests: [], orders: [], unfinished: w.unfinished }));
   for (const [name, html] of [["coupon email", coupon], ["reminder, Didn't finish paying", part]]) {
@@ -450,7 +456,7 @@ test("a coupon code stays on one line at 31px, and a code of wide letters gets j
   for (const code of ["FK-7QJS-2EMV", "FK-WXDL-NPMZ", "FK-WWWW-WWWW"]) {
     const px = String(codePx(code));
     assert.equal(sizeIn(T.welcomeCoupon({ code, discount: 15 }), code), px, `the welcome coupon, ${code}`);
-    assert.equal(sizeIn(T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party"], code, discount: 15 }), code), px, `the coupon after an unfinished checkout, ${code}`);
+    assert.equal(sizeIn(T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party"], code, words: "15% off" }), code), px, `the coupon after an unfinished checkout, ${code}`);
     assert.equal(sizeIn(AE.couponEmail({ code, discount: 15 }).content, code), px, `the gift from Admin -> Leads, ${code}`);
   }
   assert.equal(sizeIn(T.supabaseTemplate({ heading: "Your code", intro: "Use it.", buttonLabel: "Sign in", withCode: true }), "\\{\\{ \\.Token \\}\\}"), "31", "Supabase's code box is unchanged");

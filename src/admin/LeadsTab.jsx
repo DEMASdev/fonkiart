@@ -2,6 +2,14 @@ import { useState, useEffect } from "react";
 import { adminDb as supabase } from "../lib/adminDb";
 import { generateCouponCode, sendEmail } from "../utils/helpers";
 import { couponEmail } from "../lib/adminEmails";
+import { ownSizes, sizesWords } from "../lib/couponSize";
+
+// What a code gives, after it, when it has a size of its own ("· $300 off": chosen under Orders, "Send
+// a coupon"). A code with none gives the shop's %, and shows nothing more, as before.
+const codeSize = (lead) => {
+  const words = lead.coupon_code ? sizesWords(ownSizes(lead.coupon_size)) : "";
+  return words && <span className="lead-size" style={{letterSpacing:0}}><span className="lead-size-dot"> ·{"\u00a0"}</span>{words}</span>;
+};
 
 export default function LeadsTab({ discount = 15 }) {
   const [leads, setLeads] = useState([]);
@@ -105,7 +113,7 @@ export default function LeadsTab({ discount = 15 }) {
             <tbody>{filtered.map(l => (
               <tr key={l.id}>
                 <td data-label="Email" className="crm-wide">{l.email}</td>
-                <td data-label="Coupon Code" style={{letterSpacing:".05em"}}>{l.coupon_code||"—"}</td>
+                <td data-label="Coupon Code" style={{letterSpacing:".05em"}}>{l.coupon_code||"—"}{codeSize(l)}</td>
                 <td data-label="Source">{l.source||"—"}</td>
                 <td data-label="Used">
                   {l.coupon_used

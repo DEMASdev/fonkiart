@@ -8,6 +8,7 @@ import { invoiceLink, findArtwork } from "../lib/invoiceView";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
 import ArtThumb from "./ArtThumb";
+import CouponAsk from "./CouponAsk";
 import ShipAddressDialog from "./ShipAddressDialog";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick, statusOptions } from "../lib/orderStatus";
 import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave, withNumber } from "../lib/tracking";
@@ -18,7 +19,9 @@ const NEW_ORDER = "new-order";
 // "Done" words in plum-grey, never green (Andy, 2026-11-22: "no green on the sile maybe soft lilac
 // or violet but no green").
 const DONE_TEXT = { margin:0, fontSize:16, lineHeight:1.5, color:"#5b4a5c" };
-// "Coupon sent <date>" where the button was: a plain line, the button's height, nothing to tap.
+// "Coupon sent Nov 23 · $300 off" where the button was: a plain line, the button's height, nothing to
+// tap. On a wide screen its column is narrow: how much goes under the date, with no dot (src/index.css
+// o-coupon-said draws both).
 const SENT_LINE = { ...DONE_TEXT, lineHeight:1.25, padding:"5px 0", whiteSpace:"nowrap", textAlign:"center", alignSelf:"center" };
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
@@ -53,13 +56,16 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   // { kind:"untrack", id }: "Remove the tracking from this order?" (or the pickup / hand delivery)
   // { kind:"delete", id }: "Delete this order? This can't be undone."
   // { kind:"link", id }: the client's invoice link, with a copy button
-  // { kind:"coupon", id }: "Email <buyer> a 15% coupon, with their pieces?" (Send / Cancel), on a
-  //   "Didn't finish paying" row whose checkout has not had one: ONE per checkout, never a second
+  // { kind:"coupon", id }: "Email <buyer> a coupon, with their pieces?" and how much off (CouponAsk:
+  //   Send / Cancel), on a "Didn't finish paying" row whose checkout has not had one: ONE per
+  //   checkout, never a second
   const [ask, setAsk] = useState(null);
   // "Send a coupon" (Andy, 2026-11-22: "maybe send them a coupon ?"): by order id, what the server
-  // knows (api/_lib/unfinishedCoupon.js): { ref, sentAt, used, code }, loaded when the list opens.
-  // couponNote: what the last tap did, by order id, { ok, text }.
+  // knows (api/_lib/unfinishedCoupon.js): { ref, sentAt, said, used, code, sizes, pieces }, loaded when
+  // the list opens. couponShop: { choose, percent }, can the amount be chosen, and the shop's %; null
+  // until it is known. couponNote: what the last tap did, by order id, { ok, text }.
   const [coupons, setCoupons] = useState({});
+  const [couponShop, setCouponShop] = useState(null);
   const [couponNote, setCouponNote] = useState({});
   const asking = (kind, id) => ask?.kind === kind && ask?.id === id;
   // Tracking (Andy, 2026-11-17). track: the open tracking forms, by order id, each
@@ -529,8 +535,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     </div>
   );
   // ── The coupon for a checkout that wasn't finished. Only on Andy's tap, asked on the order
-  // itself (never a browser pop-up). ONCE per checkout: once it has gone, every row of it shows
-  // "Coupon sent <date>" as a plain line, with no button, and the server never sends a second.
+  // itself (never a browser pop-up), with how much off (CouponAsk.jsx). ONCE per checkout: once it
+  // has gone, every row of it shows "Coupon sent <date> · <how much>" as a plain line, with no
+  // button, and the server never sends a second.
   const noteCoupon = (id, note) => setCouponNote(n => ({ ...n, [id]: note }));
   const askCoupon = (o) => { noteCoupon(o.id, null); setMenuFor(null); setAsk({ kind:"coupon", id:o.id }); };
   // Every row of the checkout `ref` learns what the server said (its rows share one coupon).
@@ -538,22 +545,25 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     const next = { ...c, [o.id]: { ...(c[o.id] || {}), ref } };
     return Object.fromEntries(Object.entries(next).map(([id, x]) => [id, x?.ref === ref ? { ...x, ...v } : x]));
   });
-  const sendCoupon = async (o) => {
+  // choice: { percent } or { dollars }, or {} for what their code gives, the shop's % (CouponAsk.jsx).
+  const sendCoupon = async (o, choice) => {
     setAsk(null);
     if (!startBusy(o.id, "coupon")) return;
     try {
-      const r = await adminAction("coupon-send", { id: o.id });
+      const r = await adminAction("coupon-send", { id: o.id, ...choice });
       if (r.sent) {
-        markCheckout(o, r.ref, { sentAt: r.sentAt, used: false, code: r.code });
+        markCheckout(o, r.ref, { sentAt: r.sentAt, said: r.said, used: false, code: r.code });
         noteCoupon(o.id, r.noted
-          ? { ok: true, text: `✓ Coupon ${r.code} (${r.discount}% off) sent to ${r.to}.` }
+          ? { ok: true, text: `✓ Coupon ${r.code} (${r.said}) sent to ${r.to}.` }
           : { ok: false, text: `Sent to ${r.to}, but the shop could not save that it was sent. After a reload this row may show the button again: don't send a second one.` });
       } else if (r.why === "sent") {
-        markCheckout(o, r.ref, { sentAt: r.sentAt });
+        markCheckout(o, r.ref, { sentAt: r.sentAt, said: r.said });
         noteCoupon(o.id, { ok: true, text: `A coupon already went for this checkout on ${shortDate(r.sentAt)}, so nothing more was sent.` });
       } else if (r.why === "used") {
         setCoupons(c => ({ ...c, [o.id]: { ...(c[o.id] || {}), used: true, code: r.code } }));
         noteCoupon(o.id, { ok: false, text: `Their coupon ${r.code} was already used, so nothing was sent.` });
+      } else if (r.why === "less") {
+        noteCoupon(o.id, { ok: false, text: `Their coupon already gives ${r.now}, so it can't be less. Nothing was sent.` });
       } else {
         noteCoupon(o.id, { ok: false, text: "Their pieces have sold since, so nothing was sent." });
       }
@@ -577,20 +587,17 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
       </div>
     );
-    return (
-      <div className="mark-paid-ask">
-        <span>Email {to} a {data?.settings?.couponDiscount ?? 15}% coupon, with their pieces?</span>
-        <button className="tap o-btn o-btn-ink" onClick={()=>sendCoupon(o)}>Send</button>
-        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
-      </div>
-    );
+    return <CouponAsk to={to} coupon={c} shop={couponShop} percent={data?.settings?.couponDiscount ?? 15}
+      onSend={choice => sendCoupon(o, choice)} onCancel={()=>setAsk(null)} />;
   };
   // Its place on a "Didn't finish paying" row: the button, until the checkout's coupon has gone;
-  // then a plain line saying when (no button: never a second). Their code already used: the
-  // button says so, and its tap only explains.
+  // then a plain line saying when and how much (no button: never a second). One sent before amounts
+  // could be chosen says when only. Their code already used: the button says so, and its tap only
+  // explains.
+  const sentDay = (iso) => new Date(iso).toLocaleDateString("en-US", { month:"short", day:"numeric" });
   const couponCell = (o) => {
     const c = coupons[o.id];
-    if (c?.sentAt) return <span className="o-coupon-sent" style={SENT_LINE}>Coupon sent {shortDate(c.sentAt)}</span>;
+    if (c?.sentAt) return <span className="o-coupon-sent" style={SENT_LINE}>Coupon sent {sentDay(c.sentAt)}{c.said && <> <span className="o-coupon-said">{c.said}</span></>}</span>;
     const busy = trackBusy[o.id] === "coupon";
     return (
       <button className="tap o-btn o-coupon" aria-expanded={asking("coupon", o.id)} onClick={()=>askCoupon(o)} disabled={busy}>
@@ -650,8 +657,8 @@ export default function OrdersTab({ data, action, onActionHandled }) {
     if (!showUnpaid || !unpaidIds) return;
     let live = true;
     adminAction("coupon-status", { ids: unpaidIds.split(",").map(Number) })
-      .then(r => { if (live) setCoupons(r.coupons || {}); })
-      .catch(e => console.warn("coupon status:", e?.message || e));
+      .then(r => { if (live) { setCoupons(r.coupons || {}); setCouponShop({ choose: r.choose === true, percent: r.percent }); } })
+      .catch(e => { console.warn("coupon status:", e?.message || e); if (live) setCouponShop(s => s || { failed: true }); });
     return () => { live = false; };
   }, [showUnpaid, unpaidIds]);
   const statusCounts = { all:shop.length, ...Object.fromEntries(ORDER_STATUSES.map(([v]) => [v, 0])) };

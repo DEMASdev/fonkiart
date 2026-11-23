@@ -10,7 +10,10 @@
 // It also keeps the buyer's details as they typed them, and the coupon the server took, so that
 // coming back the checkout looks normal, filled in (Andy, 2026-11-19, yes to: "When they come
 // back, the checkout looks normal, with their name and address already filled in"). They stay in
-// this browser: the server never hands them back.
+// this browser: the server never hands them back. Beside the coupon, what it took off in the
+// server's words ("$300 off": couponSize.js sizeWords), so coming back the checkout says it right.
+import { isSizeWords } from "./couponSize.js";
+
 const KEY = "fonkiart-card-order";
 const DETAILS = ["firstName", "lastName", "email", "phone", "address", "city", "state", "zip", "country"];
 
@@ -30,21 +33,24 @@ export function readCardOrder() {
       && typeof o.email === "string" && Array.isArray(o.lines) && o.lines.length === o.ids.length;
     if (!ok) return null;
     // The details and the coupon as the checkout can use them: the fields as text, nothing else.
-    const { customer, coupon, ...order } = o;
-    return { ...order, ...(customer && typeof customer === "object" ? { customer: details(customer) } : {}), ...(typeof coupon === "string" && coupon ? { coupon } : {}) };
+    const { customer, coupon, couponWords, ...order } = o;
+    return { ...order, ...(customer && typeof customer === "object" ? { customer: details(customer) } : {}), ...taken(coupon, couponWords) };
   } catch { return null; }
 }
 
 // The checkout's own fields only, each as text.
 const details = (customer) => Object.fromEntries(DETAILS.map(k => [k, typeof customer[k] === "string" ? customer[k] : ""]));
+// The coupon the server took, and its words when they are real ones.
+const taken = (coupon, words) => typeof coupon === "string" && coupon ? { coupon, ...(isSizeWords(words) ? { couponWords: words } : {}) } : {};
 
 // Keeps it and hands back what was kept. customer: the details as typed; coupon: the code the
-// server took for this order. Either left out (an order kept before they were): none kept.
-export function saveCardOrder({ ref, ids, email, lines, total, session, customer, coupon }) {
+// server took for this order, couponWords: what it took off. Any of them left out (an order kept
+// before they were): none kept.
+export function saveCardOrder({ ref, ids, email, lines, total, session, customer, coupon, couponWords }) {
   const order = {
     ref, ids, email, lines: lines.map(({ title, amount }) => ({ title, amount })), total, session: SESSION.test(session || "") ? session : null,
     ...(customer && typeof customer === "object" ? { customer: details(customer) } : {}),
-    ...(typeof coupon === "string" && coupon ? { coupon } : {}),
+    ...taken(coupon, couponWords),
   };
   try { localStorage.setItem(KEY, JSON.stringify(order)); } catch { /* storage blocked: a retry can't be recognised then, and nothing else breaks */ }
   return order;
