@@ -29,6 +29,7 @@ import InvoicePage from "./pages/InvoicePage";
 import { readInvoiceParams } from "./lib/invoiceView";
 import CardReturnPage from "./pages/CardReturnPage";
 import { readCardReturn, dropCardOrder, withoutTitles } from "./lib/cartOrder";
+import { readAdminLink, withoutAdminLink, askOpenUnfinished } from "./lib/adminLink";
 import ThreadPage from "./pages/ThreadPage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
@@ -63,6 +64,10 @@ export default function App() {
   // Back from paying a Cart order by card: { ref, session } once paid, { ref, cancelled } from
   // Stripe's own page without paying (src/lib/cartOrder.js readCardReturn).
   const [cardReturn]   = useState(() => readCardReturn(window.location.search));
+  // The daily email's "Open in Admin → Orders" (?admin=unfinished, src/lib/adminLink.js): Admin ->
+  // Orders with "Didn't finish paying" open. Read once (Admin's tab is set to Orders here, before
+  // it is read below), then taken out of the address bar.
+  const [adminLink]    = useState(() => { const link = readAdminLink(window.location.search); if (link) localStorage.setItem("fonkiart-admin-tab", "orders"); return link; });
   const [deepModal, setDeepModal] = useState(null);
   const [deepPriceInquiry, setDeepPriceInquiry] = useState(null);
   // "#admin-reset=<token>" / "#reset=<token>" are the links in the admin and customer
@@ -78,7 +83,7 @@ export default function App() {
   // site not a chat site").
   // The invoice link (?invoice=<token>) does the same (Andy, 2026-11-17: "should go to
   // the site ... not to some lost page somewhere").
-  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : cardReturn ? "card-return" : resetLink ? "home" : localStorage.getItem("fonkiart-page") || "home"));
+  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : cardReturn ? "card-return" : resetLink ? "home" : adminLink ? "admin" : localStorage.getItem("fonkiart-page") || "home"));
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => {
@@ -111,6 +116,11 @@ export default function App() {
   const [loginModal, setLoginModal] = useState(false);
   const [adminAuthed, setAdminAuthed] = useState(() => adminHasToken());
   const [adminTab, setAdminTabState] = useState(() => localStorage.getItem("fonkiart-admin-tab") || "dashboard");
+  useEffect(() => {
+    if (!adminLink) return;
+    askOpenUnfinished();
+    window.history.replaceState(window.history.state, "", window.location.pathname + withoutAdminLink(window.location.search) + window.location.hash);
+  }, [adminLink]);
   const setAdminTab = (t) => { localStorage.setItem("fonkiart-admin-tab", t); setAdminTabState(t); };
   // The Collectors Room leads back to where it was opened from (Andy: "when going to the collectors
   // room there's no way back to the orders page"): from Admin, "← Back to Orders". Kept beside the

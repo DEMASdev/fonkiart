@@ -119,3 +119,7 @@ export function unfinishedThisWeek(order, now = Date.now()) {
   const started = Date.parse(order.created_at || "");
   return !Number.isFinite(started) || now - started < UNFINISHED_DAYS * 24 * 60 * 60 * 1000;
 }
+// The checkout an order row belongs to: a Cart checkout saves one row per piece, each with notes
+// that start "Order Ref: FA-1739 · " (api/_lib/storeOps.js opOrder). null for any other order.
+const CART_REF = /^Order Ref: (FA-\d{1,9})(?: · |$)/;
+export const cartRef = (order) => String(order?.notes || "").match(CART_REF)?.[1] || null;

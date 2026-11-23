@@ -5,6 +5,7 @@
 // live here. Anything that came from a customer (name, notes, titles) is escaped.
 
 import { orderTracking, orderTrackingLink, carrierLabel, isPickup } from "./tracking.js";
+import { codePx } from "./couponCode.js";
 
 const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -78,7 +79,7 @@ export function couponEmail({ code, discount }) {
   return {
     heading: "A Gift From Fonkiart",
     content: `<p style="margin:0 0 16px;">We have a special offer just for you:</p>`
-      + `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:Georgia,serif;font-size:31px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${esc(code)}</div><div style="font-size:16px;color:${C.muted};margin-top:6px;">${esc(discount)}% off your purchase</div></div>`
+      + `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:Georgia,serif;font-size:${codePx(code)}px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${esc(code)}</div><div style="font-size:16px;color:${C.muted};margin-top:6px;">${esc(discount)}% off your purchase</div></div>`
       + small("Enter this code at checkout. One use only.") + small("— Fonkiart"),
   };
 }

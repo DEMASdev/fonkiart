@@ -113,7 +113,7 @@ test("daily run: first time makes the PRIVATE note bucket, emails fonkiart@gmail
   const note = db.note();
   assert.equal(note.lastSentAt, inHour.toISOString());
   assert.equal(note.lastRunBy, "vercel-cron/1.0");
-  assert.deepEqual(note.lastSent, { requests: 3, orders: 3 });
+  assert.deepEqual(note.lastSent, { requests: 3, orders: 3, unfinished: 0 });
 });
 
 test("daily run: a second call the same day sends nothing (the cron may fire twice, or anyone may hit the URL)", async () => {

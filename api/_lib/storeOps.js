@@ -57,7 +57,8 @@ export const formatOrderRef = (id) => `FA-${Number(id) + ORDER_REF_OFFSET}`;
 
 export const sha256hex = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
 
-async function couponDiscount(db) {
+// The shop's coupon % (Admin -> Settings), the one the welcome popup offers.
+export async function couponDiscount(db) {
   const { data } = await db.from("Settings").select("*").eq("id", 1).maybeSingle();
   return data?.couponDiscount ?? 15;
 }
@@ -67,18 +68,28 @@ async function findCoupon(db, code) {
   return data && data.length === 1 ? data[0] : null;
 }
 
-export async function opWelcome(db, body, mail) {
-  const email = emailField(body.email).toLowerCase();
+// The one coupon an email has (Leads coupon_code): its own code when it has one (used or not),
+// else a new code saved on its Leads row, the row made when there is none. source: where a new
+// row came from. The welcome popup and the coupon after an unfinished checkout (Admin -> Orders,
+// unfinishedCoupon.js) both get theirs here. email: already lower case.
+export async function leadCoupon(db, email, source) {
   const { data: rows, error } = await db.from("Leads").select("id,coupon_code,coupon_used").eq("email", email).limit(1);
   if (error) throw error;
   const existing = rows?.[0];
-  if (existing?.coupon_code) return { returning: true, code: existing.coupon_code, used: !!existing.coupon_used };
+  if (existing?.coupon_code) return { code: existing.coupon_code, used: !!existing.coupon_used, made: false };
   const code = newCouponCode();
   const write = existing
     ? db.from("Leads").update({ coupon_code: code, coupon_used: false }).eq("id", existing.id)
-    : db.from("Leads").insert([{ email, source: "welcome-popup", coupon_code: code, coupon_used: false }]);
+    : db.from("Leads").insert([{ email, source, coupon_code: code, coupon_used: false }]);
   const { error: writeErr } = await write;
   if (writeErr) throw writeErr;
+  return { code, used: false, made: true };
+}
+
+export async function opWelcome(db, body, mail) {
+  const email = emailField(body.email).toLowerCase();
+  const { code, used, made } = await leadCoupon(db, email, "welcome-popup");
+  if (!made) return { returning: true, code, used };
   const discount = await couponDiscount(db);
   // "Verify my email" beside the code: it signs them in as a buyer (verifyLink.js), or is null.
   const verifyLink = await buyerSignInLink(db, email);

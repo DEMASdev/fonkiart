@@ -3,6 +3,9 @@ import { InputError } from "./errors.js";
 import { ADMIN_EMAIL } from "./adminSecret.js";
 import { bearer } from "./adminToken.js";
 import * as T from "./emails.js";
+import { readNote, writeNote } from "./systemNote.js";
+// The same rule as Admin -> Orders "Didn't finish paying", imported, never copied.
+import { cartRef, unfinishedCard, unfinishedThisWeek } from "../../src/lib/orderRow.js";
 
 // "Waiting for you" reminder (Andy, 2026-11-13): "there should be a warning sent to
 // fonkiart@gmail.com whenever there's a message waiting for answer or order waiting to
@@ -13,10 +16,14 @@ import * as T from "./emails.js";
 // it can fire any time inside the scheduled hour, so the email goes out only during
 // SEND_HOUR_UTC and at most once per MIN_GAP_MS, whoever calls the URL. A small JSON note
 // in a private Storage bucket remembers when it last ran and last sent.
+//
+// It also names the Cart checkouts a buyer started and never paid (Andy, 2026-11-22: "a warning
+// to the admin saying .... this person had an order in the cart and didn't checkout"): their own
+// part, "Didn't finish paying", from the last 7 days by the SAME rule as Admin -> Orders
+// (src/lib/orderRow.js unfinishedThisWeek), and no longer under "Orders to send".
 
 export const SEND_HOUR_UTC = 13;              // 8–9 am in the Florida Keys in winter, 9–10 am in summer
 const MIN_GAP_MS = 20 * 60 * 60 * 1000;
-const BUCKET = "system";
 const FILE = "reminders.json";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -51,43 +58,51 @@ export async function collectWaiting(db, now = new Date()) {
     replied: Boolean(r.thread_token),        // the shop answered before and the customer wrote back
     days: daysSince(r.created_at, now),
   }));
-  const orders = (ords.data || []).filter(orderWaits).map(o => ({
+  const all = ords.data || [];
+  const orders = all.filter(o => orderWaits(o) && !unfinishedCard(o)).map(o => ({
     title: o.item_title, amount: o.amount, email: o.client_email,
     status: o.status || "pending", days: daysSince(o.created_at, now),
   }));
-  return { requests, orders };
+  return { requests, orders, unfinished: unfinishedCheckouts(all, now) };
 }
 
-export function reminderSubject({ requests, orders }) {
+// One entry per checkout: its rows share the Order Ref in their notes (one row per piece). Who
+// (the name and phone the buyer typed at checkout), the pieces, the total, and when it started.
+function unfinishedCheckouts(rows, now) {
+  const byRef = new Map();
+  for (const o of rows.filter(r => unfinishedThisWeek(r, now.getTime()))) {
+    const ref = cartRef(o) || `#${o.id}`;
+    if (!byRef.has(ref)) byRef.set(ref, []);
+    byRef.get(ref).push(o);
+  }
+  return [...byRef.entries()].map(([ref, list]) => {
+    const first = list[0];
+    return {
+      ref, name: first.ship_name || first.client_name || "", email: first.client_email || "", phone: first.ship_phone || "",
+      pieces: list.map(o => ({ title: o.item_title, amount: o.amount })),
+      total: list.reduce((sum, o) => sum + (Number(o.amount) || 0), 0),
+      started: first.created_at || null,
+    };
+  });
+}
+
+export function reminderSubject({ requests, orders, unfinished = [] }) {
   const bits = [];
   if (requests.length) bits.push(`${requests.length} ${requests.length === 1 ? "message" : "messages"} to answer`);
   if (orders.length) bits.push(`${orders.length} ${orders.length === 1 ? "order" : "orders"} to send`);
+  if (unfinished.length) bits.push(`${unfinished.length} didn't finish paying`);
   return `Waiting for you: ${bits.join(", ")} · Fonkiart`;
 }
 
-async function readState(db) {
-  const { data, error } = await db.storage.from(BUCKET).download(FILE);
-  if (error || !data) return {};
-  try { return JSON.parse(await data.text()) || {}; } catch { return {}; }
-}
-
-async function writeState(db, state) {
-  const put = () => db.storage.from(BUCKET).upload(FILE, new Blob([JSON.stringify(state)], { type: "application/json" }), { contentType: "application/json", upsert: true });
-  let { error } = await put();
-  if (error && /not.?found|bucket/i.test(error.message || "")) {
-    const made = await db.storage.createBucket(BUCKET, { public: false });
-    if (made.error && !/exist/i.test(made.error.message || "")) throw new Error(`reminder note bucket: ${made.error.message}`);
-    ({ error } = await put());
-  }
-  if (error) throw new Error(`reminder note: ${error.message || error}`);
-}
+const readState = (db) => readNote(db, FILE);
+const writeState = (db, state) => writeNote(db, FILE, state, "reminder note");
 
 const sameSecret = (given, actual) =>
   crypto.timingSafeEqual(crypto.createHash("sha256").update(String(given)).digest(), crypto.createHash("sha256").update(String(actual)).digest());
 
 async function sendReminder(db, mail, now) {
   const waiting = await collectWaiting(db, now);
-  const count = waiting.requests.length + waiting.orders.length;
+  const count = waiting.requests.length + waiting.orders.length + waiting.unfinished.length;
   if (!count) return { waiting, sent: false };
   await mail.send({ to: ADMIN_EMAIL, subject: reminderSubject(waiting), htmlContent: T.reminderStore(waiting) });
   return { waiting, sent: true };
@@ -113,7 +128,7 @@ export async function opReminders(db, req, mail, now = new Date()) {
   if (!sent) return { ok: true, sent: false, reason: "nothing waiting" };
   await writeState(db, {
     ...state, lastRunAt: now.toISOString(), lastRunBy: ranBy,
-    lastSentAt: now.toISOString(), lastSent: { requests: waiting.requests.length, orders: waiting.orders.length },
+    lastSentAt: now.toISOString(), lastSent: { requests: waiting.requests.length, orders: waiting.orders.length, unfinished: waiting.unfinished.length },
   });
   return { ok: true, sent: true };
 }
@@ -125,7 +140,7 @@ export async function adminReminderNow(db, mail, now = new Date()) {
   const state = await readState(db);
   return {
     ok: true, sent, to: ADMIN_EMAIL,
-    requests: waiting.requests.length, orders: waiting.orders.length,
+    requests: waiting.requests.length, orders: waiting.orders.length, unfinished: waiting.unfinished.length,
     lastRunAt: state.lastRunAt || null, lastRunBy: state.lastRunBy || null, lastSentAt: state.lastSentAt || null,
   };
 }

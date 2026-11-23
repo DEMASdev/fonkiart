@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
-import { adminDb as supabase } from "../lib/adminDb";
+import { adminDb as supabase, adminAction } from "../lib/adminDb";
+import { wantsOpenUnfinished, doneOpenUnfinished } from "../lib/adminLink";
 import { sendEmail } from "../utils/helpers";
 import { invoiceEmail, statusEmailFor } from "../lib/adminEmails";
 import { invoiceLink, findArtwork } from "../lib/invoiceView";
@@ -14,6 +15,11 @@ import { hasShipAddress, shipLines } from "../lib/shipAddress";
 import { needsAddress, shipShort, shipPrefill, orderRef, approvalNote, unfinishedCard, unfinishedThisWeek } from "../lib/orderRow";
 // The id in `ask` while the "+ Add Order" form asks "Paid by:" (an order's own id otherwise).
 const NEW_ORDER = "new-order";
+// "Done" words in plum-grey, never green (Andy, 2026-11-22: "no green on the sile maybe soft lilac
+// or violet but no green").
+const DONE_TEXT = { margin:0, fontSize:16, lineHeight:1.5, color:"#5b4a5c" };
+// "Coupon sent <date>" where the button was: a plain line, the button's height, nothing to tap.
+const SENT_LINE = { ...DONE_TEXT, lineHeight:1.25, padding:"5px 0", whiteSpace:"nowrap", textAlign:"center", alignSelf:"center" };
 export default function OrdersTab({ data, action, onActionHandled }) {
   const catalog = data?.items || [];
   const [orders, setOrders] = useState([]);
@@ -47,7 +53,14 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   // { kind:"untrack", id }: "Remove the tracking from this order?" (or the pickup / hand delivery)
   // { kind:"delete", id }: "Delete this order? This can't be undone."
   // { kind:"link", id }: the client's invoice link, with a copy button
+  // { kind:"coupon", id }: "Email <buyer> a 15% coupon, with their pieces?" (Send / Cancel), on a
+  //   "Didn't finish paying" row whose checkout has not had one: ONE per checkout, never a second
   const [ask, setAsk] = useState(null);
+  // "Send a coupon" (Andy, 2026-11-22: "maybe send them a coupon ?"): by order id, what the server
+  // knows (api/_lib/unfinishedCoupon.js): { ref, sentAt, used, code }, loaded when the list opens.
+  // couponNote: what the last tap did, by order id, { ok, text }.
+  const [coupons, setCoupons] = useState({});
+  const [couponNote, setCouponNote] = useState({});
   const asking = (kind, id) => ask?.kind === kind && ask?.id === id;
   // Tracking (Andy, 2026-11-17). track: the open tracking forms, by order id, each
   // { carrier, number, url, err, shipFrom }; shipFrom only when the form was opened by picking
@@ -497,6 +510,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const pickFromMenu = (kind, o) => { setMenuFor(null); setAsk({ kind, id:o.id }); };
   const actionsCell = (o) => (
     <div className="o-actions-in">
+      {unfinishedCard(o) && couponCell(o)}
       {o.invoice_token && (
         <a className="tap o-btn" href={invoiceLink(window.location.origin, o.invoice_token, { shopView: true })} target="_blank" rel="noopener noreferrer">👁 Open</a>
       )}
@@ -514,18 +528,91 @@ export default function OrdersTab({ data, action, onActionHandled }) {
       {o.notes && <button className="tap o-btn o-notes-btn" aria-expanded={!!expanded[o.id]} onClick={()=>toggleExpand(o.id)}>Notes</button>}
     </div>
   );
+  // ── The coupon for a checkout that wasn't finished. Only on Andy's tap, asked on the order
+  // itself (never a browser pop-up). ONCE per checkout: once it has gone, every row of it shows
+  // "Coupon sent <date>" as a plain line, with no button, and the server never sends a second.
+  const noteCoupon = (id, note) => setCouponNote(n => ({ ...n, [id]: note }));
+  const askCoupon = (o) => { noteCoupon(o.id, null); setMenuFor(null); setAsk({ kind:"coupon", id:o.id }); };
+  // Every row of the checkout `ref` learns what the server said (its rows share one coupon).
+  const markCheckout = (o, ref, v) => setCoupons(c => {
+    const next = { ...c, [o.id]: { ...(c[o.id] || {}), ref } };
+    return Object.fromEntries(Object.entries(next).map(([id, x]) => [id, x?.ref === ref ? { ...x, ...v } : x]));
+  });
+  const sendCoupon = async (o) => {
+    setAsk(null);
+    if (!startBusy(o.id, "coupon")) return;
+    try {
+      const r = await adminAction("coupon-send", { id: o.id });
+      if (r.sent) {
+        markCheckout(o, r.ref, { sentAt: r.sentAt, used: false, code: r.code });
+        noteCoupon(o.id, r.noted
+          ? { ok: true, text: `✓ Coupon ${r.code} (${r.discount}% off) sent to ${r.to}.` }
+          : { ok: false, text: `Sent to ${r.to}, but the shop could not save that it was sent. After a reload this row may show the button again: don't send a second one.` });
+      } else if (r.why === "sent") {
+        markCheckout(o, r.ref, { sentAt: r.sentAt });
+        noteCoupon(o.id, { ok: true, text: `A coupon already went for this checkout on ${shortDate(r.sentAt)}, so nothing more was sent.` });
+      } else if (r.why === "used") {
+        setCoupons(c => ({ ...c, [o.id]: { ...(c[o.id] || {}), used: true, code: r.code } }));
+        noteCoupon(o.id, { ok: false, text: `Their coupon ${r.code} was already used, so nothing was sent.` });
+      } else {
+        noteCoupon(o.id, { ok: false, text: "Their pieces have sold since, so nothing was sent." });
+      }
+    } catch (e) {
+      noteCoupon(o.id, { ok: false, text: `Could not send the coupon (${e?.message || "unknown error"}).` });
+    } finally { endBusy(o.id); }
+  };
+  const couponAsk = (o) => {
+    const c = coupons[o.id];
+    const to = o.client_email || "the buyer";
+    // Asked before the list knew it had gone already: say so; there is nothing to send.
+    if (c?.sentAt) return (
+      <div className="mark-paid-ask">
+        <span>A coupon went to {to} on {shortDate(c.sentAt)}. One per checkout, so there is nothing more to send.</span>
+        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
+      </div>
+    );
+    if (c?.used) return (
+      <div className="mark-paid-ask">
+        <span>Their coupon {c.code} was already used, so there is nothing to send. To send it, reset it under Leads first.</span>
+        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
+      </div>
+    );
+    return (
+      <div className="mark-paid-ask">
+        <span>Email {to} a {data?.settings?.couponDiscount ?? 15}% coupon, with their pieces?</span>
+        <button className="tap o-btn o-btn-ink" onClick={()=>sendCoupon(o)}>Send</button>
+        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Cancel</button>
+      </div>
+    );
+  };
+  // Its place on a "Didn't finish paying" row: the button, until the checkout's coupon has gone;
+  // then a plain line saying when (no button: never a second). Their code already used: the
+  // button says so, and its tap only explains.
+  const couponCell = (o) => {
+    const c = coupons[o.id];
+    if (c?.sentAt) return <span className="o-coupon-sent" style={SENT_LINE}>Coupon sent {shortDate(c.sentAt)}</span>;
+    const busy = trackBusy[o.id] === "coupon";
+    return (
+      <button className="tap o-btn o-coupon" aria-expanded={asking("coupon", o.id)} onClick={()=>askCoupon(o)} disabled={busy}>
+        {busy ? "Sending…" : c?.used ? "Coupon already used" : "✉ Send a coupon"}
+      </button>
+    );
+  };
   // The panel under an order: open only while one of its questions, forms, notes or messages is.
-  const panelOpen = (o) => ask?.id === o.id || !!track[o.id] || !!shipNote[o.id] || !!trackNote[o.id] || (!!expanded[o.id] && !!o.notes);
+  const panelOpen = (o) => ask?.id === o.id || !!track[o.id] || !!shipNote[o.id] || !!trackNote[o.id] || !!couponNote[o.id] || (!!expanded[o.id] && !!o.notes);
   const panel = (o) => {
     const notes = [shipNote[o.id], trackNote[o.id]].filter(Boolean);
+    const sent = couponNote[o.id];
     return (
       <div className="o-panel">
         {asking("paid", o.id) && paidByAsk(o.payment_methods, method => updateStatus(o.id, "paid", method))}
         {asking("resend", o.id) && resendAsk(o)}
         {asking("link", o.id) && linkAsk(o)}
         {asking("delete", o.id) && deleteAsk(o)}
+        {asking("coupon", o.id) && couponAsk(o)}
         {trackPanel(o)}
         {notes.map((note, i) => <p key={i} className={note.ok ? "track-ok" : "track-err"} role="status">{note.text}</p>)}
+        {sent && (sent.ok ? <p style={DONE_TEXT} role="status">{sent.text}</p> : <p className="track-err" role="status">{sent.text}</p>)}
         {expanded[o.id] && o.notes && (
           <div className="o-notes">
             <p className="o-panel-head">Order details</p>
@@ -548,7 +635,25 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const shop = orders.filter(o => !unfinishedCard(o));
   const filtered = shop.filter(o => (statusFilter === "all" || o.status === statusFilter) && matches(o));
   const unpaid = orders.filter(o => unfinishedThisWeek(o) && matches(o));
-  const [showUnpaid, setShowUnpaid] = useState(false);
+  // Opened from the daily email's "Open in Admin → Orders" (src/lib/adminLink.js): open, in sight.
+  const [fromEmail] = useState(wantsOpenUnfinished);
+  const [showUnpaid, setShowUnpaid] = useState(fromEmail);
+  const unfinishedRef = useRef(null);
+  useEffect(() => {
+    if (!fromEmail || loading) return;
+    doneOpenUnfinished();
+    unfinishedRef.current?.scrollIntoView({ block: "start" });
+  }, [fromEmail, loading]);
+  // The coupons' state, for every unfinished checkout of the week (not only the ones the search shows).
+  const unpaidIds = orders.filter(o => unfinishedThisWeek(o)).map(o => o.id).join(",");
+  useEffect(() => {
+    if (!showUnpaid || !unpaidIds) return;
+    let live = true;
+    adminAction("coupon-status", { ids: unpaidIds.split(",").map(Number) })
+      .then(r => { if (live) setCoupons(r.coupons || {}); })
+      .catch(e => console.warn("coupon status:", e?.message || e));
+    return () => { live = false; };
+  }, [showUnpaid, unpaidIds]);
   const statusCounts = { all:shop.length, ...Object.fromEntries(ORDER_STATUSES.map(([v]) => [v, 0])) };
   shop.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
   const shipOrder = shipFor == null ? null : orders.find(o => o.id === shipFor) || null;
@@ -857,7 +962,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         : filtered.length===0 ? <p className="crm-empty">No orders match this filter.</p>
         : ordersTable(filtered)}
       {!loading && unpaid.length > 0 && (statusFilter === "all" || statusFilter === "pending") && (
-        <section className="o-unfinished" aria-label="Didn't finish paying">
+        <section className="o-unfinished" aria-label="Didn't finish paying" ref={unfinishedRef}>
           <button className="tap o-unfinished-head" aria-expanded={showUnpaid} onClick={() => setShowUnpaid(v => !v)}>
             <span className="o-unfinished-title">Didn't finish paying</span>
             <span className="o-chip-n">{unpaid.length}</span>

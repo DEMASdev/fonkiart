@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { escapeHtml as e } from "./brevo.js";
 import { paidWords } from "./stripe.js";
+import { unfinishedLink } from "../../src/lib/adminLink.js";
+import { codePx } from "../../src/lib/couponCode.js";
 
 // Every Fonkiart email, built on the server so a visitor can't choose the
 // recipient, subject or markup. Everything a visitor typed is escaped.
@@ -12,6 +14,8 @@ import { paidWords } from "./stripe.js";
 //    "Order Received — Flamingo Party" email showed the piece he had just taken out of his cart:
 //    "shows the one i removed but names the one i did keep in the cart !! BIG BIG BIG mistake !!!");
 //  - an email about no piece (password reset, welcome coupon, contact form...) gets a random one.
+//  - the coupon to a buyer who didn't finish paying shows their pieces BIG and whole (piecesSlot's big), and
+//    the daily reminder's "Didn't finish paying" a small whole picture by each piece (thumbSlot).
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
@@ -33,17 +37,25 @@ const SITE = "https://fonkiart.com";
 export const ART_SLOT = "<!--ART-->";
 const hex = (s) => Buffer.from(s, "utf8").toString("hex");
 const usableTitle = (t) => typeof t === "string" && t.trim() !== "";
-export const piecesSlot = (titles) => `<!--ART:${[...new Set(titles.filter(usableTitle))].map(hex).join(",")}-->`;
+// big: the pieces at the email's full width (artBig), not beside the message.
+export const piecesSlot = (titles, { big = false } = {}) => `<!--ART${big ? "-BIG" : ""}:${[...new Set(titles.filter(usableTitle))].map(hex).join(",")}-->`;
 // The slot in a built email: { titles } for an email about pieces (titles may be empty: then no
-// picture), { titles: null } for a random piece, or null when the email has no slot.
-const ANY_SLOT = /<!--ART(?::([0-9a-f,]*))?-->/;
+// picture), { titles: null } for a random piece, or null when the email has no slot. big: true
+// for the big ones.
+const ANY_SLOT = /<!--ART(-BIG)?(?::([0-9a-f,]*))?-->/;
 export function readSlot(html) {
   const m = String(html).match(ANY_SLOT);
   if (!m) return null;
-  return { slot: m[0], titles: m[1] === undefined ? null : m[1].split(",").filter(Boolean).map(h => Buffer.from(h, "hex").toString("utf8")) };
+  return { slot: m[0], titles: m[2] === undefined ? null : m[2].split(",").filter(Boolean).map(h => Buffer.from(h, "hex").toString("utf8")), ...(m[1] ? { big: true } : {}) };
 }
+// A small picture of ONE named piece inside a list (the daily reminder's "Didn't finish paying"),
+// filled when the email is sent, by the same rule: exactly that piece, or nothing.
+export const thumbSlot = (title) => usableTitle(title) ? `<!--THUMB:${hex(title)}-->` : "";
+export const readThumbs = (html) => [...String(html).matchAll(/<!--THUMB:([0-9a-f]+)-->/g)].map(m => ({ slot: m[0], title: Buffer.from(m[1], "hex").toString("utf8") }));
 
-// pieces: the titles of the pieces this email is about (left out when it is about none).
+// pieces: the titles of the pieces this email is about (left out when it is about none), or
+// { big: titles } for those pieces big and whole above the message.
+const slotFor = (pieces) => Array.isArray(pieces) ? piecesSlot(pieces) : Array.isArray(pieces?.big) ? piecesSlot(pieces.big, { big: true }) : ART_SLOT;
 function frame(heading, body, pieces) {
   return `<div style="margin:0;padding:24px 12px;background:#ffffff;">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:2px solid ${C.gold};border-collapse:collapse;">`
@@ -55,7 +67,7 @@ function frame(heading, body, pieces) {
     // mail apps ignore. Outlook gets the same two columns from the [if mso] table.
     + `<tr><td style="padding:30px 28px 14px;font-size:0;text-align:center;">`
     + `<!--[if mso]><table role="presentation" width="536" cellpadding="0" cellspacing="0"><tr><![endif]-->`
-    + (Array.isArray(pieces) ? piecesSlot(pieces) : ART_SLOT)
+    + slotFor(pieces)
     + `<!--[if mso]><td width="360" valign="top"><![endif]-->`
     + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:360px;text-align:left;font-family:${SANS};font-size:18px;line-height:1.7;color:${C.ink};">`
     + `<h1 style="font-family:${SERIF};font-weight:normal;font-size:31px;line-height:1.25;color:${C.ink};margin:0 0 14px;">${heading}</h1>${body}</div>`
@@ -71,7 +83,8 @@ const small = (html) => `<p style="margin:0 0 12px;font-size:16px;line-height:1.
 const link = (href, label) => `<a href="${e(href)}" style="color:${C.gold};">${label}</a>`;
 const signoff = small("— Fonkiart");
 const button = (href, label) => `<p style="text-align:center;margin:8px 0 24px;"><a href="${e(href)}" style="display:inline-block;background:${C.gold};color:#ffffff;padding:14px 30px;text-decoration:none;font-family:${SANS};font-size:16px;font-weight:bold;letter-spacing:.14em;text-transform:uppercase;">${label}</a></p>`;
-const codeBox = (code, note) => `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:31px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${code}</div>${note ? `<div style="font-size:16px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
+// The code on one line, as big as fits a phone (src/lib/couponCode.js).
+const codeBox = (code, note) => `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:${SERIF};font-size:${codePx(code)}px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${code}</div>${note ? `<div style="font-size:16px;color:${C.muted};margin-top:6px;">${note}</div>` : ""}</div>`;
 const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:17px;"><strong>${label}:</strong> ${html}</p>`;
 const footnote = `<p style="margin:20px 0 0;font-size:16px;color:${C.muted};">Sent from fonkiart.com</p>`;
@@ -93,7 +106,8 @@ function artCell({ href, image, alt, title, linkLabel }) {
 
 // The originals are full-size photos (up to 24 MB); emails get a 320px copy made
 // by Vercel's image service (vercel.json "images" allows the Supabase bucket).
-export const emailImage = (url) => `${SITE}/_vercel/image?url=${encodeURIComponent(url)}&w=320&q=75`;
+// width: one of vercel.json's sizes (640 for the big pictures, the size Stripe's page asks for too).
+export const emailImage = (url, width = 320) => `${SITE}/_vercel/image?url=${encodeURIComponent(url)}&w=${width}&q=75`;
 
 const pieceHref = (art) => `${SITE}/?artwork=${encodeURIComponent(art.id)}`;
 
@@ -118,8 +132,32 @@ function artGallery(arts) {
     + `<!--[if mso]></td><![endif]-->`;
 }
 
-// What fills the slot: no piece, no picture; one, beside the message; several, the row.
-export const artFor = (arts) => !arts.length ? "" : arts.length === 1 ? artRow(arts[0]) : artGallery(arts);
+// The buyer's own pieces, big and whole (the coupon after a checkout they didn't finish): each one
+// at the email's full width, two to a line on a computer when there are several and one on a
+// phone, never cropped (height auto), its title under it, each a link to the piece in the shop.
+// Outlook for Windows gets them in a row of their own above the message.
+function artBig(arts) {
+  const one = arts.length === 1;
+  const w = one ? 536 : 260;
+  const piece = (art) => `<div style="display:inline-block;vertical-align:top;width:100%;max-width:${w}px;margin:0 ${one ? 0 : 4}px 22px;text-align:center;">`
+    + `<a href="${e(pieceHref(art))}" style="text-decoration:none;"><img src="${e(emailImage(art.image, 640))}" alt="${e(`${art.title}, original art by Aliana`)}" width="${w}" style="display:block;width:100%;max-width:${w}px;height:auto;border:0;margin:0 auto;"></a>`
+    + `<p style="margin:10px 0 0;font-family:${SERIF};font-style:italic;font-size:19px;line-height:1.4;color:${C.ink};">“${e(art.title)}”</p>`
+    + `</div>`;
+  return `<!--[if mso]><td width="536" valign="top"><![endif]-->`
+    + `<div style="display:inline-block;vertical-align:top;width:100%;max-width:536px;text-align:center;">`
+    + `<div style="padding:6px 0 4px;">${arts.map(piece).join("")}`
+    + `<p style="margin:0 0 18px;font-family:${SANS};font-size:16px;line-height:1.6;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};">Original art by Aliana</p>`
+    + `</div></div>`
+    + `<!--[if mso]></td></tr><tr><![endif]-->`;
+}
+
+// What fills the slot: no piece, no picture; one, beside the message; several, the row; big: artBig.
+export const artFor = (arts, { big = false } = {}) => !arts.length ? "" : big ? artBig(arts) : arts.length === 1 ? artRow(arts[0]) : artGallery(arts);
+
+// A thumbSlot's picture: small and whole, in its own cell before the piece's line.
+export function artThumb(art) {
+  return `<td width="80" valign="top" style="padding:0 12px 0 0;"><a href="${e(pieceHref(art))}" style="text-decoration:none;"><img src="${e(emailImage(art.image))}" alt="${e(`${art.title}, original art by Aliana`)}" width="80" style="display:block;width:80px;height:auto;border:0;"></a></td>`;
+}
 
 // A random piece of Aliana's own art (not the children's pieces), or null. Only for the emails
 // about no piece, and the picture in Supabase's own emails (api/art.js).
@@ -168,6 +206,25 @@ export function welcomeCoupon({ code, discount, verifyLink }) {
     + small("Enter this code at checkout. Valid on original art and prints. One use per customer.")
     + (verifyLink ? button(verifyLink, "Verify my email") + small("Tapping it confirms your email and signs you in to your Fonkiart account. No password needed.") : "")
     + signoff);
+}
+
+// The coupon to a buyer who started a Cart checkout and didn't finish paying (Andy, 2026-11-22:
+// "maybe send them a coupon ?"). It goes only when Andy taps "Send a coupon" in Admin -> Orders
+// (unfinishedCoupon.js), never by itself. Their pieces big and whole, one warm line, their code,
+// the way back to the shop. A marketing email, in the same frame and footer as the welcome coupon.
+const oneLine = (s) => String(s || "").replace(/\s+/g, " ").trim();
+export function unfinishedCouponSubject({ titles, discount }) {
+  const what = titles.length === 1 ? clip(oneLine(titles[0]), 60) : `your ${titles.length} pieces`;
+  return `Still thinking about ${what}? Here's ${discount}% off — Fonkiart`;
+}
+export function unfinishedCoupon({ firstName, titles, code, discount }) {
+  const one = titles.length === 1;
+  return frame(`Still thinking it over${firstName ? `, ${e(firstName)}` : ""}?`,
+    p(`${one ? "Your piece is" : "Your pieces are"} still here, waiting for you. Here is ${e(discount)}% off to bring ${one ? "it" : "them"} home:`)
+    + codeBox(e(code), `${e(discount)}% off your order`)
+    + button(SITE, "Back to the shop")
+    + small("Enter the code at checkout with this email address. One use.")
+    + signoff, { big: titles });
 }
 
 export function orderBuyer({ firstName, orderRef, items, total, couponApplied, discount, addr, sender }) {
@@ -397,9 +454,28 @@ const more = (n) => n > MAX_ROWS ? `<p style="margin:6px 0 0;font-size:16px;colo
 const row = (html, i) => `<div style="${i ? `margin:14px 0 0;padding:14px 0 0;border-top:1px solid ${C.line};` : "margin:0;"}">${html}</div>`;
 const note = (html) => `<p style="margin:0;font-size:16px;letter-spacing:.06em;color:${C.muted};">${html}</p>`;
 
+// "Didn't finish paying" (Andy, 2026-11-22: "a warning to the admin saying .... this person had an
+// order in the cart and didn't checkout"): one entry per checkout, from the last 7 days
+// (reminders.js). Who, how to reach them, each piece with its small picture and price, the total,
+// when they started, and the way into Admin -> Orders with that list open.
+const SHOP_TZ = "America/New_York"; // the shop: Isla Morada, Florida Keys
+// "Nov 20, 10:05 AM", in the shop's own time.
+const whenOf = (iso) => { const t = Date.parse(iso || ""); return Number.isFinite(t) ? new Date(t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: SHOP_TZ }) : ""; };
+const pieceLine = (pc) => `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 10px;"><tr>${thumbSlot(pc.title)}`
+  + `<td valign="middle" style="font-family:${SANS};font-size:17px;line-height:1.5;color:${C.ink};">${e(pc.title || "—")}${pc.amount ? ` — $${money(pc.amount)}` : ""}</td></tr></table>`;
+const unfinishedRow = (u, i) => row(
+  `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(u.name || "—")}</strong></p>`
+  + `<p style="margin:0 0 12px;font-size:16px;">${[u.email ? link(`mailto:${u.email}`, e(u.email)) : "", u.phone ? e(u.phone) : ""].filter(Boolean).join(" · ")}</p>`
+  + u.pieces.map(pieceLine).join("")
+  + (u.pieces.length > 1 ? `<p style="margin:0 0 6px;font-size:17px;"><strong>Total:</strong> $${money(u.total)}</p>` : "")
+  + (whenOf(u.started) ? note(`Started paying ${whenOf(u.started)}`) : "")
+  + `<p style="margin:8px 0 0;font-size:16px;">${link(unfinishedLink(SITE), "Open in Admin → Orders →")}</p>`, i);
+
 // Its pictures: the pieces of the orders it lists and of the price inquiries it lists, each
 // once. When it lists none (only contact messages), a random piece, as in every email about none.
-export function reminderStore({ requests, orders }) {
+// A checkout that wasn't finished shows its own pieces by its lines (thumbSlot), so they are not
+// in the top row too; with only those, the top row stays empty, never a random piece.
+export function reminderStore({ requests, orders, unfinished = [] }) {
   const named = [...orders.slice(0, MAX_ROWS).map(o => o.title), ...requests.slice(0, MAX_ROWS).map(r => inquiryTitle(r.message))].filter(Boolean);
   const reqRows = requests.slice(0, MAX_ROWS).map((r, i) => row(
     `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(r.name || "—")}</strong>${r.email ? ` · ${link(`mailto:${r.email}`, e(r.email))}` : ""}</p>`
@@ -413,7 +489,8 @@ export function reminderStore({ requests, orders }) {
     p("Here's what is still waiting at Fonkiart.")
     + (requests.length ? panel(`Messages to answer (${requests.length})`, reqRows + more(requests.length)) : "")
     + (orders.length ? panel(`Orders to send (${orders.length})`, ordRows + more(orders.length)) : "")
+    + (unfinished.length ? panel(`Didn't finish paying (${unfinished.length})`, unfinished.slice(0, MAX_ROWS).map(unfinishedRow).join("") + more(unfinished.length)) : "")
     + button(SITE, "Open the admin")
     + small("Answer messages under Requests and update orders under Orders. This email comes once a day, and only when something is waiting.")
-    + footnote, named.length ? named : undefined);
+    + footnote, named.length ? named : unfinished.length ? [] : undefined);
 }

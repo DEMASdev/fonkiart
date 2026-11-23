@@ -1,4 +1,4 @@
-import { readSlot, artFor, pickArt } from "./emails.js";
+import { readSlot, readThumbs, artFor, artThumb, pickArt } from "./emails.js";
 import { findArtworkByTitle } from "./artworks.js";
 
 // The picture in every email, put in when it is sent (api/store.js, api/admin.js,
@@ -12,10 +12,13 @@ import { findArtworkByTitle } from "./artworks.js";
 //    BIG BIG BIG mistake !!!")
 //  - An email about no piece (password reset, welcome coupon, contact form...) keeps a random
 //    piece of Aliana's art (pickArt), as since 2026-11-01.
+//  - The small pictures inside a list (the daily reminder's "Didn't finish paying") follow the
+//    same rule, one named piece each (fillThumbs); the coupon after an unfinished checkout shows its
+//    pieces big (the slot's big flag).
 // The picture never stops an email: anything that goes wrong finding it means no picture.
 export async function withArt(db, html) {
   const found = readSlot(html);
-  if (!found) return html;
+  if (!found) return fillThumbs(db, html);
   let arts = [];
   try {
     if (found.titles === null) {
@@ -30,5 +33,14 @@ export async function withArt(db, html) {
     arts = [];
   }
   // A function, so a "$" in a title is never read as a replacement pattern.
-  return String(html).replace(found.slot, () => artFor(arts));
+  return fillThumbs(db, String(html).replace(found.slot, () => artFor(arts, { big: found.big === true })));
+}
+
+// Each thumbSlot gets exactly its piece (found by its exact title, once per title), or nothing.
+async function fillThumbs(db, html) {
+  const slots = readThumbs(html);
+  if (!slots.length) return html;
+  const titles = [...new Set(slots.map(s => s.title))];
+  const found = new Map(await Promise.all(titles.map(async t => [t, await findArtworkByTitle(db, t).catch(() => null)])));
+  return slots.reduce((out, s) => out.replace(s.slot, () => { const art = found.get(s.title); return art?.image ? artThumb(art) : ""; }), String(html));
 }

@@ -314,11 +314,63 @@ test("control: the check catches today's random picture (it lands on another pie
   for (let run = 0; run < 40; run++) assert.deepEqual(wrong(await withArt(db, html), ["Flamingo Party"]), []);
 });
 
+// The coupon to a buyer who didn't finish paying (Andy, 2026-11-22): their own pieces, BIG and whole.
+const coupon = (titles) => T.unfinishedCoupon({ firstName: "Ana", titles, code: "FK-AAAA-BBBB", discount: 15 });
+const imgTags = (html) => [...String(html).matchAll(/<img [^>]*>/g)].map(m => m[0]);
+
+test("the coupon after an unfinished checkout shows the buyer's own pieces, big and whole, and never another", async () => {
+  const db = artDb();
+  for (const titles of [["Flamingo Party"], ["Flamingo Party", "Madame Mango", "Sea Turtle Dream"]]) {
+    const html = coupon(titles);
+    assert.deepEqual(T.readSlot(html), { slot: T.piecesSlot(titles, { big: true }), titles, big: true });
+    for (let run = 0; run < 6; run++) {
+      const out = await withArt(db, html);
+      assert.deepEqual(wrong(out, titles), [], titles.join(", "));
+      assert.deepEqual(shown(out).map(a => a.title), titles, "in the checkout's own order");
+      const tags = imgTags(out);
+      assert.deepEqual(tags.map(t => Number(/ width="(\d+)"/.exec(t)[1])), titles.map(() => (titles.length === 1 ? 536 : 260)), "the email's full width; two to a line when several");
+      for (const t of tags) {
+        assert.match(t, /&amp;w=640&amp;q=75/, "a picture made big enough for it");
+        assert.match(t, /height:auto/, "whole: its height follows the picture");
+        assert.doesNotMatch(t, /object-fit|[^-]height:\d/, "nothing crops it");
+      }
+      for (const t of titles) assert.match(out, new RegExp(`\\?artwork=${ART.find(a => a.title === t).id}"`), `${t}: links to that piece in the shop`);
+    }
+  }
+  // A piece that can't be told for sure: no picture, never another one, and the email is still whole.
+  const out = await withArt(db, coupon(["Twin", "Gone Forever"]));
+  assert.deepEqual(shown(out), []);
+  assert.match(out, /FK-AAAA-BBBB/);
+});
+
+test("the reminder's \"Didn't finish paying\": a small, whole picture by each piece's own line, exactly that piece", async () => {
+  const html = T.reminderStore({ requests: [], orders: [], unfinished: [
+    { ref: "FA-1760", name: "Ana Test", email: "ana@example.com", phone: "+1 305 555 0100", pieces: [{ title: "Flamingo Party", amount: 950 }, { title: "Twin", amount: 300 }], total: 1250, started: "2026-11-20T15:05:00Z" },
+    { ref: "FA-1761", name: "Bo Test", email: "bo@example.com", phone: "", pieces: [{ title: "Madame Mango", amount: 300 }], total: 300, started: "2026-11-22T11:00:00Z" },
+  ] });
+  assert.deepEqual(T.readSlot(html).titles, [], "the top row: empty, never a random piece in an email about pieces");
+  for (let run = 0; run < 6; run++) {
+    const out = await withArt(artDb(), html);
+    assert.deepEqual(wrong(out, ["Flamingo Party", "Madame Mango", "Twin"]), []);
+    assert.deepEqual(shown(out).map(a => a.title), ["Flamingo Party", "Madame Mango"], "each piece found once, by its own line; Twin can't be told apart: no picture");
+    assert.deepEqual(imgTags(out).map(t => / width="(\d+)"/.exec(t)[1]), ["80", "80"], "small");
+    for (const t of imgTags(out)) assert.match(t, /height:auto/, "and whole");
+    assert.doesNotMatch(out, /<!--(ART|THUMB)/, "every place filled");
+    for (const t of ["Flamingo Party", "Madame Mango"]) assert.ok(out.indexOf(`/?artwork=${ART.find(a => a.title === t).id}`) < out.indexOf(`${t} — $`), `${t}: its picture, then its line`);
+  }
+  // A title can't break out of its place or turn into another piece.
+  const odd = 'A "-->" <!--ART--> piece';
+  assert.deepEqual(T.readThumbs(T.thumbSlot(odd)), [{ slot: T.thumbSlot(odd), title: odd }]);
+  assert.doesNotMatch(T.thumbSlot(odd), /-->.*-->/);
+  assert.equal(T.thumbSlot(""), "", "no title, no place");
+});
+
 test("the table: every email the server can build is either about its pieces or about none", () => {
-  const helpers = new Set(["ART_SLOT", "adminFrame", "artFor", "artRow", "emailImage", "inquiryTitle", "pickArt", "piecesSlot", "readSlot", "supabaseTemplate"]);
+  const helpers = new Set(["ART_SLOT", "adminFrame", "artFor", "artRow", "artThumb", "emailImage", "inquiryTitle", "pickArt", "piecesSlot", "readSlot", "readThumbs", "supabaseTemplate", "thumbSlot"]);
   const emails = Object.keys(T).filter(k => !helpers.has(k) && !k.endsWith("Subject")).sort();
+  // unfinishedCoupon: about its pieces, big (its own test above).
   assert.deepEqual(emails, ["adminReset", "cardPaidShop", "contactBuyer", "contactStore", "customerReset", "inboundUnmatched", "inquiryBuyer",
     "inquiryStore", "invoiceApproved", "orderBuyer", "orderStore", "paymentReceived", "reminderStore", "requestReply", "requestReplyStore",
-    "shipAddressShop", "welcomeCoupon"], "a new email? add it to this table and to ABOUT_ONE / ABOUT_PIECES or the no-piece list");
+    "shipAddressShop", "unfinishedCoupon", "welcomeCoupon"], "a new email? add it to this table and to ABOUT_ONE / ABOUT_PIECES or the no-piece list");
   assert.deepEqual(Object.keys(CE).filter(k => !k.endsWith("Subject")).sort(), ["bankFailed", "bankFailedShop", "cartPaidShop", "cartReceived"]);
 });
