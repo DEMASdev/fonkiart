@@ -328,10 +328,6 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .ai-btns { display:flex;gap:7px; }
 .settings-box { background:#fff;border:1px solid var(--border);padding:22px;margin-bottom:20px; }
 .settings-box h3 { font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:14px; }
-/* Admin -> Settings -> Stripe: the Klarna offer's two numbers, under the card status. */
-.klarna-offer-box { margin-top:22px;padding-top:18px;border-top:1px solid var(--border); }
-.klarna-offer-title { font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px; }
-.klarna-offer-wait { font-size:16px;line-height:1.6;color:#5b4a5c;margin-top:12px; }
 .cat-list { display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px; }
 .cat-chip { display:flex;align-items:center;gap:5px;background:var(--cream);border:1px solid var(--border);padding:5px 11px;font-size:16px; }
 .cat-chip-del { background:none;border:none;cursor:pointer;color:var(--muted);font-size:17px;line-height:1;transition:color .2s; }
@@ -1333,9 +1329,6 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .checkout-piece-meta { font-size:16px;line-height:1.5;color:var(--quiet);margin-top:4px; }
 .checkout-piece-price { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:600;line-height:1.2;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums;margin-top:6px; }
 .checkout-off { font-size:16px;color:var(--ok);margin-top:2px; }
-/* Once the Klarna page is open at the offer's lower price: "✓ $200 off for Klarna", in the same
-   "it worked" colour as the coupon line above (was plum-grey until the no-green change landed). */
-.checkout-klarna-off { font-size:16px;color:var(--ok);margin-top:2px; }
 .checkout-wall-total { display:flex;justify-content:center;align-items:baseline;gap:14px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line); }
 .checkout-wall-total-label { font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--quiet); }
 .checkout-wall-total-sum { font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;letter-spacing:.02em;color:var(--gold);font-variant-numeric:lining-nums; }
@@ -1414,7 +1407,6 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .checkout-side .checkout-coupon-input { flex:1 1 100%; }
   .checkout-side .pay-row { grid-template-columns:22px minmax(0,1fr);grid-template-areas:"dot label" "dot sub" "dot marks";column-gap:10px;padding:12px 8px; }
   .checkout-side .pay-row-marks { margin-top:6px; }
-  .checkout-side .pay-row.has-offer { grid-template-areas:"dot label" "dot sub" "dot offer" "dot marks"; }
 }
 @media (min-width:900px) {
   .checkout.checkout-gallery { max-width:1100px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;
@@ -1477,10 +1469,6 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .pay-row-sub { grid-area:sub;align-self:start;font-size:16px;line-height:1.4;color:var(--quiet); }
 .pay-row-marks { grid-area:marks;align-self:end;display:flex;gap:5px; }
 .pay-row-marks svg { display:block;width:35px;height:22px; }
-/* The Klarna offer on Klarna's row (src/lib/klarnaOffer.js): one more line under its quiet one, in
-   the plum-grey of the Klarna line on a piece's page (src/lib/klarnaLine.js), 8.1:1 on white. */
-.pay-row.has-offer { grid-template-areas:"dot label marks" "dot sub sub" "dot offer offer"; }
-.pay-row-offer { grid-area:offer;align-self:start;font-size:16px;font-weight:600;line-height:1.4;color:#5b4a5c;margin-top:2px; }
 /* Under the chosen row (the invoice page): what to do next, in line with the name above it. */
 .pay-row-more { padding:2px 16px 20px 48px;border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--gold);text-align:left; }
 .pay-row.sel:has(+ .pay-row-more) { border-bottom-color:transparent; }

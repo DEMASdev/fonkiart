@@ -30,11 +30,6 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
   }, [jumpTo]);
 
   const toggleNav = (id) => setNavVis(prev => ({ ...prev, [id]: prev[id] === false ? true : false }));
-  // The Klarna offer's two numbers (Stripe section): saved as dollars, or none (empty: no offer).
-  // They can be saved only once the Settings table has their columns (db/2026-11-22-klarna-offer.sql):
-  // until then the row the shop loaded has neither, and a save holding them would be refused whole.
-  const klarnaReady = "klarnaMax" in data.settings && "klarnaMostOff" in data.settings;
-  const dollarsOrNone = (v) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
   const save = async () => {
     setErr("");
@@ -106,21 +101,6 @@ export default function SettingsForm({ data, updateData, jumpTo, onJumpHandled }
         <div className="settings-box">
           <h3>💳 Stripe (Credit Card)</h3>
           <CardStatus />
-          {/* The Klarna offer (Andy, 2026-11-22, "build"): api/_lib/klarnaOffer.js. Both empty: no offer. */}
-          <div className="klarna-offer-box">
-            <h4 className="klarna-offer-title">Klarna offer</h4>
-            <div className="fld">
-              <label>Klarna&apos;s highest price ($)</label>
-              <input type="number" min="1" step="1" inputMode="decimal" value={s.klarnaMax ?? ""} disabled={!klarnaReady} onChange={e=>setS({...s,klarnaMax:dollarsOrNone(e.target.value)})} placeholder="Empty: no offer" style={{maxWidth:180}} />
-            </div>
-            <p style={{color:"var(--muted)",lineHeight:1.7}}>The highest price Klarna takes, as your Stripe settings show it.</p>
-            <div className="fld" style={{marginTop:14}}>
-              <label>Most we&apos;ll take off so Klarna fits ($)</label>
-              <input type="number" min="1" step="1" inputMode="decimal" value={s.klarnaMostOff ?? ""} disabled={!klarnaReady} onChange={e=>setS({...s,klarnaMostOff:dollarsOrNone(e.target.value)})} placeholder="Empty: no offer" style={{maxWidth:180}} />
-            </div>
-            <p style={{color:"var(--muted)",lineHeight:1.7}}>When a piece is just over that price, the checkout offers up to this much off to pay with Klarna.</p>
-            {!klarnaReady && <p className="klarna-offer-wait" role="status">These two can be saved once the shop&apos;s database has its Klarna update (db/2026-11-22-klarna-offer.sql). Until then there is no offer.</p>}
-          </div>
         </div>
       )}
 

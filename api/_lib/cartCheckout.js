@@ -45,21 +45,11 @@
 //    then the rows read "Payment processing" and their pieces are held for the buyer; they turn
 //    Paid, with the two emails, only once Stripe says paid. If it fails, the rows go back to
 //    Pending, the pieces back on sale, and the buyer gets one short email (bankCart).
-// 8. The Klarna offer (Andy said "build", 2026-11-22, to the offer as it was put to him: "when a piece is just over that line (say
-//    $3,000), the checkout says "Get $300 off and pay with Klarna.""): klarnaOffer.js has the rule.
-//    THE SERVER DECIDES, from the shop's own Settings and prices, never from anything a browser
-//    sends, and takes it off ONLY on a Klarna payment page (cart-card and cart-again with way
-//    "klarna"): its lines are the pieces' prices less their shares, and its metadata says how much
-//    (stripe.js createCartCheckout). The rows keep the FULL price while unpaid, so cards, Zelle and
-//    the rest always pay the full price, and choosing another way after all needs nothing undone.
-//    Paid on that page, each row turns Paid at its own lower amount, its notes saying so as a coupon
-//    is said ("· $200 off for Klarna"), and the emails and the thank-you show what was paid.
 
 import { InputError } from "./errors.js";
 import { artPrice, cardImage, findPricedArtwork, holdArtForOrder, markSoldForOrder, otherPageClearing, PAID_STATUSES, releaseArtForOrder } from "./artworks.js";
 import { bankClearing, bankState, cardKeys, cardReady, createCartCheckout, expireCheckout, getCheckout, isSessionId, paidWith, publishableKey, StripeError, toCents, WAY_REFUSED } from "./stripe.js";
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject, cartPaidShop, cartPaidSubject, cartReceived, cartReceivedSubject } from "./cartEmails.js";
-import { klarnaOffer, offerWords } from "./klarnaOffer.js";
 
 // The checkout's own words when card payments are off (src/components/CheckoutModal.jsx).
 export const CARD_SOON = "Card payment is being set up. Please use Zelle or contact Fonkiart directly.";
@@ -107,85 +97,6 @@ const cartView = (ref, rows) => ({
   name: firstName(rows[0].ship_name),
 });
 
-// ── the Klarna offer (8.) ───────────────────────────────────────
-
-// The offer for a payment page of these pieces (lines: [{ title, amount }], the rows' own amounts,
-// in dollars) as the shop's Settings make it (Admin -> Settings -> Stripe: klarnaMax,
-// klarnaMostOff): { off, split } in cents, for way "klarna" only, else null. The Settings unread:
-// no offer, and the page is the full price, as before.
-async function pageOffer(db, way, lines) {
-  if (way !== "klarna") return null;
-  const { data, error } = await db.from("Settings").select("*").eq("id", 1).maybeSingle();
-  if (error) {
-    console.warn("store cart: couldn't read the Klarna offer's Settings, so the Klarna page is the full price:", error.message);
-    return null;
-  }
-  return klarnaOffer(lines.map(l => cents(l.amount)), data);
-}
-
-// What the checkout is told of a page made with the offer: how much off, the page's total, and each
-// piece at its lower price, in dollars, as Stripe's form shows them (src/components/CheckoutModal.jsx).
-const offerSaid = (lines, offer) => (offer ? { klarna: {
-  off: offer.off / 100,
-  total: (lines.reduce((sum, l) => sum + cents(l.amount), 0) - offer.off) / 100,
-  lines: lines.map((l, n) => ({ title: l.title, amount: (cents(l.amount) - offer.split[n]) / 100 })),
-} } : {});
-
-// The offer a Cart page was made with (stripe.js createCartCheckout: metadata klarna_off and
-// klarna_split, which only this server writes): { off, share } with share: row id -> its cents off.
-// null for a page made without one, or one whose numbers don't add up.
-function offerOf(session) {
-  const off = String(session?.metadata?.klarna_off ?? "");
-  if (!off) return null;
-  const split = String(session.metadata.klarna_split ?? "");
-  const ids = pageIds(session);
-  const shares = /^\d{1,9}(,\d{1,9}){0,24}$/.test(split) ? split.split(",").map(Number) : [];
-  if (!/^\d{1,9}$/.test(off) || Number(off) <= 0 || shares.length !== ids.length || shares.reduce((a, b) => a + b, 0) !== Number(off)) {
-    console.warn(`store cart: page ${session.id} carries a Klarna offer that doesn't add up, so none is counted`);
-    return null;
-  }
-  return { off: Number(off), share: new Map(ids.map((id, n) => [id, shares[n]])) };
-}
-
-// What a page should take for these rows, in cents: their amounts, less the page's Klarna offer on
-// every row not Paid yet (a row it paid already holds its lower amount).
-const dueCents = (session, rows) => {
-  const offer = offerOf(session);
-  return rows.reduce((sum, r) => sum + cents(r.amount) - (offer && !PAID_STATUSES.has(r.status) ? offer.share.get(r.id) ?? 0 : 0), 0);
-};
-
-// A row's notes once paid with the offer: its share in words, as a coupon is kept (" · 15% coupon
-// applied"), before " · Paying by card" when the notes end with it, else at the end.
-const withOfferWords = (notes, share) => {
-  const was = String(notes ?? ""), words = offerWords(share);
-  return was.endsWith(CARD_NOTE) ? `${was.slice(0, -CARD_NOTE.length)}${words}${CARD_NOTE}` : `${was}${words}`;
-};
-
-// Paid on a page with the offer: each row still to be paid turns Paid at its own lower amount (its
-// price less its share), its notes saying so (withOfferWords; a share of $0 says nothing), one
-// guarded write per row since each row has its own amount, so each is written once, by whoever gets
-// there first. first: this call moved the order's first row (the first one being paid, or paid
-// already), so it is the one that sends the emails, as the one guarded write is without an offer.
-// Stops at the first write the database refuses. rows: as this page paid them, each at its lower
-// amount (what the emails and the thank-you say), whether or not every write went through.
-async function paidWithOffer(db, rows, method, offer) {
-  const lead = rows.find(r => BEFORE_PAID.includes(r.status) || PAID_STATUSES.has(r.status));
-  const changes = rows.map(r => {
-    if (!BEFORE_PAID.includes(r.status)) return null; // paid already (at its lower amount), or not being paid
-    const share = offer.share.get(r.id) ?? 0;
-    return { status: "paid", paid_method: method, amount: (cents(r.amount) - share) / 100, ...(share ? { notes: withOfferWords(r.notes, share) } : {}) };
-  });
-  const paid = rows.map((r, n) => (changes[n] ? { ...r, ...changes[n] } : r));
-  let first = false;
-  for (const [n, row] of rows.entries()) {
-    if (!changes[n]) continue;
-    const { data, error } = await db.from("Orders").update(changes[n]).eq("id", row.id).in("status", BEFORE_PAID).select("id");
-    if (error) return { error, first, rows: paid };
-    if (row === lead && data?.length) first = true;
-  }
-  return { error: null, first, rows: paid };
-}
-
 // Every piece's price from the Artworks table (opOrder's `price`): the sale price when there is
 // one, else the price, less the coupon's percent (discount: 0 unless the server found the coupon
 // valid), in whole dollars like the checkout shows it.
@@ -229,12 +140,10 @@ export async function opCartCard(db, body, mail, saveOrder) {
   // ids: the saved rows, which the checkout keeps to pay this same order again (cart-again);
   // coupon: the code, when it counted, so the checkout shows it again coming back.
   const saved = { ref: order.orderRef, ids: order.ids, lines: order.items.map(({ title, amount }) => ({ title, amount })), total: order.total, ...(order.coupon ? { coupon: order.coupon } : {}) };
-  let page, offer;
+  let page;
   try {
-    // way: the one way to pay the buyer chose (stripe.js WAYS), or none, as before. Klarna: the
-    // offer, when one fits the prices just saved (8.), never anything the browser sent.
-    offer = await pageOffer(db, body.way, order.items);
-    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, way: body.way, offer });
+    // way: the one way to pay the buyer chose (stripe.js WAYS), or none, as before.
+    page = await createCartCheckout({ ref: order.orderRef, ids: order.ids, lines: order.items, email: order.email, way: body.way });
   } catch (e) {
     console.error("store cart-card:", e instanceof StripeError ? e.code : "", e?.message || e);
     // Klarna or a bank payment, chosen, that Stripe won't open for this order: its one calm line
@@ -245,15 +154,14 @@ export async function opCartCard(db, body, mail, saveOrder) {
     // nothing of "saved" or the order's number: the buyer hears of those once paid.
     return { ...saved, cardError: "The card payment couldn't open right now. Please try again in a moment, or choose another way to pay." };
   }
-  return { ...saved, session: page.id, clientSecret: page.clientSecret, publishableKey: key, ...offerSaid(order.items, offer) };
+  return { ...saved, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
 
-// Does Stripe's record say paid, in dollars, for exactly the cents these rows hold (less the
-// Klarna offer the page was made with, if any: dueCents)?
+// Does Stripe's record say paid, in dollars, for exactly the cents these rows hold?
 export function cartPaidFor(session, rows) {
   return session?.payment_status === "paid"
     && String(session.currency).toLowerCase() === "usd"
-    && session.amount_total === dueCents(session, rows);
+    && session.amount_total === rows.reduce((sum, r) => sum + cents(r.amount), 0);
 }
 
 // A bank payment for these rows, still clearing or failed (stripe.js bankClearing), for exactly
@@ -293,36 +201,24 @@ async function settleCart(db, session, mail, via) {
   if (!cartPaidFor(session, rows)) return { paid: false, why: "not paid", ...view };
 
   const method = await paidWith(session);
-  // moved: this call moved the order's rows (the first one, with the Klarna offer, 8.), so it sends
-  // the emails. paidRows: the rows as they are now (with the offer, at their lower amounts).
-  const offer = offerOf(session);
-  let flipErr, moved, paidRows = rows;
-  if (offer) ({ error: flipErr, first: moved, rows: paidRows } = await paidWithOffer(db, rows, method, offer));
-  else {
-    const { data: flipped, error } = await db.from("Orders").update({ status: "paid", paid_method: method })
-      .in("id", ids).in("status", BEFORE_PAID).select("id");
-    flipErr = error; moved = !!flipped?.length;
-  }
-  const paidView = cartView(ref, paidRows);
+  const { data: flipped, error: flipErr } = await db.from("Orders").update({ status: "paid", paid_method: method })
+    .in("id", ids).in("status", BEFORE_PAID).select("id");
   if (flipErr) {
     console.error(`store cart (${via}): could not mark order ${ref} Paid:`, flipErr.message);
-    if (via === "webhook" && !moved) throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
+    if (via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
   }
-  if (flipErr || moved) {
+  if (flipErr || flipped?.length) {
     const email = rows[0].client_email;
     const who = rows[0].ship_name || email || "The customer";
-    const paid = { ...paidView, method };
+    const paid = { ...view, method };
     await Promise.allSettled([
       mail.send({ to: mail.sender, subject: cartPaidSubject(paid), htmlContent: cartPaidShop({ ...paid, who, email, saved: !flipErr }) }),
-      mail.send({ to: email, subject: cartReceivedSubject(paidView), htmlContent: cartReceived(paid) }),
+      mail.send({ to: email, subject: cartReceivedSubject(view), htmlContent: cartReceived(paid) }),
     ]);
   }
-  // With the offer, the first row moved and its emails went, but a later one didn't: Stripe sends
-  // it again, and that time the rest move (and nobody emails again).
-  if (flipErr && via === "webhook") throw new InputError("Could not mark the order Paid yet. Please send this again.", 500);
   // The pieces are SOLD (artworks.js: never a print, never twice).
-  for (const row of paidRows) await markSoldForOrder(db, { ...row, status: "paid" });
-  return { paid: true, ...paidView, ...saidHow(method) };
+  for (const row of rows) await markSoldForOrder(db, { ...row, status: "paid" });
+  return { paid: true, ...view, ...saidHow(method) };
 }
 
 // A bank payment (ACH) for a Cart order, still clearing or failed, as Stripe's own record of the
@@ -538,8 +434,7 @@ export async function opCartAgain(db, body, mail, helpers = {}) {
   const arts = await Promise.all(rows.map(r => findPricedArtwork(db, r.item_title)));
   const sold = rows.find((r, n) => arts[n]?.isSold === true);
   if (sold) throw new InputError(`“${sold.item_title}” has already been sold, so this order can't be paid by card. Please contact Fonkiart.`, 409);
-  // Our own page vouches with the Klarna offer it was made with taken off (8.): every row is Pending.
-  const pageVouches = !!last && last.amount_total === dueCents(last, rows) && String(last.currency).toLowerCase() === "usd";
+  const pageVouches = !!last && last.amount_total === sumCents(rows) && String(last.currency).toLowerCase() === "usd";
   const pricesVouch = rows.every((r, n) => arts[n] && cents(artPrice(arts[n])) === cents(r.amount));
   if (!pageVouches && !pricesVouch) throw new InputError("This order can't be paid by card here. You can still pay it with Zelle, Venmo or Cash App, or contact Fonkiart.", 409);
   const key = formKey("cart-again", body); // before the page before is closed: no form, no change
@@ -559,11 +454,9 @@ export async function opCartAgain(db, body, mail, helpers = {}) {
   const lines = rows.map((r, n) => ({ title: r.item_title, amount: Number(r.amount), image: arts[n] ? cardImage(arts[n].image) : null }));
   // The new page carries the email the buyer gave last. The rows take the details only once it is
   // made, so a Stripe failure writes nothing, and the browser's email still names the order.
-  // Klarna: the offer, when one fits the rows' own amounts (8.), never anything the browser sent.
-  let page, offer;
+  let page;
   try {
-    offer = await pageOffer(db, body.way, lines);
-    page = await createCartCheckout({ ref, ids, lines, email: checked ? checked.email : rows[0].client_email, way: body.way, offer });
+    page = await createCartCheckout({ ref, ids, lines, email: checked ? checked.email : rows[0].client_email, way: body.way });
   } catch (e) {
     if (e instanceof StripeError && e.code === WAY_REFUSED) throw new InputError(e.message, 409); // as cart-card
     throw stripeLater("cart-again", e);
@@ -577,7 +470,7 @@ export async function opCartAgain(db, body, mail, helpers = {}) {
     throw e;
   }
   const { name: _name, ...view } = cartView(ref, rows);
-  return { ...view, ids, email: rows[0].client_email, session: page.id, clientSecret: page.clientSecret, publishableKey: key, ...offerSaid(lines, offer) };
+  return { ...view, ids, email: rows[0].client_email, session: page.id, clientSecret: page.clientSecret, publishableKey: key };
 }
 
 // "I've Sent the Payment" by Zelle, Venmo or Cash App for a Cart order the checkout saved for a
