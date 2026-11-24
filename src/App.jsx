@@ -377,7 +377,7 @@ export default function App() {
     : page === "card-return" ? { label: "Your Order", Icon: Receipt }
     : page === "conversation" ? { label: "Your Conversation", Icon: MessageCircle }
     : page === "invoice" ? { label: "Your Invoice", Icon: Receipt }
-    : page === "unsubscribe" ? { label: "Coupon Emails", Icon: Mail }
+    : page === "unsubscribe" ? { label: "Coupons", Icon: Mail }
     : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (

@@ -598,7 +598,7 @@ test("the site around it: the link opens its own page, with no popup over it, ne
   assert.match(app, /!cardReturn && !unsubToken && !sessionStorage\.getItem\("fonkiart-welcome-seen"\)/, "nor the welcome popup");
   assert.match(app, /if \(!unsubToken \|\| page === "unsubscribe"\) return;\n\s*window\.history\.replaceState\(window\.history\.state, "", window\.location\.pathname \+ withoutUnsubscribe\(window\.location\.search\) \+ window\.location\.hash\);/);
   assert.match(app, /unsubscribe:"Coupon Emails — Fonkiart"/);
-  assert.match(app, /page === "unsubscribe" \? \{ label: "Coupon Emails", Icon: Mail \}/);
+  assert.match(app, /page === "unsubscribe" \? \{ label: "Coupons", Icon: Mail \}/, "short: the phone's top bar cut a longer one");
   assert.match(app, /\{page === "unsubscribe" && unsubToken && <UnsubscribePage token=\{unsubToken\} setPage=\{goToPage\} \/>\}/);
   // The page's own look: the shop's other small pages, nothing new under 16px, no green and no cream.
   const css = read("src/index.css");

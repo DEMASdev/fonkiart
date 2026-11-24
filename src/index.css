@@ -983,7 +983,7 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
    and the coupon side by side, one under the other when there isn't the room. */
 .orders-tab .o-cart-list, .orders-tab .o-cart-pieces { list-style:none;margin:0;padding:0; }
 .orders-tab .o-cart { padding:16px 18px;margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 4px rgba(28,26,24,.05); }
-.orders-tab .o-cart-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) max-content;align-items:start;gap:14px 24px; }
+.orders-tab .o-cart-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) 240px;align-items:start;gap:14px 24px; }
 .orders-tab .o-cart-pieces { display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 18px; }
 .orders-tab .o-cart-end { display:flex;flex-direction:column;align-items:flex-end;gap:10px; }
 .orders-tab .o-cart-total { font-size:16px;color:var(--muted);white-space:nowrap; }
