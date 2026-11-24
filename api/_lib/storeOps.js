@@ -73,8 +73,8 @@ async function findCoupon(db, code) {
 
 // The one coupon an email has (Leads coupon_code): its own code when it has one (used or not),
 // else a new code saved on its Leads row, the row made when there is none. source: where a new
-// row came from. The welcome popup and the coupon after an unfinished checkout (Admin -> Orders,
-// unfinishedCoupon.js) both get theirs here. email: already lower case. fresh: nothing was on the
+// row came from. The welcome popup and the coupons sent from Admin -> Orders (couponMail.js) both get
+// theirs here. email: already lower case. fresh: nothing was on the
 // list for that email before this very call (a new row, not only a new code). size: what its row
 // says the code gives (Leads.coupon_size), null for the shop's %. Every column is read ("*"), never
 // that one by name: it may not be there yet (db/2026-11-23-coupon-size.sql).

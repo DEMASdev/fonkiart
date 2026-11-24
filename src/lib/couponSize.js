@@ -1,6 +1,6 @@
 // How much a coupon code takes off (Andy, 2026-11-22, on a buyer who didn't finish paying: "maybe we
 // can discount $300 or something if we know the acquisition power of the person !!"). Andy chooses
-// it, a % or a $ amount, when he sends the coupon (Admin -> Orders, api/_lib/unfinishedCoupon.js);
+// it, a % or a $ amount, when he sends the coupon (Admin -> Orders, api/_lib/couponMail.js);
 // that buyer's own code then gives exactly that. Every other code gives the shop's % (Admin ->
 // Settings), as before.
 //

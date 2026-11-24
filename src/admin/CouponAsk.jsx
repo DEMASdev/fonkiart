@@ -7,7 +7,7 @@ import { couponPrices, lessThanNow, moneyWords, ownSizes, sizesOf, typedSize } f
 // typed LAST counts (it is what the email says), and has the gold edge. Beside them, what the pieces come
 // to: $950 → $650. It opens at what their code gives now, else at the shop's %. The rules are
 // src/lib/couponSize.js's, and the server goes by the same ones again, on its own prices
-// (api/_lib/unfinishedCoupon.js).
+// (api/_lib/couponMail.js).
 //  coupon: what the server knows of this buyer, { code, used, sizes, pieces }; nothing when it didn't say.
 //  shop: { choose, percent }: can the amount be chosen (its database change has run), and the shop's %;
 //    null until the server has said, { failed: true } when it couldn't be asked.

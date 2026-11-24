@@ -20,7 +20,7 @@ import { couponStatus, couponSend } from "../api/_lib/unfinishedCoupon.js";
 import { withArt } from "../api/_lib/emailArt.js";
 import * as T from "../api/_lib/emails.js";
 import { CARD_NOTE, unfinishedThisWeek } from "../src/lib/orderRow.js";
-import { unfinishedLink, readAdminLink, withoutAdminLink, askOpenUnfinished, wantsOpenUnfinished, doneOpenUnfinished } from "../src/lib/adminLink.js";
+import { unfinishedLink, readAdminLink, withoutAdminLink, askOpenList, wantsOpenList, doneOpenList } from "../src/lib/adminLink.js";
 import { issueAdminToken } from "../api/_lib/adminToken.js";
 import { newCouponCode } from "../api/_lib/storeOps.js";
 import { codePx, CODE_PX } from "../src/lib/couponCode.js";
@@ -354,7 +354,7 @@ test("nothing is automatic: only Andy's tap in Admin -> Orders ever calls it", (
   const files = [...walk("api"), ...walk("src")];
   assert.ok(files.includes("api/_lib/reminders.js") && files.includes("src/admin/OrdersTab.jsx"), "the scan reads the shop's files");
   assert.deepEqual(files.filter(f => /\bcouponSend\b/.test(read(f))), ["api/_lib/unfinishedCoupon.js", "api/admin.js"], "the server: only the admin door");
-  assert.deepEqual(files.filter(f => /coupon-send/.test(read(f))), ["api/admin.js", "src/admin/OrdersTab.jsx"]);
+  assert.deepEqual(files.filter(f => /"coupon-send"/.test(read(f))), ["api/admin.js", "src/admin/OrdersTab.jsx"]);
   const tab = read("src/admin/OrdersTab.jsx");
   assert.equal((tab.match(/adminAction\("coupon-send"/g) || []).length, 1);
   assert.equal((tab.match(/\bsendCoupon\(/g) || []).length, 1, "sendCoupon is called in one place only");
@@ -398,15 +398,17 @@ test("the email's link opens Admin -> Orders with the list open, once, and leave
   const plant = (value) => Object.defineProperty(globalThis, "sessionStorage", { value, configurable: true, writable: true });
   plant({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) });
   try {
-    assert.equal(wantsOpenUnfinished(), false);
-    askOpenUnfinished();
-    assert.equal(wantsOpenUnfinished(), true);
-    doneOpenUnfinished();
-    assert.equal(wantsOpenUnfinished(), false, "once");
+    assert.equal(wantsOpenList("unfinished"), false);
+    askOpenList("unfinished");
+    assert.deepEqual([wantsOpenList("unfinished"), wantsOpenList("carts")], [true, false], "that list, and not the other");
+    doneOpenList();
+    assert.equal(wantsOpenList("unfinished"), false, "once");
+    askOpenList("carts");
+    assert.deepEqual([wantsOpenList("unfinished"), wantsOpenList("carts")], [false, true]);
     plant({ getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } });
-    askOpenUnfinished();
-    assert.equal(wantsOpenUnfinished(), false, "storage refused: the list just starts closed");
-    doneOpenUnfinished();
+    askOpenList("unfinished");
+    assert.equal(wantsOpenList("unfinished"), false, "storage refused: the list just starts closed");
+    doneOpenList();
   } finally {
     if (real) Object.defineProperty(globalThis, "sessionStorage", real); else delete globalThis.sessionStorage;
   }
@@ -416,8 +418,9 @@ test("the email's link opens Admin -> Orders with the list open, once, and leave
   assert.match(app, /: adminLink \? "admin" :/, "the link opens Admin (which asks for its password when needed)");
   assert.match(app, /window\.history\.replaceState\([^\n]*withoutAdminLink\(window\.location\.search\)/, "then the link leaves the address bar");
   const tab = read("src/admin/OrdersTab.jsx");
-  assert.match(tab, /const \[fromEmail\] = useState\(wantsOpenUnfinished\);\n\s+const \[showUnpaid, setShowUnpaid\] = useState\(fromEmail\);/);
-  assert.match(tab, /doneOpenUnfinished\(\);/);
+  assert.match(tab, /const \[fromEmail\] = useState\(\(\) => wantsOpenList\("unfinished"\)\);\n\s+const \[showUnpaid, setShowUnpaid\] = useState\(fromEmail\);/);
+  assert.match(tab, /doneOpenList\(\);/);
+  assert.match(app, /askOpenList\(adminLink\);/, "the list that link is about");
 });
 
 // No green anywhere on Fonkiart (Andy, 2026-11-22: "i do not like the green no green on the sile maybe

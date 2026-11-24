@@ -975,6 +975,22 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .o-unfinished-head { display:inline-flex; align-items:center; gap:10px; min-height:44px; padding:6px 0; background:none; border:0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:17px; font-weight:600; letter-spacing:.04em; color:var(--ink); }
 .o-unfinished-arrow { font-size:16px; color:var(--muted); }
 .o-unfinished-note { font-size:16px; color:var(--muted); margin:2px 0 14px; line-height:1.45; max-width:62ch; }
+/* "Left in the cart" (src/admin/CartsLeft.jsx), under it: one card per person, with who, their pieces
+   and the coupon side by side, one under the other when there isn't the room. */
+.orders-tab .o-cart-list, .orders-tab .o-cart-pieces { list-style:none;margin:0;padding:0; }
+.orders-tab .o-cart { padding:16px 18px;margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 4px rgba(28,26,24,.05); }
+.orders-tab .o-cart-row { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) max-content;align-items:start;gap:14px 24px; }
+.orders-tab .o-cart-pieces { display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 18px; }
+.orders-tab .o-cart-end { display:flex;flex-direction:column;align-items:flex-end;gap:10px; }
+.orders-tab .o-cart-total { font-size:16px;color:var(--muted);white-space:nowrap; }
+.orders-tab .o-cart-sent, .orders-tab .o-cart-ok { margin:0;font-size:16px;line-height:1.5;color:#5b4a5c; }
+.orders-tab .o-cart .o-panel { margin-top:14px; }
+.orders-tab .o-cart > .o-cart-ok, .orders-tab .o-cart > .track-err { margin-top:12px;overflow-wrap:anywhere; }
+@media(max-width:900px){
+  .orders-tab .o-cart-row { grid-template-columns:minmax(0,1fr); }
+  .orders-tab .o-cart-pieces { grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr)); }
+  .orders-tab .o-cart-end { align-items:flex-start; }
+}
 /* Search and the status chips. */
 .orders-tab .o-toolbar { display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin-bottom:22px; }
 .orders-tab .crm-search { flex:1 1 280px;min-width:0;margin:0;padding:10px 18px;font-size:17px;border-radius:999px;background:#fff; }

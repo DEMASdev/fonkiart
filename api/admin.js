@@ -9,6 +9,7 @@ import { signUpload, removeFiles, adminEmail } from "./_lib/adminOps.js";
 import { queryMarkingSold } from "./_lib/artworks.js";
 import { adminReminderNow } from "./_lib/reminders.js";
 import { couponStatus, couponSend } from "./_lib/unfinishedCoupon.js";
+import { cartsForAdmin, cartCouponSend } from "./_lib/cartCoupon.js";
 import { cardCheck } from "./_lib/stripe.js";
 import { siteUrl } from "./_lib/site.js";
 
@@ -45,6 +46,9 @@ export default async function handler(req, res) {
     // "Didn't finish paying" -> "Send a coupon": only on Andy's tap, one buyer, one email.
     if (body.kind === "coupon-status") return res.status(200).json(await couponStatus(db, body));
     if (body.kind === "coupon-send") return res.status(200).json(await couponSend(db, body, { send }));
+    // "Left in the cart" -> "Send a coupon": the same, for someone who left art in their cart.
+    if (body.kind === "carts-left") return res.status(200).json(await cartsForAdmin(db));
+    if (body.kind === "cart-coupon-send") return res.status(200).json(await cartCouponSend(db, body, { send }));
     // deep: "Check again" makes a real $0.50 payment page on Stripe's own site, cards only (not
     // the card form inside fonkiart.com), and cancels it at once (see cardCheck).
     if (body.kind === "card-check") return res.status(200).json(await cardCheck({ deep: body.deep === true, site: siteUrl() }));

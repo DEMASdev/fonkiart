@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { escapeHtml as e } from "./brevo.js";
 import { paidWords } from "./stripe.js";
-import { unfinishedLink } from "../../src/lib/adminLink.js";
+import { cartsLink, unfinishedLink } from "../../src/lib/adminLink.js";
 import { codePx } from "../../src/lib/couponCode.js";
 import { MAX_ROWS } from "./reminderRows.js";
 
@@ -210,8 +210,8 @@ export function welcomeCoupon({ code, discount, verifyLink }) {
 }
 
 // The coupon to a buyer who started a Cart checkout and didn't finish paying (Andy, 2026-11-22:
-// "maybe send them a coupon ?"). It goes only when Andy taps "Send a coupon" in Admin -> Orders
-// (unfinishedCoupon.js), never by itself. Their pieces big and whole, one warm line, their code,
+// "maybe send them a coupon ?"), or left art in their cart. It goes only when Andy taps "Send a coupon"
+// in Admin -> Orders (couponMail.js), never by itself. Their pieces big and whole, one warm line, their code,
 // the way back to the shop. A marketing email, in the same frame and footer as the welcome coupon.
 // words: how much, as Andy chose it ("20% off", "$300 off": src/lib/couponSize.js sizeWords).
 const oneLine = (s) => String(s || "").replace(/\s+/g, " ").trim();
@@ -486,7 +486,7 @@ const cartRow = (c, i) => row(
   + c.pieces.map(cartPiece).join("")
   + (c.pieces.length > 1 && c.total ? `<p style="margin:0 0 6px;font-size:17px;"><strong>Total:</strong> $${money(c.total)}</p>` : "")
   + (Number.isFinite(c.hours) ? note(`Left in the cart ${agoWords(c.hours)}`) : "")
-  + `<p style="margin:8px 0 0;font-size:16px;">${link(unfinishedLink(SITE), "Open in Admin → Orders →")}</p>`, i);
+  + `<p style="margin:8px 0 0;font-size:16px;">${link(cartsLink(SITE), "Open in Admin → Orders →")}</p>`, i);
 
 // Its pictures: the pieces of the orders it lists and of the price inquiries it lists, each
 // once. When it lists none (only contact messages), a random piece, as in every email about none.

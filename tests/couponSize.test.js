@@ -224,7 +224,7 @@ test("never less than what their code already gives on these pieces", () => {
 test("the site, Admin and the server use this one file, which imports nothing", () => {
   assert.equal(existsSync(new URL("src/lib/couponSize.js", root)), true);
   assert.doesNotMatch(read("src/lib/couponSize.js"), /^\s*import\b|\brequire\(|\bimport\(/m);
-  for (const f of ["api/_lib/storeOps.js", "api/_lib/cartCheckout.js", "api/_lib/unfinishedCoupon.js"]) assert.match(read(f), /from "\.\.\/\.\.\/src\/lib\/couponSize\.js";/, f);
+  for (const f of ["api/_lib/storeOps.js", "api/_lib/cartCheckout.js", "api/_lib/couponMail.js"]) assert.match(read(f), /from "\.\.\/\.\.\/src\/lib\/couponSize\.js";/, f);
   for (const f of ["src/components/CheckoutModal.jsx", "src/components/WelcomeModal.jsx", "src/admin/CouponAsk.jsx", "src/admin/LeadsTab.jsx"]) assert.match(read(f), /from "\.\.\/lib\/couponSize";/, f);
   // No second copy of the sums: nothing else in the shop takes a % off a price.
   for (const f of ["api/_lib/cartCheckout.js", "api/_lib/storeOps.js", "src/components/CheckoutModal.jsx"]) assert.doesNotMatch(read(f), /1 - \w+ \/ 100/, f);

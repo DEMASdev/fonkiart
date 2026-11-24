@@ -1,6 +1,6 @@
 // A small JSON note the server keeps for itself in a PRIVATE Storage bucket: the daily reminder's
 // "last ran / last sent" (reminders.js), and when a coupon went to a buyer who didn't finish
-// paying (unfinishedCoupon.js). Nothing here is ever public: the bucket is made private the first
+// paying or left art in their cart (couponMail.js). Nothing here is ever public: the bucket is made private the first
 // time it is needed.
 const BUCKET = "system";
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { adminDb as supabase, adminAction } from "../lib/adminDb";
-import { wantsOpenUnfinished, doneOpenUnfinished } from "../lib/adminLink";
+import { wantsOpenList, doneOpenList } from "../lib/adminLink";
 import { sendEmail } from "../utils/helpers";
 import { invoiceEmail, statusEmailFor } from "../lib/adminEmails";
 import { invoiceLink, findArtwork } from "../lib/invoiceView";
@@ -9,6 +9,7 @@ import { invoiceNumber } from "../lib/invoiceNumber";
 import CopyButton from "../components/CopyButton";
 import ArtThumb from "./ArtThumb";
 import CouponAsk from "./CouponAsk";
+import CartsLeft from "./CartsLeft";
 import ShipAddressDialog from "./ShipAddressDialog";
 import { ORDER_STATUSES, isPaid, canMarkPaid, markPaidChoices, asksPaidMethod, statusChange, resendQuestion, paidPick, statusOptions } from "../lib/orderStatus";
 import { CARRIERS, NO_TRACKING, PICKUP_FIELDS, PICKUP_LABEL, isPickup, orderTracking, orderTrackingLink, hasTrackingSaved, carrierLabel, trackingFields, trackingSave, withNumber } from "../lib/tracking";
@@ -643,12 +644,12 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   const filtered = shop.filter(o => (statusFilter === "all" || o.status === statusFilter) && matches(o));
   const unpaid = orders.filter(o => unfinishedThisWeek(o) && matches(o));
   // Opened from the daily email's "Open in Admin → Orders" (src/lib/adminLink.js): open, in sight.
-  const [fromEmail] = useState(wantsOpenUnfinished);
+  const [fromEmail] = useState(() => wantsOpenList("unfinished"));
   const [showUnpaid, setShowUnpaid] = useState(fromEmail);
   const unfinishedRef = useRef(null);
   useEffect(() => {
     if (!fromEmail || loading) return;
-    doneOpenUnfinished();
+    doneOpenList();
     unfinishedRef.current?.scrollIntoView({ block: "start" });
   }, [fromEmail, loading]);
   // The coupons' state, for every unfinished checkout of the week (not only the ones the search shows).
@@ -979,6 +980,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
           {showUnpaid && ordersTable(unpaid)}
         </section>
       )}
+      <CartsLeft search={search} show={!loading && (statusFilter === "all" || statusFilter === "pending")} percent={data?.settings?.couponDiscount ?? 15} />
       {shipOrder && (
         <ShipAddressDialog key={shipOrder.id} order={shipOrder} art={findArtwork(catalog, shipOrder.item_title)}
           prefill={shipPrefill(shipOrder, { client: clientOf(shipOrder), orders })} clientName={clientLabel(shipOrder)}

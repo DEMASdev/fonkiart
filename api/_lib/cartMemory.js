@@ -180,11 +180,13 @@ export async function opMyCart(db, req, now = new Date()) {
 // - not someone with any order since that cart was saved, whatever its status: they came back;
 // - not someone on "Didn't finish paying" this week: they are listed there already.
 // name: from Clients, or an order's shipping name; "" when the shop doesn't know it.
-// [] until the SQL has run, or if any of it can't be read. limit: at most this many.
-export async function cartsLeft(db, { now = new Date(), limit = 200 } = {}) {
+// [] until the SQL has run, or if any of it can't be read. strict: that throws instead, for Admin's
+// list (cartCoupon.js), where nobody must mean nobody. limit: at most this many.
+export async function cartsLeft(db, { now = new Date(), limit = 200, strict = false } = {}) {
   try {
     return (await leftCarts(db, now)).slice(0, limit);
   } catch (e) {
+    if (strict) throw new Error(`couldn't read who left art in their cart: ${e?.message || e}`, { cause: e });
     console.warn(`cartsLeft: not read (${e?.code || "error"})`);
     return [];
   }

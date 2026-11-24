@@ -31,7 +31,7 @@ import { readInvoiceParams } from "./lib/invoiceView";
 import CardReturnPage from "./pages/CardReturnPage";
 import { readCardReturn, dropCardOrder, withoutTitles } from "./lib/cartOrder";
 import { firstEntry, newEntry, samePageAgain } from "./lib/backInside";
-import { readAdminLink, withoutAdminLink, askOpenUnfinished } from "./lib/adminLink";
+import { readAdminLink, withoutAdminLink, askOpenList } from "./lib/adminLink";
 import ThreadPage from "./pages/ThreadPage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
@@ -66,8 +66,8 @@ export default function App() {
   // Back from paying a Cart order by card: { ref, session } once paid, { ref, cancelled } from
   // Stripe's own page without paying (src/lib/cartOrder.js readCardReturn).
   const [cardReturn]   = useState(() => readCardReturn(window.location.search));
-  // The daily email's "Open in Admin → Orders" (?admin=unfinished, src/lib/adminLink.js): Admin ->
-  // Orders with "Didn't finish paying" open. Read once (Admin's tab is set to Orders here, before
+  // The daily email's "Open in Admin → Orders" (?admin=unfinished or carts, src/lib/adminLink.js):
+  // Admin -> Orders with the list it is about open. Read once (Admin's tab is set to Orders here, before
   // it is read below), then taken out of the address bar.
   const [adminLink]    = useState(() => { const link = readAdminLink(window.location.search); if (link) localStorage.setItem("fonkiart-admin-tab", "orders"); return link; });
   const [deepModal, setDeepModal] = useState(null);
@@ -129,7 +129,7 @@ export default function App() {
   const [adminTab, setAdminTabState] = useState(() => localStorage.getItem("fonkiart-admin-tab") || "dashboard");
   useEffect(() => {
     if (!adminLink) return;
-    askOpenUnfinished();
+    askOpenList(adminLink);
     window.history.replaceState(window.history.state, "", window.location.pathname + withoutAdminLink(window.location.search) + window.location.hash);
   }, [adminLink]);
   const setAdminTab = (t) => { localStorage.setItem("fonkiart-admin-tab", t); setAdminTabState(t); };
