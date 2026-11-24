@@ -26,6 +26,7 @@ export default function CartsLeft({ search = "", show = true, percent }) {
   const [failed, setFailed] = useState(false);
   const [asking, setAsking] = useState(null); // the email being asked about
   const [busy, setBusy] = useState({});       // by email: its coupon is on its way
+  const going = useRef(new Set());            // the same, known at once: two taps, one email
   const [notes, setNotes] = useState({});     // by email: what the last tap did, { ok, text }
   const box = useRef(null);
   const seen = useRef(false);
@@ -61,7 +62,8 @@ export default function CartsLeft({ search = "", show = true, percent }) {
   // choice: { percent } or { dollars }, or {} for what their code gives, the shop's % (CouponAsk.jsx).
   const send = async (c, choice) => {
     setAsking(null);
-    if (busy[c.email]) return;
+    if (going.current.has(c.email)) return;
+    going.current.add(c.email);
     setBusy(b => ({ ...b, [c.email]: true }));
     try {
       const r = await adminAction("cart-coupon-send", { email: c.email, ...choice });
@@ -86,7 +88,7 @@ export default function CartsLeft({ search = "", show = true, percent }) {
       }
     } catch (e) {
       note(c.email, { ok: false, text: `Could not send the coupon (${e?.message || "unknown error"}).` });
-    } finally { setBusy(b => ({ ...b, [c.email]: false })); }
+    } finally { going.current.delete(c.email); setBusy(b => ({ ...b, [c.email]: false })); }
   };
   const askBox = (c) => c.used ? (
     <div className="mark-paid-ask">

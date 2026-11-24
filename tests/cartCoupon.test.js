@@ -374,9 +374,10 @@ test("Admin: the tap asks first, with their pieces and the server's word on amou
   assert.deepEqual([l.ask().length, l.calls.length], [0, 1], "Cancel: nothing");
   l.screen.buttons("✉ Send a coupon")[0].props.onClick();
   answer = { sent: true, sentAt: "2026-11-23T21:20:00Z", to: ANA, code: "FK-TEST-AAAA", said: "$300 off", noted: true };
-  const sending = l.ask()[0].props.onSend({ dollars: 300 });
+  const { onSend } = l.ask()[0].props;
+  const sending = [onSend({ dollars: 300 }), onSend({ dollars: 300 })];
   assert.equal(l.screen.buttons("Sending…")[0].props.disabled, true, "on its way: can't be tapped again");
-  await sending;
+  await Promise.all(sending);
   assert.deepEqual(l.calls.slice(1), [["cart-coupon-send", { email: ANA, dollars: 300 }]]);
   const row = l.screen.text(l.screen.people()[0]);
   assert.match(row, /Coupon sent Nov 23 · \$300 off ?✓ Coupon FK-TEST-AAAA \(\$300 off\) sent to ana\.test@example\.com\.$/);
@@ -398,6 +399,10 @@ test("Admin: every other answer is said on that row, in plain words; nothing is 
     await l.ask()[0].props.onSend({});
     assert.match(l.screen.text(l.screen.people()[0]), words);
     assert.equal(l.screen.find(n => n.type === "button", l.screen.people()[0]).length > 0, keepsButton, String(words));
+    if (!keepsButton || answer.why === "used") continue;
+    l.screen.buttons("✉ Send a coupon")[0].props.onClick();
+    await l.ask()[0].props.onSend({});
+    assert.equal(l.calls.filter(([k]) => k === "cart-coupon-send").length, 2, `answered, so it can be sent again: ${words}`);
   }
   // A code used already only explains; there is no question to send.
   const l = await list();
