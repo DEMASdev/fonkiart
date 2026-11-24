@@ -274,6 +274,7 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .footer { border-top:1px solid var(--border);padding:28px 48px;display:flex;justify-content:space-between;align-items:center;background:var(--white);margin-top:48px;flex-wrap:wrap;gap:16px; }
 .footer-logo { font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
 .footer-copy { font-size:16px;color:var(--muted); }
+.footer-end { display:flex;flex-direction:column;align-items:flex-end;gap:6px; }
 .footer-social { display:flex;align-items:center;gap:14px; }
 .footer-social a { color:var(--muted);display:flex;align-items:center;transition:color .2s; }
 .footer-social a:hover { color:var(--accent); }
@@ -547,7 +548,8 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
   .admin-body { grid-template-columns:1fr; }
 
   /* Footer */
-  .footer { flex-direction:column;gap:10px;text-align:center;padding:24px 16px; }
+  .footer { flex-direction:column;gap:10px;padding:24px 16px; }
+  .footer-end { width:100%;align-items:flex-start; } /* below the logos, in line with them */
 
   /* Pages */
   .page { padding:20px 16px; }

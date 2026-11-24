@@ -74,3 +74,15 @@ test("every payment badge is the same size: a 48 x 30 box", () => {
   assert.equal(boxes.length, 10, "ten badges");
   for (const [name, box] of boxes) assert.equal(box, "0 0 48 30", `${name}: ${box}`);
 });
+
+// Seen in the pictures (2026-11-23): on a phone and a tablet "Accepted Payments" stood in the middle over
+// logos that start at the left, and "Track my order" was out of line with the words under it.
+test("the footer on a phone and a tablet: the heading, the logos, Track my order and the last line all start at the left", () => {
+  const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  const small = css.slice(css.indexOf("  /* Footer */"), css.indexOf("  /* Pages */"));
+  assert.match(small, /\.footer \{ flex-direction:column;gap:10px;padding:24px 16px; \}/);
+  assert.match(small, /\.footer-end \{ width:100%;align-items:flex-start; \}/);
+  assert.doesNotMatch(small, /center/);
+  assert.match(css, /\n\.footer-end \{ display:flex;flex-direction:column;align-items:flex-end;gap:6px; \}\n/, "on a computer, at the right as before");
+  assert.match(footer, /<div className="footer-end">/);
+});

@@ -35,7 +35,7 @@ export default function Footer({ settings, onTrackOrder }) {
             <svg viewBox="0 0 48 30" xmlns="http://www.w3.org/2000/svg" aria-label="Cash App"><rect width="48" height="30" rx="4" fill="#00D632"/><text x="24" y="14" fontFamily="Arial,sans-serif" fontSize="7.5" fontWeight="bold" fill="#FFFFFF" textAnchor="middle" letterSpacing=".3">CASH</text><text x="24" y="23" fontFamily="Arial,sans-serif" fontSize="7.5" fontWeight="bold" fill="#FFFFFF" textAnchor="middle" letterSpacing=".3">APP</text></svg>
           </div>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
+        <div className="footer-end">
           <button className="track-order-btn" onClick={onTrackOrder}>Track my order</button>
           <div className="footer-copy">© {new Date().getFullYear()} Fonkiart · All rights reserved</div>
         </div>
