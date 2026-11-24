@@ -95,5 +95,5 @@ test("the server is asked which ways it opens, and told the way chosen: the Cart
   const invoice = read("src/pages/InvoicePage.jsx");
   assert.match(invoice, /storeCall\("card-setup"\)\.then\(\(r\) => \{\s*const can = serverWays\(r\);/);
   assert.match(invoice, /storeCall\("card-checkout", \{ token, embedded: true, way, /);
-  assert.match(invoice, /const handleCard = async \(way = "card"\) => \{/, "Try Again and an older call: a card, as before");
+  assert.match(invoice, /const handleCard = \(way = "card"\) => \{/, "Try Again and an older call: a card, as before");
 });

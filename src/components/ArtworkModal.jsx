@@ -3,7 +3,9 @@ import Pic from "./Pic";
 import KlarnaLine from "./KlarnaLine";
 import { priceCents } from "../lib/klarnaLine";
 
-export default function ArtworkModal({ item, onClose, onBuy, sold }) {
+// inCart + onCheckout: the piece is in the cart already, so its button goes to the checkout (Andy,
+// 2026-11-23: "once a item is clicked ( the shop buttom ) , the button of that item should be checkout !").
+export default function ArtworkModal({ item, onClose, onBuy, sold, inCart, onCheckout }) {
   const allImages = (item.images?.length > 0) ? item.images : (item.image ? [item.image] : []);
   const [imgIdx, setImgIdx] = useState(0);
   const [zoomed, setZoomed] = useState(false);
@@ -46,9 +48,9 @@ export default function ArtworkModal({ item, onClose, onBuy, sold }) {
           {/* Klarna's "pay in 4" line (Andy, 2026-11-21), only for a piece that can be bought at a price */}
           {onBuy && !sold && cents > 0 && <KlarnaLine cents={cents} />}
           {onBuy && (<>
-            <button className="buy-btn" onClick={() => onBuy(item)}>
-              {item.price || item.salePrice ? "Add to Cart" : "Request Pricing"}
-            </button>
+            {inCart && onCheckout
+              ? <button className="buy-btn" onClick={onCheckout}>Checkout →</button>
+              : <button className="buy-btn" onClick={() => onBuy(item)}>{item.price || item.salePrice ? "Add to Cart" : "Request Pricing"}</button>}
             <p className="buy-note">Ships worldwide · Secure payment</p>
           </>)}
           {sold && <>

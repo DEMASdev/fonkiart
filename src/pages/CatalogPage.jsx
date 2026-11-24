@@ -2,9 +2,10 @@ import { useState } from "react";
 import Pagination from "../components/Pagination";
 import ArtworkModal from "../components/ArtworkModal";
 import PriceInquiryModal from "../components/PriceInquiryModal";
+import ShopButton from "../components/ShopButton";
 import Pic from "../components/Pic";
 
-export default function CatalogPage({ data, addToCart, cart, initialCategory }) {
+export default function CatalogPage({ data, addToCart, cart, onCheckout, initialCategory }) {
   const [cat, setCat] = useState(initialCategory || "All");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
@@ -32,6 +33,7 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
 
   const handleCat = (c) => { setCat(c); setPage(1); };
   const handleSearch = (v) => { setSearch(v); setPage(1); };
+  const inCart = (item) => !!cart?.find(i => i.id === item.id);
 
   return (
     <div>
@@ -74,10 +76,7 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
                         </div>
                       : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span className="card-price-ask">Price on request</span>}</div>
                     }
-                    {item.isSold
-                      ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>
-                      : <button className="card-btn" onClick={e => { e.stopPropagation(); item.price||item.salePrice ? addToCart(item) : setPriceInquiry(item); }}>{item.price||item.salePrice ? (cart?.find(i=>i.id===item.id) ? "✓ Added" : "Shop →") : "Inquire"}</button>
-                    }
+                    <ShopButton item={item} inCart={inCart(item)} onAdd={addToCart} onAsk={setPriceInquiry} onCheckout={onCheckout} />
                   </div>
                 </div>
               ))}
@@ -85,7 +84,7 @@ export default function CatalogPage({ data, addToCart, cart, initialCategory }) 
         }
       </div>
       <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? addToCart(s) : setPriceInquiry(s); }} />}
+      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} inCart={inCart(selected)} onCheckout={onCheckout} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? addToCart(s) : setPriceInquiry(s); }} />}
       {priceInquiry && <PriceInquiryModal item={priceInquiry} onClose={() => setPriceInquiry(null)} />}
     </div>
   );

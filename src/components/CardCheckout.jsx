@@ -1,5 +1,6 @@
 import { useState, useEffect, useEffectEvent } from "react";
 import PayArt from "./PayArt";
+import WayBack from "./WayBack";
 
 // Stripe allows one card form on a page at a time, so each one starts only after the one before
 // it has gone (the panel closed and opened again, or React's development double start).
@@ -23,6 +24,8 @@ const forms = { turn: Promise.resolve() };
 // totalLabel: the line above the total.
 // art: the pieces above the form (PayArt). The Cart's checkout passes false: its art is already
 // on the screen, beside the form on a computer and above it on a phone (CheckoutModal).
+// onBack: the way back to the other ways to pay (WayBack.jsx), above the form and at its end; an
+// invoice passes it. The Cart's checkout draws its own, there before the form is (CheckoutModal).
 // Leaving the panel (onBack, or the checkout closing) DESTROYS the form, so it opens clean again.
 // onFail: the form couldn't open here; the checkout says so calmly, with Try Again and another
 // way to pay (never Stripe's own page).
@@ -60,7 +63,7 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
   // nothing left to choose.
   return (
     <div className="pay-card">
-      {!paid && <button type="button" className="tap pay-card-back" onClick={onBack}>← Choose another way to pay</button>}
+      {!paid && onBack && <WayBack onBack={onBack} />}
       {noun !== "order" && <p className="pay-card-label">Your {noun} <span className="pay-card-ref">{pay.ref}</span></p>}
       {art && <PayArt lines={pay.lines} total={pay.total} artworks={artworks} totalLabel={totalLabel} />}
       {!paid && (
@@ -68,6 +71,7 @@ export default function CardCheckout({ pay, artworks, onBack, onFail, onComplete
           {!ready && <p className="pay-card-wait" role="status">Opening the secure card form…</p>}
           <div ref={setBox} className="pay-card-form" />
           <p className="pay-card-note">Your card is handled by Stripe, in this secure form. Fonkiart never sees your card number.</p>
+          {onBack && <WayBack foot onBack={onBack} />}
         </>
       )}
       {check === "checking" && <p className="pay-card-wait" role="status">Confirming your payment…</p>}

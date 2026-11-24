@@ -3,7 +3,10 @@ import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { stripeJsReady } from "../lib/stripeJs";
 import { readCardOrder, saveCardOrder, dropCardOrder, matchesCart, cardOrderBody, CARD_FORM_DOWN } from "../lib/cartOrder";
+import { payTries } from "../lib/payTries";
+import { holdBack } from "../lib/backInside";
 import CardCheckout from "./CardCheckout";
+import WayBack from "./WayBack";
 import PaidThanks from "./PaidThanks";
 import PayRows from "./PayRows";
 import Pic from "./Pic";
@@ -35,6 +38,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // their name and address already filled in"): the details as they typed them, and the coupon
   // the server took for it, applied. The number shows on the thank-you.
   const [saved, setSaved] = useState(() => { const order = readCardOrder(); return matchesCart(order, items) ? order : null; });
+  // The same, for a try to pay to read once the server has answered: another try may have saved the
+  // order since that one was tapped. keep sets both.
+  const savedNow = useRef(saved);
+  const keep = (order) => { savedNow.current = order; setSaved(order); };
   const blank = { firstName:"", lastName:"", email:"", phone:"", address:"", city:"", state:"", zip:"", country:"" };
   const [customer, setCustomer] = useState(() => saved ? { ...blank, email: saved.email, ...saved.customer } : blank);
   const [couponCode, setCouponCode] = useState(() => saved?.coupon || "");
@@ -46,8 +53,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [pay, setPay] = useState(null);                // the card form, open inside the page
   const [paidView, setPaidView] = useState(null);      // the card payment is in
   const [cardCheck, setCardCheck] = useState(null);    // paid in the card form: "checking" · "unpaid" · "error"
-  const [calm, setCalm] = useState("");                // the card form didn't open: said calmly
-  const [retry, setRetry] = useState(false);           // ...with "Try Again" and another way to pay
+  const [calm, setCalm] = useState("");                // the card form didn't open: said calmly, with Try Again
   // Klarna or a bank payment, chosen, that Stripe won't open for this order (its amount, or the way
   // not switched on): the server's one line (api/_lib/stripe.js wayRefused), shown on the ways to
   // pay, with that way no longer chosen and no Try Again.
@@ -63,10 +69,12 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   const [stepsH, setStepsH] = useState(0);
   const wallBox = useRef(null);                        // the art's column (measured too: a phone keeps it in view)
   const [wallH, setWallH] = useState(0);
-  // Set the moment a pay button is tapped and cleared once the server has answered, so a double
-  // tap counts once and two card calls never race (each would close the page before and open
-  // its own, leaving one open that nobody pays).
-  const busy = useRef(false);
+  // One try to pay at a time, from the tap until the server has answered, so a double tap counts
+  // once and two card calls never race (each would close the page before and open its own, leaving
+  // one open that nobody pays). The buyer can leave one on its way and choose another way to pay
+  // (src/lib/payTries.js): the next try then waits for it, and pays the order it made.
+  const [tries] = useState(payTries);
+  const over = useRef(false); // paid, or the order placed: a try still on its way has nothing left to do
   // The checkout is gone (✕, or the page moved on) while a card attempt is still on its way:
   // Stripe.js can take up to 15 s to load, and a buyer may walk away first. Then nothing more is
   // asked of the server, and no card form opens in a checkout that is closed.
@@ -153,8 +161,9 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     try {
       const { status } = await storeCall("coupon", { code, email: customer.email });
       // A card payment already started for this cart: its price is the server's, set then, and
-      // a coupon can't change it now. Said plainly, and nothing is taken off.
-      setCouponStatus(saved && status === "valid" ? "too-late" : status);
+      // a coupon can't change it now. Said plainly, and nothing is taken off. (savedNow: it may have
+      // been saved while the coupon was asked about.)
+      setCouponStatus(savedNow.current && status === "valid" ? "too-late" : status);
     } catch { setCouponStatus("invalid"); }
   };
 
@@ -168,14 +177,13 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   });
 
   // The server saves the order, marks the coupon used and sends both emails.
-  // Returns false (with a message the buyer can act on) if it could not be reached.
+  // Returns false if it could not be reached.
   const saveOrder = async () => {
     try {
       await storeCall("order", orderPayload());
       return true;
     } catch (e) {
       console.warn("Order:", e);
-      setCheckoutError(`We couldn't save your order. Please email ${BREVO_SENDER || "us"} with your order number ${orderRef}.`);
       return false;
     }
   };
@@ -183,34 +191,41 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // Before the server is asked to pay the saved order (by card again, or another way), the details
   // as typed now are kept with it: should the answer never arrive after a changed email reached the
   // order, the next try, or the checkout opened again, still finds THIS order by that email.
-  const keepTyped = () => saveCardOrder({ ...saved, customer });
+  const keepTyped = () => saveCardOrder({ ...savedNow.current, customer });
   // markSold intentionally removed — Andy marks sold manually in Admin after verifying payment received
-  const finish = () => { setDone(true); onSuccess?.(); };
+  const finish = () => { over.current = true; setDone(true); onSuccess?.(); };
   // Zelle, Venmo, Cash App. A card order this cart already saved is the order: nothing is saved
   // again. The server closes its card page and only now sends its "order received" emails, once
   // (cart-other: a card order's emails wait until it is paid, api/_lib/cartCheckout.js), with the
   // details as they are on the screen now. If the card payment came through after all, that
   // thank-you shows instead.
-  const confirmPaid = async () => {
-    if (busy.current) return;
-    busy.current = true;
+  const confirmPaid = () => tries.start(async (mine) => {
     setSaving(true); setCheckoutError("");
+    await tries.behind(); // a try the buyer left is still being answered: the order it makes is the one to pay
+    if (mine.left || closed.current || over.current) return;
+    mine.asked = true;
+    const was = savedNow.current;
     try {
-      if (!saved) { if (await saveOrder()) finish(); return; }
+      if (!was) {
+        if (await saveOrder()) finish();
+        else if (!mine.left) setCheckoutError(`We couldn't save your order. Please email ${BREVO_SENDER || "us"} with your order number ${orderRef}.`);
+        return;
+      }
       const out = await storeCall("cart-other", { ...cardOrderBody(keepTyped(), items), customer, method });
+      if (over.current) return; // paid, as the server said meanwhile
       if (out.paid) { paidNow(out); return; }
       dropCardOrder(); finish();
     } catch (e) {
       console.warn("Paying another way:", e);
       if (e.status === 404) {
+        if (mine.left) { forget(); return; }
         startAfresh();
         setCheckoutError(GONE);
-      } else if (e.status === 409 || e.status === 400) setCheckoutError(e.message);
-      else setCheckoutError(`We couldn't record that just now. Your order ${saved.ref} is saved: please try again in a moment, or email ${BREVO_SENDER || "us"} with your order number.`);
-    } finally {
-      busy.current = false; setSaving(false);
+      } else if (mine.left) return; // gone back to choose another way: nothing more to say
+      else if (e.status === 409 || e.status === 400) setCheckoutError(e.message);
+      else setCheckoutError(`We couldn't record that just now. Your order ${was.ref} is saved: please try again in a moment, or email ${BREVO_SENDER || "us"} with your order number.`);
     }
-  };
+  }, () => setSaving(false));
   const handleConfirmZelle   = confirmPaid;
   const handleConfirmVenmo   = confirmPaid;
   const handleConfirmCashApp = confirmPaid;
@@ -218,23 +233,25 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // The card payment is in (or a bank payment made, still clearing: order.processing): the saved
   // order is done with, the thank-you shows, and the Cart page empties those pieces.
   const paidNow = (order) => {
+    over.current = true;
     dropCardOrder();
-    setSaved(null); setPay(null); setPaidView(order); setDone(true);
+    keep(null); setPay(null); setPaidView(order); setDone(true);
     onPaid?.(order.lines.map(l => l.title));
   };
   // The saved order is gone from the shop (cancelled, or handled by hand): forget it and start
   // afresh, the details still filled in. Its coupon is asked about again (Apply): it counted
   // for that order, and may not count for a new one.
-  const startAfresh = () => {
+  const forget = () => {
     dropCardOrder();
-    if (saved?.coupon) setCouponStatus(null);
-    setSaved(null); setPay(null); setRetry(false); setCalm(""); setStep(1);
+    if (savedNow.current?.coupon) setCouponStatus(null);
+    keep(null);
   };
+  const startAfresh = () => { forget(); setPay(null); setCalm(""); setStep(1); };
   // Klarna or a bank payment that Stripe won't open for this order: back to the ways to pay, with
   // the server's line, that way no longer chosen, and no Try Again (it would only be refused
   // again). An order already saved stays saved, so another way pays THAT order, never a second.
   const refuseWay = (line) => {
-    setPay(null); setCalm(""); setRetry(false);
+    setPay(null); setCalm("");
     setRefusedWay(method || ""); setMethod(null); setRefused(line); setStep(2);
   };
 
@@ -252,64 +269,72 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // (cart-again), naming the last payment page Stripe made for it. Card payments off: the server
   // says so and saves nothing. The cart is NOT emptied here, only once the payment is in: paid
   // in the form, the buyer stays right here (cardComplete).
-  const startCard = async () => {
-    if (busy.current) return; // a double tap: the first one is already on its way
-    busy.current = true;
-    setSaving(true); setCheckoutError(""); setCalm(""); setRetry(false);
+  // The buyer can go back to the ways to pay at any moment (leavePayment). Gone back while Stripe.js
+  // loads: nothing was asked of the server. While the server answers: the order it saves is kept all
+  // the same, no form opens, and whichever way is chosen next pays THAT order (tries.behind()).
+  const startCard = () => tries.start(async (mine) => {
+    setSaving(true); setCheckoutError(""); setCalm("");
+    let was = null; // the order already saved for this cart, as this try asks to pay it
     try {
       const ready = await stripeJsReady();
-      if (closed.current) return; // closed while Stripe.js loaded: nothing saved, nothing sent
-      if (!ready) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+      // Gone back, or closed, while Stripe.js loaded: nothing saved, nothing sent.
+      if (mine.left || closed.current || over.current) return;
+      if (!ready) { setCalm(CARD_FORM_DOWN); return; }
+      await tries.behind();
+      if (mine.left || closed.current || over.current) return;
+      mine.asked = true;
+      was = savedNow.current;
       // Again: the details as they are on the screen now go with it, so the order's rows (and the
       // email on Stripe's page) follow a changed address or email; still the same order.
-      const order = saved
+      const order = was
         ? await storeCall("cart-again", { ...cardOrderBody(keepTyped(), items), customer, embedded: true, way: method })
         : await storeCall("cart-card", { ...orderPayload(), embedded: true, way: method });
+      if (over.current) return; // paid, as the server said meanwhile
       if (order.paid) { paidNow(order); return; }
       // Kept BEFORE the form opens, so the next attempt names this page. Kept even if the checkout
       // closed meanwhile, so opening it again pays THIS order, never a second one. With it, the
       // details as typed and the coupon the server took, for coming back to a filled-in checkout.
       const kept = saveCardOrder({
-        ref: order.ref, ids: order.ids, email: saved ? (order.email || saved.email) : customer.email.trim(),
-        lines: order.lines, total: order.total, session: order.session || saved?.session,
-        customer, coupon: saved ? saved.coupon : order.coupon,
+        ref: order.ref, ids: order.ids, email: was ? (order.email || was.email) : customer.email.trim(),
+        lines: order.lines, total: order.total, session: order.session || was?.session,
+        customer, coupon: was ? was.coupon : order.coupon,
       });
       if (closed.current) return; // no card form in a checkout that is gone
-      setSaved(kept);
-      // A coupon the server didn't take (used elsewhere a moment ago) is not shown as applied.
-      if (!kept.coupon && couponStatus === "valid") setCouponStatus(null);
+      keep(kept);
+      // The coupon the server took is the one applied, whatever was typed since (the buyer gone back
+      // meanwhile); one it didn't take (used elsewhere a moment ago) is not shown as applied.
+      if (kept.coupon) { setCouponCode(kept.coupon); setCouponStatus("valid"); }
+      else setCouponStatus(s => s === "valid" ? null : s);
+      if (mine.left) return; // gone back to choose another way: no form opens
       if (order.clientSecret) { setPay(order); return; }
       // Saved, but Stripe won't open Klarna or a bank payment for it (cart-card's `refused`): kept
       // above all the same, so the next try is THIS order (cart-again, cart-other).
       if (order.refused) { refuseWay(order.cardError); return; }
       // Saved, but no card form to open (Stripe failed as the order was saved): the calm word, and
       // Try Again re-opens THAT order (cart-again). Whatever the answer, this tab never leaves.
-      setRetry(true);
       setCalm(order.cardError || CARD_FORM_DOWN);
     } catch (e) {
       console.warn("Card payment:", e);
-      if (saved && e.status === 404) {
+      if (was && e.status === 404) {
         // The shop no longer has that order as it was saved: start afresh.
+        if (mine.left) { forget(); return; }
         startAfresh();
         setCheckoutError(GONE);
-      } else if (e.status === 409 && e.message === CARD_FORM_DOWN) {
+      } else if (mine.left) return; // gone back to choose another way: nothing more to say
+      else if (e.status === 409 && e.message === CARD_FORM_DOWN) {
         // The server can't offer the card form here: nothing was saved or sent.
-        setRetry(true); setCalm(e.message);
+        setCalm(e.message);
       } else if (e.status === 409 && method !== "card") {
         // Klarna or a bank payment, refused for the order already saved (cart-again answers a 409):
         // the same line, back on the ways to pay; nothing was saved again.
         refuseWay(e.message);
       } else if (e.status === 409 || e.status === 400) setCheckoutError(e.message);
-      else if (e.status === 502 || saved) {
+      else if (e.status === 502 || was) {
         // The order is safe; only the card page didn't open.
-        setRetry(true);
         setCalm(e.status === 502 ? e.message : CARD_DIDNT_OPEN);
       } else setCheckoutError(CARD_DIDNT_OPEN); // no order number before paying (Andy, 2026-11-19)
-    } finally {
-      busy.current = false;
-      setSaving(false);
     }
-  };
+  }, () => setSaving(false));
   const handleCard = () => startCard();
   // Paid inside the card form, and the buyer never left fonkiart.com (Andy: "i don't want to be
   // making the user jump to stripe then back , everything should and can happen in fonkiart.com
@@ -317,9 +342,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // paid (cart-paid), exactly as for an order started on Stripe's own page before; paid, the
   // thank-you shows right here and those pieces leave the cart. Not yet, or out of reach: a calm
   // word and Check Again, and the saved order stands (opening the checkout again asks too).
-  const cardComplete = async (page) => {
-    if (busy.current) return; // Check Again tapped twice: once
-    busy.current = true;
+  const cardComplete = (page) => tries.start(async () => { // Check Again tapped twice: once
     setCardCheck("checking"); setCalm(""); setCheckoutError("");
     try {
       const order = await storeCall("cart-paid", { ref: page.ref, session: page.session });
@@ -330,16 +353,29 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     } catch (e) {
       console.warn("Card check:", e);
       setCardCheck("error");
-    } finally {
-      busy.current = false;
     }
-  };
+  });
   // Stripe.js wouldn't open the form: the same calm word; Try Again re-opens this order's form.
-  const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
-  const otherWay = () => { setStep(2); setCalm(""); setRetry(false); };
-  // "← Choose another way to pay" in the card form: back to the ways to pay, not to an empty step.
-  // The order stays saved, so choosing card again re-opens THAT order (cart-again).
-  const leaveCardForm = () => { setPay(null); otherWay(); };
+  const cardFormFailed = () => { setPay(null); setCalm(CARD_FORM_DOWN); };
+  // "Choose another way to pay" (WayBack.jsx): back to the ways to pay, from any way, at any moment
+  // of the payment, also while the form is still opening (Andy, 2026-11-23: "make sure if the user
+  // selects credit card or any other method , the user can go and select another"). An order already
+  // saved stays saved, so whichever way is chosen next pays THAT order (cart-again, cart-other).
+  const leavePayment = () => {
+    tries.leave();
+    setSaving(false); setPay(null); setCalm(""); setCheckoutError("");
+    setStep(2);
+  };
+  // The browser's (or the phone's) own Back, one step at a time (src/lib/backInside.js): the payment,
+  // the ways to pay, the details, then out to the cart. true: the checkout is still open after it.
+  const stepBack = useEffectEvent(() => {
+    if (!done && cardCheck === "checking") return true; // a moment: the payment is being confirmed
+    if (!done && !cardCheck && step === 3) { leavePayment(); return true; }
+    if (!done && !cardCheck && step === 2) { setCheckoutError(""); setStep(1); return true; }
+    onClose();
+    return false;
+  });
+  useEffect(() => holdBack(() => stepBack()), []);
 
   // Opening with a saved card order, the server is asked once what became of it ("cart-order"):
   // paid by now (paid, then the tab closed before coming back): the thank-you, and the cart
@@ -354,7 +390,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     if (order?.state === "processing") { paidNow({ ...order, processing: true }); return; }
     if (order?.state === "open") {
       const kept = readCardOrder();
-      if (kept && kept.ref === order.ref) setSaved(saveCardOrder({ ...kept, email: order.email || kept.email, lines: order.lines, total: order.total }));
+      if (kept && kept.ref === order.ref) keep(saveCardOrder({ ...kept, email: order.email || kept.email, lines: order.lines, total: order.total }));
       return;
     }
     startAfresh();
@@ -497,7 +533,10 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
   // Stripe's ways, on the payment step: its heading, and the word while the form opens.
   const stripeQ = { card: "Pay by Card", klarna: "Pay with Klarna", bank: "Pay by Bank Transfer" }[method];
   const opening = method === "card" ? "Opening the secure card form…" : "Opening the secure payment form…";
-  const back = (to) => <button type="button" className="tap checkout-back" onClick={() => setStep(to)}>← Back</button>;
+  // Step 3, whichever way was chosen: the way back, always on the screen (WayBack.jsx); gone only once
+  // the payment is being confirmed. Twice in the page, one shown (src/index.css, "The way back"): above
+  // the art where the art and the step are one column, else at the top of the step.
+  const wayBack = step === 3 && !cardCheck && <WayBack onBack={leavePayment} />;
   // On a phone the art sits on the left and the step on the right (Andy, 2026-11-22: "i would like
   // the image to the left and the options to the right"), at every step but Stripe's own form: that
   // keeps the phone's whole width, the art above it, as before. Beside the art it would get only
@@ -517,11 +556,14 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
     <div className={fullPage ? "checkout-page-bg checkout-gallery-page" : "modal-bg checkout-gallery-bg"} onClick={fullPage ? undefined : onClose}>
       <div ref={box} className={`checkout checkout-buy checkout-gallery${fullPage ? " checkout-fullpage" : ""}${side ? " checkout-side" : ""}`} onClick={e => e.stopPropagation()}>
         <button className="modal-close checkout-x" aria-label="Close" onClick={onClose}>✕</button>
+        {wayBack}
         {wall}
         <div ref={stepsBox} className={`checkout-steps${stepsH ? " is-measured" : ""}`} style={stepsH ? { "--steps-h": `${stepsH}px` } : undefined}>
           <p className="checkout-eyebrow">Purchase · Step {step} of 3</p>
+          {wayBack}
           {step === 1 && (
             <>
+              {fullPage && <button type="button" className="tap checkout-back" onClick={onClose}>← Back to Cart</button>}
               <h2 className="checkout-q">Where should we send it?</h2>
               <div className="checkout-two">
                 <div className="fld"><label>First Name *</label><input autoComplete="given-name" value={customer.firstName} onChange={e=>cv("firstName",e.target.value)} placeholder="Jane" /></div>
@@ -566,7 +608,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
 
           {step === 2 && (
             <>
-              {back(1)}
+              <button type="button" className="tap checkout-back" onClick={() => { setCheckoutError(""); setStep(1); }}>← Back</button>
               <h2 className="checkout-q">How would you like to pay?</h2>
               {refused && <p className="pay-calm" role="status">{refused}</p>}
               <PayRows rows={rows} value={method} onChoose={(id) => { setMethod(id); if (isStripe(id)) stripeJsReady(); }} />
@@ -577,7 +619,6 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
 
           {step === 3 && (
             <>
-              {!pay && !(isStripe(method) && saving) && back(2)}
               {method === "zelle" && sendVia("Zelle",
                 <><div style={{ fontSize:16, color:"var(--quiet)", marginBottom:5 }}>Send to this {settings.zelleLabel}:</div><div className="zelle-contact">{settings.zelleContact}</div></>,
                 <>1. Open your bank app → Zelle<br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong> to <strong>{settings.zelleContact}</strong><br />3. Memo: write <strong>{memo}</strong> in your Zelle memo/note<br />4. Confirm below — we ship once payment clears ✓</>)}
@@ -589,7 +630,7 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
                 <>1. Open Cash App → Search <strong>{cashAppHandle}</strong><br />2. Send <strong>${Number(amountDue||0).toLocaleString()}</strong><br />3. Note: write <strong>{memo}</strong> in the Cash App note<br />4. Confirm below — we ship once payment clears ✓</>)}
               {isStripe(method) && <h2 className="checkout-q">{stripeQ}</h2>}
               {isStripe(method) && pay && (
-                <CardCheckout pay={pay} artworks={items} art={false} onBack={leaveCardForm} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
+                <CardCheckout pay={pay} artworks={items} art={false} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
               )}
               {method==="zelle"   && <button className="confirm-btn" onClick={handleConfirmZelle}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
               {method==="venmo"   && <button className="confirm-btn" onClick={handleConfirmVenmo}   disabled={saving}>{saving?"Saving…":"✓ I've Sent the Payment"}</button>}
@@ -599,8 +640,8 @@ export default function CheckoutModal({ items, settings, onClose, onSuccess, onP
               {isStripe(method) && !pay && (saving
                 ? <p className="pay-card-wait" role="status">{opening}</p>
                 : <button className="stripe-btn" onClick={handleCard}>Try Again</button>)}
-              {isStripe(method) && !pay && retry && !saving && <button type="button" className="tap pay-other" onClick={otherWay}>Choose Another Way to Pay</button>}
               {checkoutError && <p role="alert" style={{ fontSize:16, color:"#c0392b", marginTop:8, textAlign:"center" }}>{checkoutError}</p>}
+              {wayBack && !(isStripe(method) && !pay && saving) && <WayBack foot onBack={leavePayment} />}
             </>
           )}
         </div>

@@ -211,6 +211,10 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .card-price-ask { font-family:'DM Sans',sans-serif;font-size:16px;font-weight:400;letter-spacing:.06em;opacity:.75; }
 .card-btn { background:var(--sidebar-bg);color:#fff;border:none;padding:12px 0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;width:100%;transition:background .2s;border-radius:4px; }
 .card-btn:hover { background:var(--gold); }
+/* The piece is in the cart: its button goes to the checkout, in the checkout's own gold
+   (src/components/ShopButton.jsx). */
+.card-btn.is-checkout { background:var(--gold); }
+.card-btn.is-checkout:hover { background:#a07a3a; }
 .card-children { position:absolute;top:12px;right:12px;background:#e74c3c;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.3);pointer-events:none; }
 .card-badge { position:absolute;left:12px;font-size:16px;letter-spacing:.12em;text-transform:uppercase;line-height:1.2;padding:4px 10px;z-index:2;pointer-events:none;font-weight:500;border-radius:3px; }
 .card-badge-sale { background:#c0392b;color:#fff; }
@@ -1258,7 +1262,6 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .pay-art-info { flex:1;min-width:0; }
 .pay-art-title { font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:500;line-height:1.25;color:var(--ink);overflow-wrap:anywhere; }
 .pay-art-price { font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;letter-spacing:.02em;color:var(--ink);font-variant-numeric:lining-nums;margin-top:4px; }
-.pay-card-back { display:inline-block;background:none;border:none;padding:0;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.08em;color:var(--gold);min-height:44px;margin-bottom:10px; }
 .pay-card-label { font-size:var(--inv-small);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:2px; }
 .pay-card-ref { font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:none;color:var(--ink);font-variant-numeric:lining-nums;white-space:nowrap; }
 .pay-card-wait { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:21px;color:var(--muted);text-align:center;margin:20px 0 6px; }
@@ -1267,6 +1270,14 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .pay-calm { font-size:var(--inv-text);line-height:1.6;color:var(--ink);background:var(--cream);border:1px solid var(--border);border-left:3px solid var(--gold);padding:14px 16px;margin:0 0 14px; }
 .pay-other { display:block;width:100%;background:none;border:1px solid var(--border);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:16px;letter-spacing:.08em;padding:13px;margin-top:10px;cursor:pointer;transition:border-color .2s; }
 .pay-other:hover { border-color:var(--ink); }
+/* The way back to the ways to pay (src/components/WayBack.jsx; Andy, 2026-11-23: "right now i went hit
+   CC then tried to go back ... there's no way i'm trapped"). While a payment is open it holds at the
+   top of the screen, under the shop's bars on a page, over a white strip the form passes under. */
+.way-back { position:sticky;top:0;z-index:2;background:#fff;padding:8px 0;margin:0 0 16px;border-bottom:1px solid rgba(184,146,63,.4); }
+.checkout-fullpage .way-back, .inv-card-panel .way-back { top:calc(var(--marquee) + var(--topbar)); }
+.way-back-btn { display:inline-flex;align-items:center;max-width:100%;min-height:44px;padding:8px 16px;background:#fff0fb;border:1px solid var(--gold);color:var(--ink);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.3;letter-spacing:.02em;text-align:left;cursor:pointer;transition:background .2s; }
+.way-back-btn:hover { background:#ffe3f8; }
+.way-back-btn:focus-visible { outline:2px solid var(--gold);outline-offset:2px; }
 .pay-return-wait { font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;color:var(--muted);text-align:center;padding:8px 0; }
 .pay-return-title { font-family:'Cormorant Garamond',serif;font-size:27px;font-weight:500;line-height:1.3;color:var(--ink);text-align:center;margin-bottom:10px;text-wrap:balance; }
 .pay-return-text { font-size:var(--inv-text);line-height:1.7;color:var(--muted);text-align:center;margin-bottom:16px; }
@@ -1427,6 +1438,26 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
   .checkout-gallery.checkout-fullpage .checkout-steps.is-measured { top:min(calc(var(--marquee) + var(--topbar) + 16px), calc(100vh - var(--steps-h) - 16px)); }
   .checkout-gallery > .checkout-x { top:16px;right:18px; }
   .checkout-gallery .checkout-q { font-size:34px; }
+}
+/* The way back (above), in the checkout. Beside the art (a computer; a phone, for Zelle, Venmo and
+   Cash App) it is the top of the step. Where the art and the step are one column (a tablet, and a
+   phone with Stripe's own form) it is the top of the whole checkout, above the art, so the phone's
+   first screen shows it; it leaves the ✕ its corner. It is drawn in both places (CheckoutModal.jsx),
+   one shown. A phone holds it on the screen by clipping the page sideways WITHOUT making it a box of
+   its own (overflow clip, as for the art above). */
+.checkout > .way-back { display:none; }
+@media (max-width:899px) {
+  .checkout > .way-back { display:block;margin:0;padding:8px 68px 8px 20px; }
+  .checkout > .way-back + .checkout-wall { padding-top:24px; }
+  .checkout-steps .way-back { display:none; }
+}
+@media (max-width:640px) {
+  .checkout-side > .way-back { display:none; }
+  .checkout-side > .way-back + .checkout-wall { padding-top:58px; }
+  .checkout-side .checkout-steps .way-back { display:block; }
+}
+@media (max-width:900px) {
+  @supports (overflow:clip) { .content:has(.way-back) { overflow-x:clip; } }
 }
 /* The ways to pay, as rows (src/components/PayRows.jsx), on the Cart's checkout (step 2) and the
    invoice page alike. The words first (no emoji), a quiet line under them, the way's own small

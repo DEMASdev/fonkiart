@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useEffectEvent, useRef } from "react";
 import { BREVO_SENDER } from "../lib/supabase";
 import { storeCall } from "../lib/store";
 import { canApprove, paymentOptions, findArtwork, readInvoiceParams, paidCongrats, paidByLabel, BANK_CLEARING } from "../lib/invoiceView";
@@ -12,6 +12,8 @@ import PayRows from "../components/PayRows";
 import { invoiceNumber } from "../lib/invoiceNumber";
 import { stripeJsReady } from "../lib/stripeJs";
 import { CARD_FORM_DOWN } from "../lib/cartOrder";
+import { payTries } from "../lib/payTries";
+import { holdBack } from "../lib/backInside";
 import { payRows, isStripe, serverWays } from "../lib/payWays";
 
 // The shipping address fields that take a whole line of the form.
@@ -52,8 +54,9 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const [calm, setCalm] = useState("");
   const [retry, setRetry] = useState(false);
   const [cardMsg, setCardMsg] = useState("");
-  // Set the moment a card button is tapped, so a double tap (or Check Again, twice) asks once.
-  const cardBusy = useRef(false);
+  // One try to pay at a time, so a double tap (or Check Again, twice) asks once. Another way chosen
+  // while the form is still opening leaves it (src/lib/payTries.js): no form opens over that choice.
+  const [tries] = useState(payTries);
   const lastPage = useRef(null);
   const cardTop = useRef(null);
   const waysTop = useRef(null);
@@ -134,35 +137,37 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   // (409 CARD_FORM_DOWN), the calm word, with Try Again and the other ways to pay above. The card
   // page this tab opened before goes with it (last), so only one page can ever take the money.
   // way: the row tapped, "card", "klarna" or "bank" (the server is told which).
-  const handleCard = async (way = "card") => {
-    if (shopView || cardBusy.current) return;
-    cardBusy.current = true;
-    setPaying(true); setCalm(""); setRetry(false); setCardMsg("");
-    try {
-      if (!(await stripeJsReady())) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
-      const last = lastPage.current || readLast(token);
-      const r = await storeCall("card-checkout", { token, embedded: true, way, ...(last ? { last } : {}) });
-      if (r?.paid) { await paidNow(null); return; }
-      if (r?.processing) { await clearingNow(); return; }
-      if (!r?.clientSecret) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
-      lastPage.current = r.session;
-      keepLast(token, r.session);
-      setCardCheck(null);
-      setPay(r);
-    } catch (e) {
-      console.warn("Card payment:", e);
-      if (e.status === 409 && e.message !== CARD_FORM_DOWN) setCardMsg(e.message);
-      else { setRetry(true); setCalm(e.status === 409 ? CARD_FORM_DOWN : CARD_LATER); }
-    } finally {
-      cardBusy.current = false;
-      setPaying(false);
-    }
+  const handleCard = (way = "card") => {
+    if (shopView) return;
+    tries.start(async (mine) => {
+      setPaying(true); setCalm(""); setRetry(false); setCardMsg("");
+      try {
+        const ready = await stripeJsReady();
+        if (mine.left) return; // another way chosen while Stripe.js loaded: nothing asked
+        if (!ready) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+        await tries.behind(); // one left is still being answered: its page is the one to name (last)
+        if (mine.left) return;
+        mine.asked = true;
+        const last = lastPage.current || readLast(token);
+        const r = await storeCall("card-checkout", { token, embedded: true, way, ...(last ? { last } : {}) });
+        if (r?.paid) { await paidNow(null); return; }
+        if (r?.processing) { await clearingNow(); return; }
+        if (r?.clientSecret) { lastPage.current = r.session; keepLast(token, r.session); }
+        if (mine.left) return; // another way chosen meanwhile: the page is named, no form opens
+        if (!r?.clientSecret) { setRetry(true); setCalm(CARD_FORM_DOWN); return; }
+        setCardCheck(null);
+        setPay(r);
+      } catch (e) {
+        console.warn("Card payment:", e);
+        if (mine.left) return;
+        if (e.status === 409 && e.message !== CARD_FORM_DOWN) setCardMsg(e.message);
+        else { setRetry(true); setCalm(e.status === 409 ? CARD_FORM_DOWN : CARD_LATER); }
+      }
+    }, () => setPaying(false));
   };
   // Paid in the form, and the client never left: the server asks Stripe itself (card-paid). Paid:
   // the paid invoice. Not yet, or out of reach: a calm word and Check Again, asked once a tap.
-  const cardComplete = async (page) => {
-    if (cardBusy.current) return;
-    cardBusy.current = true;
+  const cardComplete = (page) => tries.start(async () => {
     setCardCheck("checking");
     try {
       const r = await storeCall("card-paid", { token, session: page.session });
@@ -172,12 +177,21 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
     } catch (e) {
       console.warn("Card check:", e);
       setCardCheck("error");
-    } finally {
-      cardBusy.current = false;
     }
-  };
+  });
   // Stripe.js wouldn't open the form: the calm word; Try Again asks for a new one.
   const cardFormFailed = () => { setPay(null); setRetry(true); setCalm(CARD_FORM_DOWN); };
+  // "Choose another way to pay" (WayBack.jsx), and the browser's (or the phone's) own Back while the
+  // form is open (src/lib/backInside.js): back to the invoice's ways to pay. Paid in the form and
+  // being confirmed: Back waits; not confirmed yet (Check Again): Back leaves the page, as anywhere.
+  const leaveForm = () => { setPay(null); setCardCheck(null); };
+  const stepBack = useEffectEvent(() => {
+    if (cardCheck === "checking") return true;
+    if (cardCheck) window.history.back(); else leaveForm();
+    return false;
+  });
+  const formOpen = !!pay;
+  useEffect(() => (formOpen ? holdBack(() => stepBack()) : undefined), [formOpen]);
 
   const handleApprove = async () => {
     if (!order || !canApprove({ approved, shopView })) return;
@@ -254,6 +268,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
   const payChoices = payRows({ zelle: !!payZelle, venmo: !!payVenmo, cashApp: !!payCashApp, card: payCard, ways });
   const chosenWay = payChoices.length === 1 ? payChoices[0].id : payChoices.some(w => w.id === payWay) ? payWay : null;
   const chooseWay = (id) => {
+    tries.leave(); setPaying(false); // the form still opening for another way opens no more
     setPayWay(id); setCalm(""); setRetry(false); setCardMsg("");
     if (isStripe(id) && !shopView) stripeJsReady(); // the form opens sooner when tapped
   };
@@ -451,7 +466,7 @@ export default function InvoicePage({ token, shopView = false, embedded = false,
         {pay && (
           <div className="inv-card-panel">
             <CardCheckout pay={pay} artworks={artworks} noun="invoice" totalLabel="Total Due"
-              onBack={() => { setPay(null); setCardCheck(null); }} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
+              onBack={leaveForm} onFail={cardFormFailed} onComplete={cardComplete} check={cardCheck} />
           </div>
         )}
       </>) : shopView ? (

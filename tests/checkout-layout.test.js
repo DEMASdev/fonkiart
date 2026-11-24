@@ -175,7 +175,7 @@ test("the steps column on a computer: it stays in view while the art scrolls; ta
 test("the checkout draws the art once, before the steps; three steps, one question each; the card form without its own pictures", () => {
   const modal = read("src/components/CheckoutModal.jsx");
   const view = modal.slice(modal.lastIndexOf("  return ("));
-  assert.match(view, /<button className="modal-close checkout-x"[^>]*>✕<\/button>\s*\{wall\}\s*<div ref=\{stepsBox\} className=\{`checkout-steps/, "the ✕, the art, then the steps");
+  assert.match(view, /<button className="modal-close checkout-x"[^>]*>✕<\/button>\s*\{wayBack\}\s*\{wall\}\s*<div ref=\{stepsBox\} className=\{`checkout-steps/, "the ✕, the way back (while a payment is open: tests/wayBack.test.js), the art, then the steps");
   assert.match(view, /checkout checkout-buy checkout-gallery/);
   for (const [n, q] of [[1, "Where should we send it?"], [2, "How would you like to pay?"]]) {
     assert.ok(view.includes(`{step === ${n} && (`) && view.includes(`<h2 className="checkout-q">${q}</h2>`), `step ${n}: ${q}`);

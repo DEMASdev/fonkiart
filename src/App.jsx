@@ -29,6 +29,7 @@ import InvoicePage from "./pages/InvoicePage";
 import { readInvoiceParams } from "./lib/invoiceView";
 import CardReturnPage from "./pages/CardReturnPage";
 import { readCardReturn, dropCardOrder, withoutTitles } from "./lib/cartOrder";
+import { firstEntry, newEntry, samePageAgain } from "./lib/backInside";
 import { readAdminLink, withoutAdminLink, askOpenUnfinished } from "./lib/adminLink";
 import ThreadPage from "./pages/ThreadPage";
 import HomePage from "./pages/HomePage";
@@ -101,6 +102,13 @@ export default function App() {
   const [pendingCategory, setPendingCategory] = useState(null);
   const goToCategory = (cat) => { setPendingCategory(cat); setPage("catalog"); };
   const goToPage = (p) => { if (p === "catalog") setPendingCategory(null); setPage(p); };
+  // The Cart page, opened afresh: on the cart itself ("View Cart", also from inside its checkout,
+  // where it did nothing before), or straight on its checkout ("Checkout →" on a piece already in
+  // the cart; Andy, 2026-11-23: "once a item is clicked ( the shop buttom ) , the button of that item
+  // should be checkout !").
+  const [cartView, setCartView] = useState({ n: 0, checkout: false });
+  const openCart = (checkout) => { setCartView(v => ({ n: v.n + 1, checkout })); setPage("cart"); };
+  const goCheckout = () => openCart(true);
   const [data, setData] = useState(null);
   const [artworks, setArtworks] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -238,22 +246,30 @@ export default function App() {
   // site entirely (or does nothing) instead of returning to the prior page.
   // Admin tab switches (Dashboard/Artworks/Leads/.../Settings) are tracked
   // too, so Back steps through admin sections before leaving Admin.
+  // A checkout (or an invoice's card form) open on a page has Back step inside
+  // it first: src/lib/backInside.js. A layout effect, so a page opened with its
+  // checkout on it (goCheckout) has its own entry before the checkout adds its.
   const isFirstRender = useRef(true);
   const fromPopState = useRef(false);
-  useEffect(() => {
+  const shown = useRef({ page, adminTab });
+  useLayoutEffect(() => {
+    shown.current = { page, adminTab };
     if (isFirstRender.current) {
       isFirstRender.current = false;
-      history.replaceState({ page, adminTab }, "", window.location.href);
+      history.replaceState(firstEntry({ page, adminTab }), "", window.location.href);
       return;
     }
     if (fromPopState.current) { fromPopState.current = false; return; }
-    history.pushState({ page, adminTab }, "", window.location.href);
+    history.pushState(newEntry({ page, adminTab }), "", window.location.href);
   }, [page, adminTab]);
 
   useEffect(() => {
     const onPopState = (e) => {
-      fromPopState.current = true;
-      setPage(e.state?.page || "home");
+      if (samePageAgain(e.state)) { history.back(); return; }
+      const to = e.state?.page || "home", tab = e.state?.adminTab || shown.current.adminTab;
+      // Back on the same page (inside its checkout): no page change is coming to skip the entry of.
+      if (to !== shown.current.page || tab !== shown.current.adminTab) fromPopState.current = true;
+      setPage(to);
       if (e.state?.adminTab) setAdminTabState(e.state.adminTab);
     };
     window.addEventListener("popstate", onPopState);
@@ -420,17 +436,17 @@ export default function App() {
         <MarqueeStrip settings={data.settings} />
 
         {page === "home"     && <HomePage setPage={goToPage} data={mergedData} />}
-        {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
-        {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} initialCategory="Art Prints" key="artprints" />}
+        {page === "catalog"  && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} onCheckout={goCheckout} initialCategory={pendingCategory} key={pendingCategory || "all"} />}
+        {page === "artprints" && <CatalogPage data={mergedData} addToCart={addToCart} cart={cart} onCheckout={goCheckout} initialCategory="Art Prints" key="artprints" />}
         {page === "collections" && <CollectionsPage data={mergedData} setPage={goToPage} goToCategory={goToCategory} />}
-        {(page === "cart" || (page === "card-return" && !cardReturn?.session)) && <CartPage cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} onPaid={paidCart} cancelledRef={page === "card-return" ? cardReturn?.ref : undefined} savedFor={<CartRemembered count={cart.length} user={user} saving={cartSaving} />} />}
+        {(page === "cart" || (page === "card-return" && !cardReturn?.session)) && <CartPage key={cartView.n} startCheckout={cartView.checkout} onStarted={() => setCartView(v => ({ ...v, checkout: false }))} cart={cart} removeFromCart={removeFromCart} addToCart={addToCart} items={mergedData.items} settings={mergedData.settings} setPage={goToPage} onPaid={paidCart} cancelledRef={page === "card-return" ? cardReturn?.ref : undefined} savedFor={<CartRemembered count={cart.length} user={user} saving={cartSaving} />} />}
         {page === "card-return" && cardReturn?.session && <CardReturnPage orderRef={cardReturn.ref} session={cardReturn.session} artworks={mergedData.items} onPaid={paidCart} setPage={goToPage} />}
         {page === "special"  && <SpecialOrdersPage setPage={goToPage} />}
         {page === "auctions" && <AuctionsPage />}
         {page === "partners" && <PartnersPage setPage={goToPage} />}
         {page === "contact"  && <ContactPage data={mergedData} />}
-        {page === "new"      && <NewCollectionsPage data={mergedData} addToCart={addToCart} cart={cart} />}
-        {page === "specials" && <SpecialsPage data={mergedData} addToCart={addToCart} cart={cart} />}
+        {page === "new"      && <NewCollectionsPage data={mergedData} addToCart={addToCart} cart={cart} onCheckout={goCheckout} />}
+        {page === "specials" && <SpecialsPage data={mergedData} addToCart={addToCart} cart={cart} onCheckout={goCheckout} />}
         {page === "about"    && <AboutPage />}
         {page === "archive"  && <SoldPage data={mergedData} />}
         {page === "children" && <ChildrenPage setPage={goToPage} />}
@@ -438,7 +454,7 @@ export default function App() {
         {page === "invoice" && invoiceToken && <InvoicePage token={invoiceToken} shopView={invoiceShopView} embedded artworks={mergedData.items} />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
-        <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => setPage("cart")} />
+        <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => openCart(false)} />
         <MobileBottomNav page={page} setPage={goToPage} cartCount={cart.length} onCart={() => setCartOpen(true)} onAccount={goAccount} />
 
         {deepModal && !deepPriceInquiry && (
@@ -446,6 +462,8 @@ export default function App() {
             item={deepModal}
             sold={!!deepModal.isSold}
             onClose={() => setDeepModal(null)}
+            inCart={cart.some(i => i.id === deepModal.id)}
+            onCheckout={() => { setDeepModal(null); setCartOpen(false); goCheckout(); }}
             onBuy={deepModal.isSold ? undefined : (s) => {
               setDeepModal(null);
               s.price || s.salePrice ? addToCart(s) : setDeepPriceInquiry(s);

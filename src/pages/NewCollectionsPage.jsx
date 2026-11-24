@@ -1,12 +1,14 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
 import PriceInquiryModal from "../components/PriceInquiryModal";
+import ShopButton from "../components/ShopButton";
 import Pic from "../components/Pic";
 
-export default function NewCollectionsPage({ data, addToCart, cart }) {
+export default function NewCollectionsPage({ data, addToCart, cart, onCheckout }) {
   const [selected, setSelected] = useState(null);
   const [priceInquiry, setPriceInquiry] = useState(null);
   const items = data.items.filter(i => i.isNew);
+  const inCart = (item) => !!cart?.find(i => i.id === item.id);
   return (
     <div>
       <div className="page-hero">
@@ -34,17 +36,14 @@ export default function NewCollectionsPage({ data, addToCart, cart }) {
                         </div>
                       : <div className="card-price">{item.price ? `$${Number(item.price).toLocaleString()}` : <span className="card-price-ask">Price on request</span>}</div>
                     }
-                    {item.isSold
-                      ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>
-                      : <button className="card-btn" onClick={e=>{e.stopPropagation(); item.price||item.salePrice ? addToCart(item) : setPriceInquiry(item);}}>{item.price||item.salePrice ? (cart?.find(i=>i.id===item.id) ? "✓ Added" : "Shop →") : "Inquire"}</button>
-                    }
+                    <ShopButton item={item} inCart={inCart(item)} onAdd={addToCart} onAsk={setPriceInquiry} onCheckout={onCheckout} />
                   </div>
                 </div>
               ))}
             </div>
         }
       </div>
-      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? addToCart(s) : setPriceInquiry(s); }} />}
+      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} inCart={inCart(selected)} onCheckout={onCheckout} onBuy={selected.isSold ? undefined : s => { setSelected(null); s.price||s.salePrice ? addToCart(s) : setPriceInquiry(s); }} />}
       {priceInquiry && <PriceInquiryModal item={priceInquiry} onClose={() => setPriceInquiry(null)} />}
     </div>
   );

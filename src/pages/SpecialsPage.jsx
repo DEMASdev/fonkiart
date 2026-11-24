@@ -1,10 +1,12 @@
 import { useState } from "react";
 import ArtworkModal from "../components/ArtworkModal";
+import ShopButton from "../components/ShopButton";
 import Pic from "../components/Pic";
 
-export default function SpecialsPage({ data, addToCart, cart }) {
+export default function SpecialsPage({ data, addToCart, cart, onCheckout }) {
   const [selected, setSelected] = useState(null);
   const items = data.items.filter(i => i.salePrice);
+  const inCart = (item) => !!cart?.find(i => i.id === item.id);
   return (
     <div>
       <div className="page-hero">
@@ -30,17 +32,14 @@ export default function SpecialsPage({ data, addToCart, cart }) {
                       <div className="card-price" style={{color:"var(--gold)"}}>${Number(item.salePrice).toLocaleString()}</div>
                       {item.price && <div className="card-price-was">${Number(item.price).toLocaleString()}</div>}
                     </div>
-                    {item.isSold
-                      ? <button className="card-btn" disabled style={{opacity:.45,cursor:"default"}}>Sold Out</button>
-                      : <button className="card-btn" onClick={e=>{e.stopPropagation();addToCart(item);}}>{cart?.find(i=>i.id===item.id) ? "✓ Added" : "Shop →"}</button>
-                    }
+                    <ShopButton item={item} inCart={inCart(item)} onAdd={addToCart} onCheckout={onCheckout} />
                   </div>
                 </div>
               ))}
             </div>
         }
       </div>
-      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} onBuy={selected.isSold ? undefined : s => { setSelected(null); addToCart(s); }} />}
+      {selected && <ArtworkModal item={selected} onClose={() => setSelected(null)} sold={!!selected.isSold} inCart={inCart(selected)} onCheckout={onCheckout} onBuy={selected.isSold ? undefined : s => { setSelected(null); addToCart(s); }} />}
     </div>
   );
 }

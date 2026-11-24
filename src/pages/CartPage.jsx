@@ -14,8 +14,12 @@ import Pic from "../components/Pic";
 // another way. Paid after all: the thank-you. Closed by the shop, or unknown to it: forgotten,
 // so Checkout starts afresh.
 // savedFor: the line saying whose email this cart is saved with (App.jsx, CartRemembered), under the title.
-export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage, onPaid, cancelledRef, savedFor }) {
-  const [checkout, setCheckout] = useState(false);
+// startCheckout: "Checkout →" was tapped on a piece in the shop (App.jsx goCheckout): the page opens
+// on the checkout, once; onStarted says it has.
+export default function CartPage({ cart, removeFromCart, addToCart, items, settings, setPage, onPaid, cancelledRef, savedFor, startCheckout, onStarted }) {
+  const [checkout, setCheckout] = useState(() => !!startCheckout && cart.length > 0);
+  const started = useEffectEvent(() => { if (startCheckout) onStarted?.(); });
+  useEffect(() => { started(); }, []);
   // The items of the order just placed. The cart itself is emptied the moment the order is
   // saved, so closing the tab on the thank-you screen leaves no paid cart behind; that screen
   // names the order from this copy.
@@ -159,6 +163,8 @@ export default function CartPage({ cart, removeFromCart, addToCart, items, setti
           item={selected}
           onClose={() => setSelected(null)}
           sold={!!selected.isSold}
+          inCart={cart.some(i => i.id === selected.id)}
+          onCheckout={() => { setSelected(null); setCheckout(true); }}
           onBuy={selected.isSold ? undefined : s => { setSelected(null); addToCart(s); }}
         />
       )}
