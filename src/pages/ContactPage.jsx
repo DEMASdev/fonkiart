@@ -13,10 +13,15 @@ export default function ContactPage({ data }) {
     if (!form.name || !form.email || !form.message) { setFormErr("Please fill in all fields."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { setFormErr("Please enter a valid email address."); return; }
     setLoading(true);
-    try { await storeCall("request", { kind: "contact", name: form.name, email: form.email, message: form.message }); }
-    catch (e) { console.warn("Contact:", e); }
+    // "Message sent!" only once it was. If not, what they wrote stays in the form.
+    try {
+      await storeCall("request", { kind: "contact", name: form.name, email: form.email, message: form.message });
+      setSent(true);
+    } catch (e) {
+      console.warn("Contact:", e?.message || e);
+      setFormErr("That didn't go through. Please try again.");
+    }
     setLoading(false);
-    setSent(true);
   };
 
   return (

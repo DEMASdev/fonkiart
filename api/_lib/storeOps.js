@@ -130,10 +130,11 @@ export async function opRequest(db, body, mail) {
     const message = text(body.message, 5000, "message", { required: true });
     const { error } = await db.from("Requests").insert([{ name, email, message, status: "new" }]);
     if (error) console.warn("store contact insert:", error.message);
-    await Promise.allSettled([
-      mail.send({ to: mail.sender, subject: "Contact Form Request", htmlContent: T.contactStore({ name, email, message }), replyTo: email }),
-      mail.send({ to: email, subject: "We received your message — Fonkiart", htmlContent: T.contactBuyer({ name, message, sender: mail.sender }) }),
-    ]);
+    const [told] = await Promise.allSettled([mail.send({ to: mail.sender, subject: "Contact Form Request", htmlContent: T.contactStore({ name, email, message }), replyTo: email })]);
+    if (told.status === "rejected") console.warn("store contact email:", told.reason?.message || told.reason);
+    // Neither kept nor emailed to the shop: it reached nobody, so the page must not say it was sent.
+    if (error && told.status === "rejected") throw new Error("a contact message reached nobody");
+    await Promise.allSettled([mail.send({ to: email, subject: "We received your message — Fonkiart", htmlContent: T.contactBuyer({ name, message, sender: mail.sender }) })]);
     return { ok: true };
   }
   if (body.kind === "inquiry") {
