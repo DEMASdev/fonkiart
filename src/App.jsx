@@ -5,6 +5,7 @@ import { supabase } from "./lib/supabase";
 import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
 import { storeCall } from "./lib/store";
 import { useCartSaving } from "./lib/useCartSaving";
+import { useSavedCart } from "./lib/useSavedCart";
 import { adminDb } from "./lib/adminDb";
 import { loadData, saveData } from "./utils/helpers";
 import { NAV_ITEMS, DEFAULT_CATEGORIES, DEFAULT_STATE } from "./constants";
@@ -79,6 +80,8 @@ export default function App() {
     return m ? { admin: m[1] === "admin-reset", token: m[2] } : null;
   });
   const [loginNotice, setLoginNotice] = useState(null);
+  // "Sign in and your cart is saved too." (SignInLine): the sign-in window, with that email in it.
+  const signInAs = (email) => { setLoginNotice({ email, text: "" }); setLoginModal(true); };
   // The link in our answers (?thread=<token>) opens the conversation INSIDE the full
   // site, with the menu, top bar and footer (Andy, 2026-11-13: "should go to the full
   // site not a chat site").
@@ -227,6 +230,8 @@ export default function App() {
   // Not the conversation or the invoice: they only exist while their link is in the address bar.
   useEffect(() => { if (!LINK_PAGES.has(page)) localStorage.setItem("fonkiart-page", page); }, [page]);
   useEffect(() => { localStorage.setItem("fonkiart-cart", JSON.stringify(cart)); }, [cart]);
+  // After the line above: it counts on the cart being kept here first.
+  useSavedCart({ cart, setCart, user, artworks, saving: cartSaving });
   useEffect(() => {
     if (collectorsClient) localStorage.setItem("fonkiart-collectors-client", JSON.stringify(collectorsClient));
     else localStorage.removeItem("fonkiart-collectors-client");
@@ -420,9 +425,9 @@ export default function App() {
           </div>
         </div>
 
-        {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} saving={cartSaving} />}
+        {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); sessionStorage.setItem("fonkiart-welcome-seen","1"); }} discount={mergedData.settings.couponDiscount ?? 15} artworks={mergedData.items} saving={cartSaving} onSignIn={user ? undefined : signInAs} />}
         {authModal && <AuthModal user={user} onClose={() => setAuthModal(false)} artworks={mergedData.items} />}
-        <CartMemory cart={cart} user={user} settings={mergedData.settings} quiet={LINK_PAGES.has(page)} saving={cartSaving} />
+        <CartMemory cart={cart} user={user} settings={mergedData.settings} quiet={LINK_PAGES.has(page)} saving={cartSaving} onSignIn={user ? undefined : signInAs} />
         {trackModal && <TrackOrderModal onClose={() => setTrackModal(false)} />}
         {resetLink?.admin && <NewPasswordModal title="New Admin Password" subtitle="Choose the password you'll use to sign in to the admin."
           submitLabel="Save and open the admin →" onSubmit={(pw) => setAdminPassword(resetLink.token, pw)} onClose={() => setResetLink(null)}

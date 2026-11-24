@@ -45,11 +45,18 @@ export default function LeadsTab({ discount = 15 }) {
     const email = newEmail.trim().toLowerCase();
     if (!email || !email.includes("@")) { setCreateMsg({ type:"err", text:"Please enter a valid email." }); return; }
     setCreateMsg({ type:"loading", text:"Checking…" });
-    const { data: existing } = await supabase.from("Leads").select("coupon_code").eq("email", email).maybeSingle();
-    if (existing) { setCreateMsg({ type:"err", text:`This email already has coupon ${existing.coupon_code}.` }); return; }
+    const { data, error: readErr } = await supabase.from("Leads").select("id,coupon_code").eq("email", email);
+    if (readErr) { setCreateMsg({ type:"err", text:readErr.message }); return; }
+    const rows = data || [];
+    const owned = rows.find(l => l.coupon_code);
+    if (owned) { setCreateMsg({ type:"err", text:`This email already has coupon ${owned.coupon_code}.` }); return; }
     const code = generateCouponCode();
     setCreateMsg({ type:"loading", text:"Creating…" });
-    const { error } = await supabase.from("Leads").insert([{ email, source:"manual", coupon_code:code, coupon_used:false }]);
+    // On the list with no code yet (a cart saved while signed in makes such a row): its own row gets
+    // one (Andy, 2026-11-23, "all 8"; it answered "already has coupon null").
+    const { error } = rows.length
+      ? await supabase.from("Leads").update({ coupon_code:code, coupon_used:false }).eq("id", rows[0].id)
+      : await supabase.from("Leads").insert([{ email, source:"manual", coupon_code:code, coupon_used:false }]);
     if (error) { setCreateMsg({ type:"err", text:error.message }); return; }
     if (couponEmailEnabled) {
       try {

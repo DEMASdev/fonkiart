@@ -1,5 +1,6 @@
-/* The 5-minute box (src/components/CartEmailBox.jsx) and the line on the Cart page that says whose
-   email the cart is saved with (src/components/CartRemembered.jsx). Andy's rules hold here too:
+/* The 5-minute box (src/components/CartEmailBox.jsx), the line on the Cart page that says who the
+   cart is saved for (src/components/CartRemembered.jsx), and "Sign in and your cart is saved too."
+   in the box and the welcome window (src/components/SignInLine.jsx). Andy's rules hold here too:
    nothing under 16px, no cream or sand, no green, and the art is never cut (object-fit: contain on
    white). The buttons are ink: white on gold is too faint to read. Plum-grey #5b4a5c for the
    quieter words (8:1 on white), the deep rose #9c3a76 for the % (6:1). */
@@ -8,7 +9,7 @@ html:has(.cart-box-bg) { overflow:hidden; }
 .cart-box { position:relative;box-sizing:border-box;background:#fff;width:100%;max-width:460px;margin:auto;border-top:3px solid var(--gold);box-shadow:0 18px 50px rgba(0,0,0,.28);padding:26px 28px 18px;font-family:'DM Sans',sans-serif;color:var(--ink);outline:none;animation:cart-box-up .28s cubic-bezier(.25,.46,.45,.94); }
 .cart-box-x { position:absolute;top:8px;right:8px;width:44px;height:44px;padding:0;border-radius:50%;background:#fff;border:1px solid #d6d6d6;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s,color .2s,border-color .2s; }
 .cart-box-x:hover { background:var(--ink);color:#fff;border-color:var(--ink); }
-.cart-box-x:focus-visible, .cart-box-send:focus-visible, .cart-box-later:focus-visible, .cart-box-copy:focus-visible, .cart-kept-not:focus-visible { outline:3px solid rgba(184,146,63,.6);outline-offset:2px; }
+.cart-box-x:focus-visible, .cart-box-send:focus-visible, .cart-box-later:focus-visible, .cart-box-copy:focus-visible, .cart-kept-not:focus-visible, .cart-signin-go:focus-visible { outline:3px solid rgba(184,146,63,.6);outline-offset:2px; }
 .cart-box-title { font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:400;line-height:1.2;margin:0 40px 16px 0;color:var(--ink); }
 .cart-box-pct { color:#9c3a76;font-weight:600;font-variant-numeric:lining-nums;white-space:nowrap; }
 .cart-box-pieces { display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px; }
@@ -39,9 +40,18 @@ html:has(.cart-box-bg) { overflow:hidden; }
   .cart-box-code-text { font-size:23px; }
 }
 
-/* The Cart page: "Your pieces are saved for you@example.com. Not you?" */
+/* The Cart page: "Your pieces are saved for you@example.com. Not you?", or, signed in, "Your pieces
+   are saved with your account." */
 .cart-kept { max-width:760px;box-sizing:border-box;display:flex;align-items:center;flex-wrap:wrap;gap:0 12px;background:#fff;border-left:3px solid var(--gold);padding:6px 16px;margin:-12px 0 24px; }
 .cart-kept-text { font-size:16px;line-height:1.6;color:#5b4a5c;margin:0;overflow-wrap:anywhere; }
+.cart-kept-alone { padding:9px 0; }
 .cart-kept-email { color:var(--ink);font-weight:500; }
 .cart-kept-not { background:none;border:none;cursor:pointer;min-height:44px;padding:0 4px;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);text-decoration:underline;text-underline-offset:3px; }
 .cart-kept-not:hover { color:#5b4a5c; }
+
+/* "Sign in and your cart is saved too." [Sign in] */
+.cart-signin { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;background:#fff;border-left:3px solid var(--gold);padding:4px 0 4px 14px;margin:0 0 14px; }
+.welcome-body .cart-signin { margin:14px 0 0; }
+.cart-signin .cart-signin-text { font-size:16px;line-height:1.5;color:#5b4a5c;margin:0; }
+.cart-signin-go { min-height:44px;padding:0 20px;background:#fff;border:1px solid var(--ink);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:16px;color:var(--ink);transition:background .2s,color .2s; }
+.cart-signin-go:hover { background:var(--ink);color:#fff; }

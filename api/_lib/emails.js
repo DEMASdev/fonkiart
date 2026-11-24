@@ -3,6 +3,7 @@ import { escapeHtml as e } from "./brevo.js";
 import { paidWords } from "./stripe.js";
 import { unfinishedLink } from "../../src/lib/adminLink.js";
 import { codePx } from "../../src/lib/couponCode.js";
+import { MAX_ROWS } from "./reminderRows.js";
 
 // Every Fonkiart email, built on the server so a visitor can't choose the
 // recipient, subject or markup. Everything a visitor typed is escaped.
@@ -15,7 +16,7 @@ import { codePx } from "../../src/lib/couponCode.js";
 //    "shows the one i removed but names the one i did keep in the cart !! BIG BIG BIG mistake !!!");
 //  - an email about no piece (password reset, welcome coupon, contact form...) gets a random one.
 //  - the coupon to a buyer who didn't finish paying shows their pieces BIG and whole (piecesSlot's big), and
-//    the daily reminder's "Didn't finish paying" a small whole picture by each piece (thumbSlot).
+//    the daily reminder's "Didn't finish paying" and "Left in the cart" a small whole picture by each piece.
 
 const money = (n) => Number(n || 0).toLocaleString("en-US");
 const firstWord = (s) => String(s || "").trim().split(/\s+/)[0] || "";
@@ -450,7 +451,6 @@ export function inboundUnmatched({ from, subject, text }) {
 // The daily "waiting for you" reminder (reminders.js). Only sent when the list isn't empty.
 const waited = (d) => d === 0 ? "came in today" : d === 1 ? "1 day ago" : `${d} days ago`;
 const clip = (s, n) => { const t = String(s || "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
-const MAX_ROWS = 15;
 const more = (n) => n > MAX_ROWS ? `<p style="margin:6px 0 0;font-size:16px;color:${C.muted};">…and ${n - MAX_ROWS} more in the admin.</p>` : "";
 // A thin gold line BETWEEN rows, none under the last one.
 const row = (html, i) => `<div style="${i ? `margin:14px 0 0;padding:14px 0 0;border-top:1px solid ${C.line};` : "margin:0;"}">${html}</div>`;
@@ -463,8 +463,9 @@ const note = (html) => `<p style="margin:0;font-size:16px;letter-spacing:.06em;c
 const SHOP_TZ = "America/New_York"; // the shop: Isla Morada, Florida Keys
 // "Nov 20, 10:05 AM", in the shop's own time.
 const whenOf = (iso) => { const t = Date.parse(iso || ""); return Number.isFinite(t) ? new Date(t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: SHOP_TZ }) : ""; };
-const pieceLine = (pc) => `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 10px;"><tr>${thumbSlot(pc.title)}`
-  + `<td valign="middle" style="font-family:${SANS};font-size:17px;line-height:1.5;color:${C.ink};">${e(pc.title || "—")}${pc.amount ? ` — $${money(pc.amount)}` : ""}</td></tr></table>`;
+const pieceRow = (thumb, title, price) => `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 10px;"><tr>${thumb}`
+  + `<td valign="middle" style="font-family:${SANS};font-size:17px;line-height:1.5;color:${C.ink};">${e(title || "—")}${price ? ` — $${money(price)}` : ""}</td></tr></table>`;
+const pieceLine = (pc) => pieceRow(thumbSlot(pc.title), pc.title, pc.amount);
 const unfinishedRow = (u, i) => row(
   `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(u.name || "—")}</strong></p>`
   + `<p style="margin:0 0 12px;font-size:16px;">${[u.email ? link(`mailto:${u.email}`, e(u.email)) : "", u.phone ? e(u.phone) : ""].filter(Boolean).join(" · ")}</p>`
@@ -473,11 +474,26 @@ const unfinishedRow = (u, i) => row(
   + (whenOf(u.started) ? note(`Started paying ${whenOf(u.started)}`) : "")
   + `<p style="margin:8px 0 0;font-size:16px;">${link(unfinishedLink(SITE), "Open in Admin → Orders →")}</p>`, i);
 
+// "Left in the cart" (Andy, 2026-11-23, "all 8": nobody saw who left art in their cart), drawn like the
+// part above: who, each piece with its small whole picture and the shop's price today, the total, and
+// how long ago. cartMemory.js cartsLeft gives each piece's own id and picture, so it is drawn as it
+// is, not looked up by its title. name: shown when the shop knows it.
+const agoWords = (hours) => { const days = Math.floor(hours / 24); return days >= 1 ? `${days} ${days === 1 ? "day" : "days"} ago` : `${hours} ${hours === 1 ? "hour" : "hours"} ago`; };
+const cartPiece = (pc) => pieceRow(pc.image ? artThumb(pc) : "", pc.title, pc.price);
+const cartRow = (c, i) => row(
+  (c.name ? `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(c.name)}</strong></p>` : "")
+  + `<p style="margin:0 0 12px;font-size:16px;">${link(`mailto:${c.email}`, e(c.email))}</p>`
+  + c.pieces.map(cartPiece).join("")
+  + (c.pieces.length > 1 && c.total ? `<p style="margin:0 0 6px;font-size:17px;"><strong>Total:</strong> $${money(c.total)}</p>` : "")
+  + (Number.isFinite(c.hours) ? note(`Left in the cart ${agoWords(c.hours)}`) : "")
+  + `<p style="margin:8px 0 0;font-size:16px;">${link(unfinishedLink(SITE), "Open in Admin → Orders →")}</p>`, i);
+
 // Its pictures: the pieces of the orders it lists and of the price inquiries it lists, each
 // once. When it lists none (only contact messages), a random piece, as in every email about none.
-// A checkout that wasn't finished shows its own pieces by its lines (thumbSlot), so they are not
-// in the top row too; with only those, the top row stays empty, never a random piece.
-export function reminderStore({ requests, orders, unfinished = [] }) {
+// A checkout that wasn't finished, and a cart left behind, show their own pieces by their lines
+// (thumbSlot, artThumb), so they are not in the top row too; with only those, the top row stays
+// empty, never a random piece.
+export function reminderStore({ requests, orders, unfinished = [], carts = [] }) {
   const named = [...orders.slice(0, MAX_ROWS).map(o => o.title), ...requests.slice(0, MAX_ROWS).map(r => inquiryTitle(r.message))].filter(Boolean);
   const reqRows = requests.slice(0, MAX_ROWS).map((r, i) => row(
     `<p style="margin:0 0 4px;font-size:17px;"><strong>${e(r.name || "—")}</strong>${r.email ? ` · ${link(`mailto:${r.email}`, e(r.email))}` : ""}</p>`
@@ -492,7 +508,8 @@ export function reminderStore({ requests, orders, unfinished = [] }) {
     + (requests.length ? panel(`Messages to answer (${requests.length})`, reqRows + more(requests.length)) : "")
     + (orders.length ? panel(`Orders to send (${orders.length})`, ordRows + more(orders.length)) : "")
     + (unfinished.length ? panel(`Didn't finish paying (${unfinished.length})`, unfinished.slice(0, MAX_ROWS).map(unfinishedRow).join("") + more(unfinished.length)) : "")
+    + (carts.length ? panel(`Left in the cart (${carts.length})`, carts.slice(0, MAX_ROWS).map(cartRow).join("") + more(carts.length)) : "")
     + button(SITE, "Open the admin")
     + small("Answer messages under Requests and update orders under Orders. This email comes once a day, and only when something is waiting.")
-    + footnote, named.length ? named : unfinished.length ? [] : undefined);
+    + footnote, named.length ? named : unfinished.length || carts.length ? [] : undefined);
 }

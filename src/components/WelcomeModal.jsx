@@ -3,10 +3,13 @@ import { storeCall } from "../lib/store";
 import { remember } from "../lib/cartMemory";
 import { ownSizes, sizesWords } from "../lib/couponSize";
 import Pic from "./Pic";
+import SignInLine from "./SignInLine";
 
 // saving: whether cart saving is on (App.jsx). Only then does the small print say the cart is
-// remembered, and only then is the email told so (src/lib/cartMemory.js remember).
-export default function WelcomeModal({ onClose, discount = 15, artworks = [], saving = false }) {
+// remembered, and only then is the email told so (src/lib/cartMemory.js remember). An email that was
+// on the list already has no pass, so its cart is saved only once they sign in: SignInLine says so
+// (onSignIn(email): opens the sign-in window; none for someone signed in).
+export default function WelcomeModal({ onClose, discount = 15, artworks = [], saving = false, onSignIn }) {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,7 +25,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
     setLoading(true);
     try {
       const r = await storeCall("welcome", { email });
-      remember(email, { told: saving }); // the cart is saved with it when the small print said so (src/lib/cartMemory.js)
+      remember(email, { told: saving, pass: r.pass }); // the cart is saved with it when the small print said so, and it was new (src/lib/cartMemory.js)
       setGeneratedCode(r.code);
       setReturning(!!r.returning);
       setAlreadyUsed(!!r.used);
@@ -95,6 +98,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
                     <button className="btn-p" style={{ width:"100%", background:"var(--gold)", padding:"14px", fontSize:16 }} onClick={onClose}>Browse the Collection</button>
                   </>
                 )}
+                {saving && <SignInLine email={email} onSignIn={onSignIn && ((v) => { onClose(); onSignIn(v); })} />}
               </>
             )}
           </div>

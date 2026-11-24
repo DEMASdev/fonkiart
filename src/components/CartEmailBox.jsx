@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { storeCall } from "../lib/store";
-import { remember } from "../lib/cartMemory";
+import { remember, toldEmail } from "../lib/cartMemory";
 import Pic from "./Pic";
+import SignInLine from "./SignInLine";
 import "../cartBox.css";
 
 // The 5-minute box (Andy, 2026-11-22: "ask the customer ... after X amount of time for a fabulous
@@ -10,16 +11,18 @@ import "../cartBox.css";
 // same email as the welcome window (the store action "welcome"), whose email also carries "Verify
 // my email". The email is remembered AT ONCE (src/lib/cartMemory.js). It says plainly that the code
 // is sent, and, only while cart saving is on (saving: the store action "cart-saving"), that the
-// pieces are remembered with the email; only then is the cart saved with it. Closed with the X,
-// "No thanks", Escape or a tap outside it. The pieces are shown whole.
+// pieces are remembered with the email; only then is the cart saved with it. An email that was on
+// the list already is answered with no pass, so its cart is saved only once they sign in, and that
+// is what it says then (SignInLine, onSignIn). Closed with the X, "No thanks", Escape or a tap
+// outside it. The pieces are shown whole.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SHOWN = 4; // pieces shown; any more are counted
 
-export default function CartEmailBox({ cart, percent, saving, onClose }) {
+export default function CartEmailBox({ cart, percent, saving, onSignIn, onClose }) {
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(null); // { code, returning, used }
+  const [done, setDone] = useState(null); // { code, returning, used, email, kept: its cart is saved with it }
   const box = useRef(null);
 
   useEffect(() => { box.current?.focus(); }, []);
@@ -37,8 +40,8 @@ export default function CartEmailBox({ cart, percent, saving, onClose }) {
     setSending(true);
     try {
       const r = await storeCall("welcome", { email: v });
-      remember(v, { told: saving }); // told: the words above said the pieces are remembered
-      setDone({ code: r.code, returning: !!r.returning, used: !!r.used });
+      remember(v, { told: saving, pass: r.pass }); // told: the words above said the pieces are remembered
+      setDone({ code: r.code, returning: !!r.returning, used: !!r.used, email: v, kept: toldEmail() === v });
     } catch {
       setErr("That didn't go through. Please try again.");
     }
@@ -78,15 +81,15 @@ export default function CartEmailBox({ cart, percent, saving, onClose }) {
             <button type="submit" className="cart-box-send" disabled={sending}>{sending ? "Sending…" : "Send my code →"}</button>
             <button type="button" className="cart-box-later" onClick={onClose}>No thanks</button>
           </form>
-        ) : <BoxSent done={done} saving={saving} onClose={onClose} />}
+        ) : <BoxSent done={done} saving={saving} onSignIn={onSignIn} onClose={onClose} />}
       </div>
     </div>
   );
 }
 
 // After sending: the code (or that it was used), "Verify my email" for someone new, and, only
-// while cart saving is on, that the pieces are saved with the email.
-export function BoxSent({ done, saving, onClose }) {
+// while cart saving is on, that the pieces are saved with the email, or how they would be.
+export function BoxSent({ done, saving, onSignIn, onClose }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard?.writeText(done.code)
@@ -107,7 +110,8 @@ export function BoxSent({ done, saving, onClose }) {
           {!done.returning && <p className="cart-box-text">We sent it to your email, with a &ldquo;Verify my email&rdquo; button that signs you in. No password needed.</p>}
         </>
       )}
-      {saving && <p className="cart-box-text">Your pieces are saved with your email.</p>}
+      {saving && done.kept && <p className="cart-box-text">Your pieces are saved with your email.</p>}
+      {saving && !done.kept && <SignInLine email={done.email} onSignIn={onSignIn && ((v) => { onClose(); onSignIn(v); })} />}
       <button type="button" className="cart-box-send" onClick={onClose}>Keep shopping</button>
     </div>
   );

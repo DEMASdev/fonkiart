@@ -14,7 +14,8 @@ import { SHIP_LIMITS, SHIP_REQUIRED, SHIP_WORDS } from "./shipAddress.js";
 import { opCartCard, opCartPaid, opCartAgain, opCartOrder, opCartOther, isCartPage, cartStripeEvent, formKey, CARD_NOTE } from "./cartCheckout.js";
 import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } from "./cartEmails.js";
 import { buyerSignInLink } from "./verifyLink.js";
-import { opCartSaving, opRememberCart } from "./cartMemory.js";
+import { opCartSaving, opMyCart, opRememberCart } from "./cartMemory.js";
+import { makePass } from "./cartPass.js";
 import { appliedWords, couponPrices, ownSizes, sizesOf, sizeWords } from "../../src/lib/couponSize.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
@@ -73,9 +74,10 @@ async function findCoupon(db, code) {
 // The one coupon an email has (Leads coupon_code): its own code when it has one (used or not),
 // else a new code saved on its Leads row, the row made when there is none. source: where a new
 // row came from. The welcome popup and the coupon after an unfinished checkout (Admin -> Orders,
-// unfinishedCoupon.js) both get theirs here. email: already lower case. size: what its row says the
-// code gives (Leads.coupon_size), null for the shop's %. Every column is read ("*"), never that one
-// by name: it may not be there yet (db/2026-11-23-coupon-size.sql).
+// unfinishedCoupon.js) both get theirs here. email: already lower case. fresh: nothing was on the
+// list for that email before this very call (a new row, not only a new code). size: what its row
+// says the code gives (Leads.coupon_size), null for the shop's %. Every column is read ("*"), never
+// that one by name: it may not be there yet (db/2026-11-23-coupon-size.sql).
 export async function leadCoupon(db, email, source) {
   const { data: rows, error } = await db.from("Leads").select("*").eq("email", email).limit(1);
   if (error) throw error;
@@ -87,12 +89,12 @@ export async function leadCoupon(db, email, source) {
     : db.from("Leads").insert([{ email, source, coupon_code: code, coupon_used: false }]);
   const { error: writeErr } = await write;
   if (writeErr) throw writeErr;
-  return { code, used: false, made: true, size: null };
+  return { code, used: false, made: true, fresh: !existing, size: null };
 }
 
 export async function opWelcome(db, body, mail) {
   const email = emailField(body.email).toLowerCase();
-  const { code, used, made, size } = await leadCoupon(db, email, "welcome-popup");
+  const { code, used, made, fresh, size } = await leadCoupon(db, email, "welcome-popup");
   // Their own code back: with what it gives when that is not the shop's %, so the popup says the truth.
   const sizes = used ? [] : ownSizes(size);
   if (!made) return { returning: true, code, used, ...(sizes.length ? { sizes } : {}) };
@@ -100,7 +102,10 @@ export async function opWelcome(db, body, mail) {
   // "Verify my email" beside the code: it signs them in as a buyer (verifyLink.js), or is null.
   const verifyLink = await buyerSignInLink(db, email);
   await mail.send({ to: email, subject: `Your ${discount}% Welcome Coupon — Fonkiart`, htmlContent: T.welcomeCoupon({ code, discount, verifyLink }) });
-  return { returning: false, code };
+  // The browser that gave this email first may save its cart with it (cartPass.js). An email that
+  // was on the list already gets no pass: a stranger may be the one typing it.
+  const pass = fresh ? makePass(email, code) : null;
+  return { returning: false, code, ...(pass && { pass }) };
 }
 
 export async function opCollectors(db, body) {
@@ -660,10 +665,12 @@ export async function opBuyer(db, req) {
 
 export const STORE_OPS = {
   "welcome": (db, req, mail) => opWelcome(db, req.body || {}, mail),
-  // The cart of someone who gave their email, or of a signed-in buyer (cartMemory.js), and
-  // whether that saving is on at all: one yes or no for the whole site.
+  // The cart of someone who gave their email, or who is signed in (cartMemory.js); whether that
+  // saving is on at all: one yes or no for the whole site; and the art waiting for whoever is
+  // signed in.
   "remember-cart": (db, req) => opRememberCart(db, req),
   "cart-saving": (db) => opCartSaving(db),
+  "my-cart": (db, req) => opMyCart(db, req),
   "collectors": (db, req) => opCollectors(db, req.body || {}),
   "request": (db, req, mail) => opRequest(db, req.body || {}, mail),
   "next-ref": (db) => opNextRef(db),

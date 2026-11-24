@@ -3,7 +3,9 @@ import { InputError } from "./errors.js";
 import { ADMIN_EMAIL } from "./adminSecret.js";
 import { bearer } from "./adminToken.js";
 import * as T from "./emails.js";
+import { MAX_ROWS } from "./reminderRows.js";
 import { readNote, writeNote } from "./systemNote.js";
+import { CART_DAYS, cartsLeft, forgetOldCarts } from "./cartMemory.js";
 // The same rule as Admin -> Orders "Didn't finish paying", imported, never copied.
 import { cartRef, unfinishedCard, unfinishedThisWeek } from "../../src/lib/orderRow.js";
 
@@ -20,12 +22,22 @@ import { cartRef, unfinishedCard, unfinishedThisWeek } from "../../src/lib/order
 // It also names the Cart checkouts a buyer started and never paid (Andy, 2026-11-22: "a warning
 // to the admin saying .... this person had an order in the cart and didn't checkout"): their own
 // part, "Didn't finish paying", from the last 7 days by the SAME rule as Admin -> Orders
-// (src/lib/orderRow.js unfinishedThisWeek), and no longer under "Orders to send".
+// (src/lib/orderRow.js unfinishedThisWeek), and no longer under "Orders to send". And whoever
+// left art in their saved cart (Andy, 2026-11-23, "all 8"; cartMemory.js cartsLeft): "Left in
+// the cart".
+//
+// In those two parts each person is named ONCE (Andy, 2026-11-23): a checkout, by its FA-
+// reference, in one daily email only; someone who left art in their cart, once in CART_DAYS. The
+// note keeps who was named and when (named). Admin -> Orders keeps the whole list. A note that
+// can't be read names them again: better twice than never.
 
 export const SEND_HOUR_UTC = 13;              // 8–9 am in the Florida Keys in winter, 9–10 am in summer
-const MIN_GAP_MS = 20 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MIN_GAP_MS = 20 * HOUR_MS;
 const FILE = "reminders.json";
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const CART_RESTS_MS = 6 * HOUR_MS;            // a cart counts as left once it hasn't changed for this long
+const NAMED_KEEP_MS = 45 * DAY_MS;            // who was named is kept this long, past both rules above
 
 const daysSince = (iso, now) => {
   const t = Date.parse(iso || "");
@@ -63,7 +75,20 @@ export async function collectWaiting(db, now = new Date()) {
     title: o.item_title, amount: o.amount, email: o.client_email,
     status: o.status || "pending", days: daysSince(o.created_at, now),
   }));
-  return { requests, orders, unfinished: unfinishedCheckouts(all, now) };
+  return { requests, orders, unfinished: unfinishedCheckouts(all, now), carts: await leftCarts(db, now) };
+}
+
+// Who left art in their saved cart (cartMemory.js cartsLeft), untouched for CART_RESTS_MS, and for
+// how many hours. They never stop the email: one that can't be read names nobody.
+async function leftCarts(db, now) {
+  try {
+    const carts = await cartsLeft(db, { now, limit: Infinity });
+    return carts.filter(c => now.getTime() - Date.parse(c.at) >= CART_RESTS_MS)
+      .map(c => ({ ...c, hours: Math.floor((now.getTime() - Date.parse(c.at)) / HOUR_MS) }));
+  } catch (e) {
+    console.warn("reminders: carts not read:", e?.code || "error");
+    return [];
+  }
 }
 
 // One entry per checkout: its rows share the Order Ref in their notes (one row per piece). Who
@@ -86,11 +111,12 @@ function unfinishedCheckouts(rows, now) {
   });
 }
 
-export function reminderSubject({ requests, orders, unfinished = [] }) {
+export function reminderSubject({ requests, orders, unfinished = [], carts = [] }) {
   const bits = [];
   if (requests.length) bits.push(`${requests.length} ${requests.length === 1 ? "message" : "messages"} to answer`);
   if (orders.length) bits.push(`${orders.length} ${orders.length === 1 ? "order" : "orders"} to send`);
   if (unfinished.length) bits.push(`${unfinished.length} didn't finish paying`);
+  if (carts.length) bits.push(`${carts.length} left art in their ${carts.length === 1 ? "cart" : "carts"}`);
   return `Waiting for you: ${bits.join(", ")} · Fonkiart`;
 }
 
@@ -100,9 +126,28 @@ const writeState = (db, state) => writeNote(db, FILE, state, "reminder note");
 const sameSecret = (given, actual) =>
   crypto.timingSafeEqual(crypto.createHash("sha256").update(String(given)).digest(), crypto.createHash("sha256").update(String(actual)).digest());
 
-async function sendReminder(db, mail, now) {
-  const waiting = await collectWaiting(db, now);
-  const count = waiting.requests.length + waiting.orders.length + waiting.unfinished.length;
+// Who was named already, from the note: a checkout by its reference, a cart by its email.
+const cartKey = (c) => `cart:${c.email}`;
+const namedWithin = (iso, ms, now) => now.getTime() - (Date.parse(iso || "") || 0) <= ms;
+const notNamed = (waiting, named, now) => ({
+  ...waiting,
+  unfinished: waiting.unfinished.filter(u => !namedWithin(named[u.ref], NAMED_KEEP_MS, now)),
+  carts: waiting.carts.filter(c => !namedWithin(named[cartKey(c)], CART_DAYS * DAY_MS, now)),
+});
+// Who this email named: those it showed (MAX_ROWS of each), added to the ones kept, the oldest dropped.
+function nowNamed(named, waiting, now) {
+  const kept = Object.entries(named).filter(([, iso]) => namedWithin(iso, NAMED_KEEP_MS, now));
+  const keys = [...waiting.unfinished.slice(0, MAX_ROWS).map(u => u.ref), ...waiting.carts.slice(0, MAX_ROWS).map(cartKey)];
+  return { ...Object.fromEntries(kept), ...Object.fromEntries(keys.map(k => [k, now.toISOString()])) };
+}
+const namedIn = (state) => (state?.named && typeof state.named === "object" ? state.named : {});
+
+// named: who was named already (the daily run), so only the others count and show. Without it
+// (Admin's "send it now") everyone who waits does.
+async function sendReminder(db, mail, now, named = null) {
+  const all = await collectWaiting(db, now);
+  const waiting = named ? notNamed(all, named, now) : all;
+  const count = waiting.requests.length + waiting.orders.length + waiting.unfinished.length + waiting.carts.length;
   if (!count) return { waiting, sent: false };
   await mail.send({ to: ADMIN_EMAIL, subject: reminderSubject(waiting), htmlContent: T.reminderStore(waiting) });
   return { waiting, sent: true };
@@ -124,23 +169,29 @@ export async function opReminders(db, req, mail, now = new Date()) {
   if (state.lastSentAt && now.getTime() - Date.parse(state.lastSentAt) < MIN_GAP_MS) {
     return { ok: true, sent: false, reason: "already sent today" };
   }
-  const { waiting, sent } = await sendReminder(db, mail, now);
-  if (!sent) return { ok: true, sent: false, reason: "nothing waiting" };
-  await writeState(db, {
-    ...state, lastRunAt: now.toISOString(), lastRunBy: ranBy,
-    lastSentAt: now.toISOString(), lastSent: { requests: waiting.requests.length, orders: waiting.orders.length, unfinished: waiting.unfinished.length },
-  });
-  return { ok: true, sent: true };
+  const { waiting, sent } = await sendReminder(db, mail, now, namedIn(state));
+  if (sent) {
+    const { requests, orders, unfinished, carts } = waiting;
+    await writeState(db, {
+      ...state, lastRunAt: now.toISOString(), lastRunBy: ranBy, lastSentAt: now.toISOString(),
+      lastSent: { requests: requests.length, orders: orders.length, unfinished: unfinished.length, ...(carts.length && { carts: carts.length }) },
+      named: nowNamed(namedIn(state), waiting, now),
+    });
+  }
+  // Once a day, after the email, so it can never stop one: carts older than CART_DAYS are let go.
+  await forgetOldCarts(db, now).catch(e => console.warn("reminders: old carts not let go:", e?.code || e?.message || "error"));
+  return sent ? { ok: true, sent: true } : { ok: true, sent: false, reason: "nothing waiting" };
 }
 
-// Admin "send it now" (to test, or whenever Andy wants the list). Same email, no hour
-// window, and it doesn't count as the day's reminder.
+// Admin "send it now" (to test, or whenever Andy wants the list). Same email with everyone who
+// waits, named before or not; no hour window, and it doesn't count as the day's reminder: it
+// marks nobody as named.
 export async function adminReminderNow(db, mail, now = new Date()) {
   const { waiting, sent } = await sendReminder(db, mail, now);
   const state = await readState(db);
   return {
     ok: true, sent, to: ADMIN_EMAIL,
-    requests: waiting.requests.length, orders: waiting.orders.length, unfinished: waiting.unfinished.length,
+    requests: waiting.requests.length, orders: waiting.orders.length, unfinished: waiting.unfinished.length, carts: waiting.carts.length,
     lastRunAt: state.lastRunAt || null, lastRunBy: state.lastRunBy || null, lastSentAt: state.lastSentAt || null,
   };
 }

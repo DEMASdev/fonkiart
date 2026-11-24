@@ -699,7 +699,7 @@ test("Admin -> Leads: a code with a size of its own shows it after the code; eve
 
 test("the welcome popup tells the truth to someone coming back for a code with a size of its own", async () => {
   const said = async (answer) => {
-    const Welcome = await component("src/components/WelcomeModal.jsx", { "../lib/store": { storeCall: async () => answer }, "../lib/cartMemory": { remember() {} }, "./Pic": { default: () => null } });
+    const Welcome = await component("src/components/WelcomeModal.jsx", { "../lib/store": { storeCall: async () => answer }, "../lib/cartMemory": { remember() {} }, "./Pic": { default: () => null }, "./SignInLine": { default: () => null } });
     const screen = draw(Welcome, { onClose() {}, discount: 15, artworks: [] });
     screen.one("email box", n => n.type === "input").props.onChange({ target: { value: SARA } });
     await screen.one("button", n => n.type === "button" && screen.text(n) === "Get My Coupon →").props.onClick();
