@@ -259,6 +259,77 @@ test("3bb a stranger typing a known email changes nothing, empties nothing, and 
   assert.deepEqual(twice.tables.Leads.map((r) => [r.id, r.cart.map((p) => p.id)]), [[1, [12]], [2, [13]]]);
 });
 
+test("3bb a stranger who typed the email before its owner ever did: once the owner has saved it signed in, their pass changes nothing", async () => {
+  const { opRememberCart, opMyCart, cartsLeft, makePass, opWelcome } = await server();
+  const start = async () => {
+    const db = fakeDb({ leads: [LEAD({ id: 1, email: "else@example.com" })] });
+    const { out } = await logsOf(() => opWelcome(db, { email: "ana@example.com" }, mailbox()));
+    const [, row] = db.tables.Leads;
+    assert.equal(row.email, "ana@example.com");
+    const pass = makePass("ana@example.com", row.coupon_code, NOW);
+    assert.equal(typeof out.pass, "string", "the first to type it holds a pass");
+    const stranger = (pieces, at = NOW) => opRememberCart(db, req({ email: "ana@example.com", pass, pieces }), at);
+    const ana = (pieces, at = NOW) => opRememberCart(db, req({ pieces }, "ana-jwt"), at);
+    return { db, row, pass, stranger, ana };
+  };
+  const ids = (row) => (row.cart || []).map((p) => p.id).filter(Boolean);
+  {
+    const { row, stranger, ana, db, pass } = await start();
+    assert.deepEqual(await stranger([13]), { ok: true, kept: true }, "control: until its owner signs in, that pass saves");
+    assert.deepEqual(ids(row), [13]);
+    assert.deepEqual(await ana([12, 13]), { ok: true });
+    const theirs = copy(row);
+    assert.deepEqual(ids(row), [12, 13]);
+    db.log.length = 0;
+    for (const pieces of [[16], [], [12, 13]]) assert.deepEqual(await stranger(pieces), { ok: true, kept: false }, JSON.stringify(pieces));
+    assert.deepEqual(await stranger([], new Date(NOW.getTime() + 29 * DAY)), { ok: true, kept: false }, "for as long as the pass lasts");
+    assert.deepEqual([row, db.writes], [theirs, []], "not changed, not emptied, nothing written");
+    assert.deepEqual(await opRememberCart(db, req({ email: "ana@example.com", pass: `${pass.slice(0, -1)}x`, pieces: [] }), NOW), { ok: true, kept: false }, "the answer a wrong pass gets");
+    assert.deepEqual(await opMyCart(db, req({}, "ana-jwt"), NOW), { signedIn: true, pieces: [12, 13] }, "and it comes back to its owner");
+    assert.deepEqual((await cartsLeft(db, { now: NOW })).map((c) => [c.email, c.pieces.map((p) => p.id)]), [["ana@example.com", [12, 13]]], "shown as any other");
+    assert.ok(!JSON.stringify(await cartsLeft(db, { now: NOW })).includes("signed"), "the mark stays on the row");
+    // The owner goes on as before, from anywhere they are signed in.
+    assert.deepEqual(await ana([16]), { ok: true });
+    assert.deepEqual(ids(row), [16]);
+  }
+  { // Emptied by its owner (bought, or taken out): it stays empty, and nobody is followed up about it.
+    const { row, stranger, ana, db } = await start();
+    await stranger([13]);
+    await ana([]);
+    assert.deepEqual([row.cart, row.cart_at], [[{ signed: true }], NOW.toISOString()]);
+    assert.deepEqual(await stranger([13]), { ok: true, kept: false });
+    assert.deepEqual(row.cart, [{ signed: true }]);
+    assert.deepEqual(await opMyCart(db, req({}, "ana-jwt"), NOW), { signedIn: true, pieces: [] });
+    assert.deepEqual(await cartsLeft(db, { now: NOW }), []);
+  }
+  { // Two rows for one email: signed in, the cart on one of them is kept; a pass for the other one changes neither.
+    const { stranger, ana, db } = await start();
+    db.tables.Leads.push(LEAD({ id: 50, coupon_code: "FK-2222-2222", cart: cartOf(13), cart_at: ago(HOUR) }));
+    await ana([12]);
+    const now = copy(db.tables.Leads);
+    assert.deepEqual(await stranger([16]), { ok: true, kept: false });
+    assert.deepEqual(await opRememberCart(db, req({ email: "ana@example.com", pass: makePass("ana@example.com", "FK-2222-2222", NOW), pieces: [16] }), NOW), { ok: true, kept: false });
+    assert.deepEqual(db.tables.Leads, now);
+  }
+  { // Only a real sign-in marks it: one that was never confirmed doesn't, and neither does a browser's own words.
+    const { row, stranger, db, pass } = await start();
+    await opRememberCart(db, req({ pieces: [12] }, "unsure-jwt"), NOW);
+    await opRememberCart(db, req({ email: "ana@example.com", pass, pieces: [12], signed: true, cart: [{ signed: true }] }), NOW);
+    assert.deepEqual(row.cart, [{ id: 12, title: "Flamingo Party", price: 950, image: "https://img.example/flamingo.jpg" }]);
+    assert.deepEqual(await stranger([13]), { ok: true, kept: true });
+    assert.deepEqual(ids(row), [13]);
+  }
+  // After 30 days the mark goes with the cart (forgetOldCarts), and any pass from before it is too old by then.
+  const { forgetOldCarts } = await server();
+  const { row, stranger, ana, db } = await start();
+  await ana([12], new Date(NOW.getTime() + DAY));
+  const later = new Date(NOW.getTime() + 31 * DAY + 2000);
+  await forgetOldCarts(db, later);
+  assert.deepEqual([row.cart, row.cart_at], [null, null]);
+  assert.deepEqual(await stranger([13], later), { ok: true, kept: false });
+  assert.equal(row.cart, null);
+});
+
 test("3bb signed in as yourself you can't reach anyone else's cart, and Supabase being down is an error, never 'nobody'", async () => {
   const { opRememberCart, opMyCart, makePass } = await server();
   const rows = () => [LEAD({ cart: cartOf(12), cart_at: ago(HOUR) }), LEAD({ id: 8, email: "col@example.com", coupon_code: "FK-CCCC-CCCC" })];
@@ -290,7 +361,7 @@ test("4bb a collector's cart is saved as a buyer's is: their own email, a new ro
     const { out, row } = await made(token);
     assert.deepEqual(out, { ok: true });
     assert.deepEqual([row.email, row.source, row.coupon_code, row.coupon_used], [email, source, null, false]);
-    assert.deepEqual(row.cart, [{ id: 12, title: "Flamingo Party", price: 950, image: "https://img.example/flamingo.jpg" }]);
+    assert.deepEqual(row.cart, [{ id: 12, title: "Flamingo Party", price: 950, image: "https://img.example/flamingo.jpg", signed: true }]);
     assert.equal(row.cart_at, NOW.toISOString());
   }
   assert.equal((await made("col-jwt", [])).row, undefined, "an empty cart makes no row");
@@ -821,7 +892,7 @@ test("2bb their art is waiting: laptop saves [A]; the phone signs in and finds i
   const wait = async (ms = 1200) => { t.mock.timers.tick(ms); await flush(); };
   const db = fakeDb();
   const shop = await shopOf(db);
-  const saved = () => db.tables.Leads.find((r) => r.email === "ana@example.com")?.cart?.map((p) => p.id) ?? null;
+  const saved = () => db.tables.Leads.find((r) => r.email === "ana@example.com")?.cart?.flatMap((p) => p.id ?? []) ?? null;
   // The laptop: the welcome gift's email, and its pass; [A] is saved with it.
   const laptop = await browser();
   const desk = await visit(laptop, { shop, artworks: ART() });
@@ -842,7 +913,7 @@ test("2bb their art is waiting: laptop saves [A]; the phone signs in and finds i
   // Taken out: saved so, and it doesn't come back on reload.
   v.take(12);
   await flush(); await wait();
-  assert.equal(saved(), null);
+  assert.deepEqual(saved(), []);
   v.close();
   db.tables.Leads[0].cart = cartOf(12); db.tables.Leads[0].cart_at = new Date().toISOString(); // even if the laptop saves it again meanwhile
   v = await visit(phone, { shop, artworks: ART(), user: ANA_IN });

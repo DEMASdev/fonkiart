@@ -8,8 +8,8 @@ import crypto from "crypto";
 //
 // "<when it was made, ms in base 36>.<HMAC-SHA256, base64url>". Nothing is stored: it is worked out
 // again from the email, the coupon code on its Leads row and when it was made. So it is good for
-// that one email only; it ends after 30 days; and it dies when the row is deleted and made again (a
-// new code). The key is derived from the server's own service key, as threads.js inboundKey does:
+// that one email only; it ends after 30 days; it dies when the row is deleted and made again (a new
+// code); and it changes nothing once its owner has saved that cart signed in (cartMemory.js). The key is derived from the server's own service key, as threads.js inboundKey does:
 // nothing new to keep, and it changes if that key is ever changed. Never logged.
 
 export const PASS_DAYS = 30;

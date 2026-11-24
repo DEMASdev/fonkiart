@@ -14,6 +14,8 @@ import { unfinishedCard, unfinishedThisWeek } from "../../src/lib/orderRow.js";
 //   with that email, or the browser that gave the email FIRST, which shows the pass it was handed
 //   then (cartPass.js). Anyone else typing that email changes nothing. Never anyone anonymous, and
 //   an email typed here never makes a Leads row.
+// - Someone else may have typed the email before its owner ever did. So a cart saved signed in is
+//   marked (savedSignedIn), and from then on only a sign-in changes it: no pass does.
 // - Before "Verify my email" is tapped, an email is ONLY this cart link: nothing about it is ever
 //   answered (no orders, no address, no account). A typed email's answer depends on the pass alone,
 //   never on whether that email is on the list, so it can't tell anyone who is.
@@ -59,6 +61,11 @@ function pieceIds(value) {
   if (ids.length > MAX_PIECES || !ids.every(isId)) throw new InputError("Bad pieces");
   return ids;
 }
+
+// A cart as it is saved. Signed in, each piece carries the mark, and an empty cart is the mark alone:
+// it outlives any pass given before it (both last 30 days, and the pass came first).
+const signedCart = (pieces) => (pieces.length ? pieces.map(p => ({ ...p, signed: true })) : [{ signed: true }]);
+const savedSignedIn = (cart) => Array.isArray(cart) && cart.some(p => p?.signed === true);
 
 // The pieces of a saved cart, by their ids.
 const savedIds = (cart) => [...new Set((Array.isArray(cart) ? cart : []).map(p => Number(p?.id)))].filter(isId).slice(0, MAX_PIECES);
@@ -116,8 +123,8 @@ async function piecesOf(db, ids) {
 // The store action "remember-cart": { email, pass, pieces: [ids] }, or { pieces } signed in. An
 // empty cart (bought, or taken out) clears what was kept, so nobody is followed up about it.
 // A typed email with no pass: { ok: true }, and nothing is read or written. A pass that isn't good
-// for it: { ok: true, kept: false }, nothing written, whoever the email is. Good, and saved:
-// { ok: true, kept: true }.
+// for it, whoever the email is, or a cart that was saved signed in since: { ok: true, kept: false },
+// nothing written. Good, and saved: { ok: true, kept: true }.
 export async function opRememberCart(db, req, now = new Date()) {
   const body = req.body || {};
   const ids = pieceIds(body.pieces);
@@ -132,10 +139,11 @@ export async function opRememberCart(db, req, now = new Date()) {
   const lead = account ? rows[0] : (rows.length ? rows : [{}]).find(r => goodPass(pass, email, r.coupon_code, now));
   if (!account && !lead) return { ok: true, kept: false };
   if (lead && !hasCart(lead)) return { ok: true }; // the SQL hasn't run yet
+  if (!account && rows.some(r => savedSignedIn(r.cart))) return { ok: true, kept: false };
   const pieces = await piecesOf(db, ids);
-  const cart = pieces.length ? pieces : null;
+  const cart = account ? signedCart(pieces) : pieces.length ? pieces : null;
   if (!lead) {
-    if (!cart) return { ok: true };
+    if (!pieces.length) return { ok: true };
     if (!(await cartColumns(db))) return { ok: true }; // the SQL hasn't run yet
   }
   const at = now.toISOString();
