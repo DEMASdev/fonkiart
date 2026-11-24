@@ -22,7 +22,7 @@ function lastSent(sent, email, now) {
 
 // The list: { carts, choose, percent }, the cart saved last first.
 //  - carts: [{ email, name, pieces: [{ id, title, price, image }], total, at, sentAt, said, used, code,
-//    sizes }]: cartsLeft's, with their coupon as on "Didn't finish paying" (unfinishedCoupon.js
+//    sizes, out }]: cartsLeft's, with their coupon as on "Didn't finish paying" (unfinishedCoupon.js
 //    couponStatus); sentAt, said: the last one they were sent.
 //  - choose, percent: as there.
 // A list that can't be read throws: never an empty one that looks like nobody.

@@ -19,6 +19,7 @@ const read = (p) => readFileSync(new URL(p, root), "utf8");
 const load = async (p) => { assert.ok(existsSync(new URL(p, root)), `${p} is there`); return import(new URL(p, root).href); };
 const server = () => load("api/_lib/cartCoupon.js");
 const HOUR = 60 * 60 * 1000, DAY = 24 * HOUR;
+process.env.SUPABASE_SERVICE_ROLE_KEY = ["made", "up", "for", "tests"].join("-"); // the server's key: a coupon email's Unsubscribe link is sealed with it
 const NOW = new Date("2026-11-23T21:20:00Z");
 const ago = (ms) => new Date(NOW.getTime() - ms).toISOString();
 async function quiet(fn) {
@@ -82,6 +83,7 @@ function fakeDb(tables, { leads = LEADS, fail = {}, notes = {} } = {}) {
   const storage = {
     async createBucket() { return { data: {}, error: null }; },
     from: () => ({
+      async list(dir) { return { data: Object.keys(files).filter(f => f.startsWith(`${dir}/`)).map(f => ({ name: f.slice(dir.length + 1) })), error: null }; },
       async download(path) {
         if (fail.notes) return { data: null, error: { message: fail.notes } };
         return files[path] == null ? { data: null, error: { message: "Object not found" } } : { data: new Blob([files[path]]), error: null };

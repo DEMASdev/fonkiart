@@ -1,7 +1,7 @@
 // A small JSON note the server keeps for itself in a PRIVATE Storage bucket: the daily reminder's
-// "last ran / last sent" (reminders.js), and when a coupon went to a buyer who didn't finish
-// paying or left art in their cart (couponMail.js). Nothing here is ever public: the bucket is made private the first
-// time it is needed.
+// "last ran / last sent" (reminders.js), when a coupon went to a buyer who didn't finish paying or
+// left art in their cart (couponMail.js), and who asked for no more coupons (unsubscribe.js, one
+// note each). Nothing here is ever public: the bucket is made private the first time it is needed.
 const BUCKET = "system";
 
 // Storage's answer for a note (or its bucket) that isn't there yet: statusCode "404", "... not found".
@@ -16,6 +16,19 @@ export async function readNote(db, file, { strict = false } = {}) {
   try { return JSON.parse(await data.text()) || {}; } catch (e) {
     if (strict) throw new Error(`${BUCKET}/${file} isn't readable: ${e.message}`, { cause: e });
     return {};
+  }
+}
+
+// The names of the notes in a folder, [] when there are none yet. One that can't be read throws.
+const LIST_AT_ONCE = 1000;
+export async function listNotes(db, dir) {
+  const names = [];
+  for (;;) {
+    const { data, error } = await db.storage.from(BUCKET).list(dir, { limit: LIST_AT_ONCE, offset: names.length, sortBy: { column: "name", order: "asc" } });
+    if (error && !missing(error)) throw new Error(`can't list ${BUCKET}/${dir}: ${error.message || error}`);
+    const page = (data || []).map(f => f.name);
+    names.push(...page);
+    if (page.length < LIST_AT_ONCE) return names;
   }
 }
 

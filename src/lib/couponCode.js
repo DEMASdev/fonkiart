@@ -1,5 +1,5 @@
-// The size of a coupon code in an email (the welcome coupon, the coupon after an unfinished
-// checkout: api/_lib/emails.js codeBox; the gift from Admin -> Leads: adminEmails.js couponEmail).
+// The size of a coupon code in an email (the welcome coupon, the ones sent from Admin -> Orders and
+// Leads: api/_lib/emails.js codeBox).
 // The code is on ONE line (Andy, 2026-11-01: "make it fit in 1 line plz"), in Georgia bold at 31px
 // with 1px between letters. A code of wide letters (W, M, H...) is wider than that at 31px on a
 // 375px phone, and pushed the whole email past the screen's edge, so it scrolled sideways

@@ -2,6 +2,7 @@ import { InputError } from "./errors.js";
 import * as T from "./emails.js";
 import { couponDiscount, leadCoupon } from "./storeOps.js";
 import { readNote, writeNote } from "./systemNote.js";
+import { sendCouponEmail, unsubscribedAmong, whyNoCoupon } from "./unsubscribe.js";
 // How much: the same rules as Admin's two boxes and the checkout, imported, never copied.
 import { addSize, couponPrices, lessThanNow, sizesOf, sizeWords, typedSize } from "../../src/lib/couponSize.js";
 
@@ -21,10 +22,13 @@ import { addSize, couponPrices, lessThanNow, sizesOf, sizeWords, typedSize } fro
 //    back as it was. Until that SQL has run no amount can be chosen, and it goes at the shop's %
 //    (couponDiscount), as before.
 //  - Their code already used: nothing is sent, and the answer says so.
+//  - They asked for no more coupons ("Unsubscribe", unsubscribe.js): nothing is made or sent, and the
+//    answer says so. That can't be checked: nothing is sent.
 //  - When it went is kept in a private note, so each list never sends a second: a checkout by its
 //    reference (FA-...), a cart by its email.
 const NOTE = "coupons-sent.json";
 const NO_CHOICE = "Choosing the amount waits for one database change, so nothing was sent.";
+const UNCHECKED = "couldn't check whether they asked for no more coupons, so nothing was sent";
 const READ_AT_ONCE = 100;
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const lower = (s) => String(s ?? "").trim().toLowerCase();
@@ -49,8 +53,9 @@ export async function canChoose(db) {
   return !missing;
 }
 
-// For a list: what each of these emails' own coupon is, by email: { used, code, sizes }. code: null
-// when they have none. sizes: what it gives now, or the shop's % when they have none.
+// For a list: what each of these emails' own coupon is, by email: { used, code, sizes }, and out: true
+// when they asked for no more. code: null when they have none. sizes: what it gives now, or the
+// shop's % when they have none.
 export async function couponsOf(db, emails, percent) {
   const leads = new Map();
   for (let i = 0; i < emails.length; i += READ_AT_ONCE) {
@@ -59,10 +64,12 @@ export async function couponsOf(db, emails, percent) {
     // The first row for each email, as leadCoupon reads it.
     for (const l of data || []) if (!leads.has(lower(l.email))) leads.set(lower(l.email), l);
   }
+  // Who asked for no more: a nicety on a list (the sending itself checks).
+  const asked = await unsubscribedAmong(db, emails).catch((e) => { console.warn("coupons: couldn't read who unsubscribed:", e?.message || e); return new Set(); });
   return (email) => {
     const lead = leads.get(lower(email));
     const used = !!(lead?.coupon_code && lead.coupon_used);
-    return { used, code: lead?.coupon_code || null, sizes: sizesOf(lead?.coupon_code && !used ? lead.coupon_size : null, percent) };
+    return { used, code: lead?.coupon_code || null, sizes: sizesOf(lead?.coupon_code && !used ? lead.coupon_size : null, percent), ...(asked.has(lower(email)) && { out: true }) };
   };
 }
 
@@ -81,12 +88,17 @@ async function saveSize(db, email, code, sizes) {
 // SQL has run). key: its place in the note. source: where a Leads row made now came from.
 // { sent: true, sentAt, to, code, said, discount, noted }: said, how much in words ("$300 off");
 // discount, the % for an Admin tab from before. Or { sent: false, why: "used", code } when nothing
-// went; { sent: false, why: "less", now, code } when their code already gives more on these pieces (now:
-// what it gives, in words). noted: false when the email went but the note of it couldn't be saved
-// (the row may then not remember it).
+// went; { sent: false, why: "out" } when they asked for no more coupons; { sent: false, why: "less", now,
+// code } when their code already gives more on these pieces (now: what it gives, in words). noted: false
+// when the email went but the note of it couldn't be saved (the row may then not remember it).
 export async function sendCoupon(db, mail, { email, name, pieces, amount, key, source, now }) {
   const titles = [...new Set(pieces.map(p => p.title))];
   const prices = pieces.map(p => p.price);
+
+  // Asked for no more coupons: none is made. Asked again as the email goes (sendCouponEmail).
+  const no = await whyNoCoupon(db, email);
+  if (no === "out") return { sent: false, why: "out" };
+  if (no) throw new Error(UNCHECKED);
 
   // The amount chosen, by the rule Admin's boxes go by, on the shop's own prices. None: size null.
   let size = null;
@@ -112,16 +124,23 @@ export async function sendCoupon(db, mail, { email, name, pieces, amount, key, s
   const cut = couponPrices(prices, size ? [size] : gives);
   const said = sizeWords(cut.size, prices.some(p => p !== null) ? cut.off : undefined);
   const firstName = String(name || "").trim().split(/\s+/)[0] || "";
+  // It didn't go: their code gives again what it gave before, never more nor less than was emailed.
+  const putBack = () => size && saveSize(db, email, coupon.code, coupon.size).catch(x => console.warn(`coupon for ${key}: not sent, and its size couldn't be put back:`, x?.message || x));
+  let out;
   try {
-    await mail.send({
+    out = await sendCouponEmail(db, mail, {
       to: email,
       subject: T.unfinishedCouponSubject({ titles, words: said }),
-      htmlContent: T.unfinishedCoupon({ firstName, titles, code: coupon.code, words: said }),
+      html: (unsubscribe) => T.unfinishedCoupon({ firstName, titles, code: coupon.code, words: said, unsubscribe }),
     });
   } catch (e) {
-    // It didn't go: their code gives again what it gave before, never more nor less than was emailed.
-    if (size) await saveSize(db, email, coupon.code, coupon.size).catch(x => console.warn(`coupon for ${key}: not sent, and its size couldn't be put back:`, x?.message || x));
+    await putBack();
     throw e;
+  }
+  if (!out.sent) {
+    await putBack();
+    if (out.why === "out") return { sent: false, why: "out" };
+    throw new Error(UNCHECKED);
   }
 
   // Noted only once it has gone; if the note can't be saved, the email still went: say so, never

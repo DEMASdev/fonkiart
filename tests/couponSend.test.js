@@ -22,6 +22,7 @@ import { CARD_NOTE } from "../src/lib/orderRow.js";
 
 const root = new URL("../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), "utf8");
+process.env.SUPABASE_SERVICE_ROLE_KEY = ["made", "up", "for", "tests"].join("-"); // the server's key: a coupon email's Unsubscribe link is sealed with it
 const NOW = new Date("2026-11-23T21:20:00Z");
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -97,6 +98,7 @@ function fakeDb(tables = {}, { leads = AFTER, fail = {} } = {}) {
     async createBucket(name) { bucket = true; return { data: { name }, error: null }; },
     from(name) {
       return {
+        async list(dir) { return { data: Object.keys(files).filter(f => f.startsWith(`${name}/${dir}/`)).map(f => ({ name: f.slice(`${name}/${dir}/`.length) })), error: null }; },
         async download(path) { const body = bucket ? files[`${name}/${path}`] : undefined; return body == null ? { data: null, error: { message: bucket ? "Object not found" : "Bucket not found" } } : { data: new Blob([body]), error: null }; },
         async upload(path, blob) { if (!bucket) return { data: null, error: { message: "Bucket not found" } }; files[`${name}/${path}`] = await blob.text(); return { data: { path }, error: null }; },
       };
@@ -686,8 +688,8 @@ test("Admin -> Leads: a code with a size of its own shows it after the code; eve
     { id: 6, email: "fay.test@example.com", coupon_code: null, coupon_size: [DOLLARS], created_at: null },
   ];
   const LeadsTab = await component("src/admin/LeadsTab.jsx", {
-    "../lib/adminDb": { adminDb: { from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows }) }) }) } },
-    "../utils/helpers": { generateCouponCode() {}, sendEmail() {} }, "../lib/adminEmails": { couponEmail() {} },
+    "../lib/adminDb": { adminDb: { from: () => ({ select: () => ({ order: () => Promise.resolve({ data: rows }) }) }) }, adminAction: async () => ({ emails: [] }) },
+    "../utils/helpers": { generateCouponCode() {} },
   });
   const screen = draw(LeadsTab, { discount: 15 });
   await settle();

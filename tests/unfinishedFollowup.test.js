@@ -24,10 +24,11 @@ import { unfinishedLink, readAdminLink, withoutAdminLink, askOpenList, wantsOpen
 import { issueAdminToken } from "../api/_lib/adminToken.js";
 import { newCouponCode } from "../api/_lib/storeOps.js";
 import { codePx, CODE_PX } from "../src/lib/couponCode.js";
-import * as AE from "../src/lib/adminEmails.js";
 import adminHandler from "../api/admin.js";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+process.env.SUPABASE_SERVICE_ROLE_KEY = ["made", "up", "for", "tests"].join("-"); // the server's key: a coupon email's Unsubscribe link is sealed with it
+const UNSUB = "https://fonkiart.com/?unsubscribe=made-up"; // every coupon email has one (tests/unsubscribe.test.js)
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(`2026-11-22T${String(SEND_HOUR_UTC).padStart(2, "0")}:20:00Z`);
 const ago = (days) => new Date(NOW.getTime() - days * DAY).toISOString();
@@ -71,6 +72,7 @@ function fakeDb(tables = {}, { failUpload = false } = {}) {
           const body = bucket ? files[`${name}/${path}`] : undefined;
           return body == null ? { data: null, error: { message: bucket ? "Object not found" : "Bucket not found" } } : { data: new Blob([body]), error: null };
         },
+        async list(dir) { return { data: Object.keys(files).filter(f => f.startsWith(`${name}/${dir}/`)).map(f => ({ name: f.slice(`${name}/${dir}/`.length) })), error: null }; },
         async upload(path, blob) {
           if (failUpload) return { data: null, error: { message: "Storage is down" } };
           if (!bucket) return { data: null, error: { message: "Bucket not found" } };
@@ -428,7 +430,7 @@ test("the email's link opens Admin -> Orders with the list open, once, and leave
 const GREEN = /green|#2d6a4f|#e8f5ee|#a3d4b3|mark-paid-yes|track-ok/i;
 const WARM = /cream|sand|beige|ivory|#f3f1ee|#faf7f2|#f5f0e8/i;
 test("no green, no cream: the coupon email, the reminder's new part and the coupon's Admin parts", async () => {
-  const coupon = await withArt(shopDb(), T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party", "Madame Mango"], code: "FK-TEST-AAAA", words: "20% off" }));
+  const coupon = await withArt(shopDb(), T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party", "Madame Mango"], code: "FK-TEST-AAAA", words: "20% off", unsubscribe: UNSUB }));
   const w = await collectWaiting(shopDb(), NOW);
   const part = await withArt(shopDb(), T.reminderStore({ requests: [], orders: [], unfinished: w.unfinished }));
   for (const [name, html] of [["coupon email", coupon], ["reminder, Didn't finish paying", part]]) {
@@ -458,9 +460,9 @@ test("a coupon code stays on one line at 31px, and a code of wide letters gets j
   assert.ok(sizes.every(px => px >= 20 && px <= 31));
   for (const code of ["FK-7QJS-2EMV", "FK-WXDL-NPMZ", "FK-WWWW-WWWW"]) {
     const px = String(codePx(code));
-    assert.equal(sizeIn(T.welcomeCoupon({ code, discount: 15 }), code), px, `the welcome coupon, ${code}`);
-    assert.equal(sizeIn(T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party"], code, words: "15% off" }), code), px, `the coupon after an unfinished checkout, ${code}`);
-    assert.equal(sizeIn(AE.couponEmail({ code, discount: 15 }).content, code), px, `the gift from Admin -> Leads, ${code}`);
+    assert.equal(sizeIn(T.welcomeCoupon({ code, discount: 15, unsubscribe: UNSUB }), code), px, `the welcome coupon, ${code}`);
+    assert.equal(sizeIn(T.unfinishedCoupon({ firstName: "Ana", titles: ["Flamingo Party"], code, words: "15% off", unsubscribe: UNSUB }), code), px, `the coupon after an unfinished checkout, ${code}`);
+    assert.equal(sizeIn(T.couponGift({ code, words: "15% off", unsubscribe: UNSUB }), code), px, `the gift from Admin -> Leads, ${code}`);
   }
   assert.equal(sizeIn(T.supabaseTemplate({ heading: "Your code", intro: "Use it.", buttonLabel: "Sign in", withCode: true }), "\\{\\{ \\.Token \\}\\}"), "31", "Supabase's code box is unchanged");
 });

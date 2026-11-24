@@ -351,6 +351,10 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .crm-empty { text-align:center;padding:60px 0;color:var(--muted);font-size:17px; }
 .crm-add-form { background:#fff;border:1px solid var(--border);padding:24px;margin-bottom:24px;max-width:560px; }
 .crm-add-form h3 { font-family:'DM Sans',sans-serif;font-size:17px;font-weight:600;margin-bottom:16px; }
+/* Leads: someone who asked for no more coupons ("Unsubscribe"), and "+ Create Coupon" when its email
+   didn't go. */
+.lead-out { display:block;margin-top:2px;font-size:16px;color:#5b4a5c; }
+.lead-said { background:#fff;border:1px solid var(--ok-line);padding:10px 14px;font-size:16px;line-height:1.5;color:#5b4a5c; }
 .crm-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
 .crm-title { font-family:'DM Sans',sans-serif;font-size:21px;font-weight:600; }
 .crm-tabs { padding:0 36px;border-bottom:1px solid var(--border);background:#fff;display:flex;flex-wrap:wrap;overflow:visible; }
@@ -1328,6 +1332,9 @@ p .copy-btn { min-width:24px;min-height:24px;padding:2px 4px;margin:0 2px; }
 .pay-return .pay-return-go { margin-top:22px; }
 .pay-return-actions { display:flex;flex-direction:column;gap:10px;margin-top:4px; }
 .pay-return .pay-return-btn { width:100%;min-height:48px;font-size:16px; }
+/* Where "Unsubscribe" in a coupon email leads (src/pages/UnsubscribePage.jsx). */
+.unsub .pay-return-text { color:#5b4a5c; }
+.unsub .pay-return-text.unsub-err { color:#c0392b; }
 .inv-embed.pay-thanks-modal { width:100%;max-width:620px;max-height:92dvh;overflow-y:auto;padding:0;margin:auto;flex-shrink:0; }
 .cart-notice { max-width:760px;background:var(--cream);border:1px solid var(--border);border-left:3px solid var(--gold);padding:16px 20px;margin:-10px 0 28px; }
 .cart-notice-title { font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:500;line-height:1.3;color:var(--ink); }

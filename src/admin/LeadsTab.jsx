@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { adminDb as supabase } from "../lib/adminDb";
-import { generateCouponCode, sendEmail } from "../utils/helpers";
-import { couponEmail } from "../lib/adminEmails";
+import { adminDb as supabase, adminAction } from "../lib/adminDb";
+import { generateCouponCode } from "../utils/helpers";
 import { ownSizes, sizesWords } from "../lib/couponSize";
 
 // What a code gives, after it, when it has a size of its own ("· $300 off": chosen under Orders, "Send
@@ -20,11 +19,16 @@ export default function LeadsTab({ discount = 15 }) {
   const [newEmail, setNewEmail] = useState("");
   const [couponEmailEnabled, setCouponEmailEnabled] = useState(true);
   const [createMsg, setCreateMsg] = useState(null);
+  const [out, setOut] = useState(new Set()); // the emails that asked for no more coupons (api/_lib/unsubscribe.js)
 
   const reload = () => {
     if (!supabase) { setLoading(false); return; }
     supabase.from("Leads").select("*").order("created_at", { ascending:false })
-      .then(({ data }) => { setLeads(data||[]); setLoading(false); })
+      .then(({ data }) => {
+        setLeads(data||[]); setLoading(false);
+        const emails = (data||[]).map(l => l.email).filter(Boolean);
+        if (emails.length) adminAction("unsubscribed", { emails }).then(r => setOut(new Set(r.emails || []))).catch(e => console.warn("Leads, unsubscribed:", e?.message || e));
+      })
       .catch(e => { console.error("Leads load:", e); setLoading(false); });
   };
   useEffect(() => { reload(); }, []);
@@ -58,16 +62,16 @@ export default function LeadsTab({ discount = 15 }) {
       ? await supabase.from("Leads").update({ coupon_code:code, coupon_used:false }).eq("id", rows[0].id)
       : await supabase.from("Leads").insert([{ email, source:"manual", coupon_code:code, coupon_used:false }]);
     if (error) { setCreateMsg({ type:"err", text:error.message }); return; }
+    // The server builds and sends it, with the person's own Unsubscribe link (api/_lib/leadsCoupon.js).
+    let said = { type:"ok", text:`Coupon ${code} created.` };
     if (couponEmailEnabled) {
       try {
-        await sendEmail({
-          to: email,
-          subject: "Your Exclusive Coupon — Fonkiart",
-          ...couponEmail({ code, discount }),
-        });
-      } catch(e) { console.warn("Email:", e); }
+        const r = await adminAction("coupon-gift", { email });
+        said = r.sent ? { type:"ok", text:`Coupon ${code} created and emailed to ${email}.` }
+          : { type:"err", text:`Coupon ${code} created, but not emailed: they asked not to get coupons.` };
+      } catch(e) { said = { type:"err", text:`Coupon ${code} created, but the email did not go (${e?.message || "unknown error"}).` }; }
     }
-    setCreateMsg({ type:"ok", text:`Coupon ${code} created${couponEmailEnabled ? " and emailed to " + email : ""}.` });
+    setCreateMsg(said);
     setNewEmail(""); setCreating(false); setCouponEmailEnabled(true);
     reload();
   };
@@ -102,6 +106,8 @@ export default function LeadsTab({ discount = 15 }) {
           <button className="btn-p" onClick={createCoupon} disabled={createMsg?.type==="loading"}>Generate & Save</button>
         </div>
       )}
+      {/* What it did: the form is closed by then. */}
+      {!creating && createMsg && <div className={createMsg.type==="ok"?"ok-msg":"lead-said"} style={{marginBottom:16,overflowWrap:"anywhere"}} role="status">{createMsg.text}</div>}
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
         <input className="crm-search" style={{marginBottom:0,flex:1,minWidth:200}} placeholder="Search by email…" value={search} onChange={e=>setSearch(e.target.value)} />
         <div className="chip-row" style={{display:"flex",gap:4,flexShrink:0}}>
@@ -119,7 +125,7 @@ export default function LeadsTab({ discount = 15 }) {
             <thead><tr><th>Email</th><th>Coupon Code</th><th>Source</th><th>Used</th><th>Date</th><th></th></tr></thead>
             <tbody>{filtered.map(l => (
               <tr key={l.id}>
-                <td data-label="Email" className="crm-wide">{l.email}</td>
+                <td data-label="Email" className="crm-wide">{l.email}{out.has(l.email) && <span className="lead-out">Unsubscribed</span>}</td>
                 <td data-label="Coupon Code" style={{letterSpacing:".05em"}}>{l.coupon_code||"—"}{codeSize(l)}</td>
                 <td data-label="Source">{l.source||"—"}</td>
                 <td data-label="Used">

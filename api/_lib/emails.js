@@ -57,7 +57,8 @@ export const readThumbs = (html) => [...String(html).matchAll(/<!--THUMB:([0-9a-
 // pieces: the titles of the pieces this email is about (left out when it is about none), or
 // { big: titles } for those pieces big and whole above the message.
 const slotFor = (pieces) => Array.isArray(pieces) ? piecesSlot(pieces) : Array.isArray(pieces?.big) ? piecesSlot(pieces.big, { big: true }) : ART_SLOT;
-function frame(heading, body, pieces) {
+// foot: more of the email's last part, under the shop's own line (unsubscribeLine).
+function frame(heading, body, pieces, foot = "") {
   return `<div style="margin:0;padding:24px 12px;background:#ffffff;">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:2px solid ${C.gold};border-collapse:collapse;">`
     + `<tr><td style="background:${C.pink};padding:20px 28px;text-align:center;">`
@@ -75,7 +76,7 @@ function frame(heading, body, pieces) {
     + `<!--[if mso]></td></tr></table><![endif]-->`
     + `</td></tr>`
     + `<tr><td style="padding:18px 28px 24px;border-top:1px solid ${C.line};text-align:center;font-family:${SANS};font-size:16px;line-height:1.8;color:${C.muted};">`
-    + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys</td></tr>`
+    + `<a href="${SITE}" style="color:${C.gold};text-decoration:none;font-weight:bold;letter-spacing:.14em;">FONKIART.COM</a><br/>Original art by Aliana · Isla Morada, Florida Keys${foot}</td></tr>`
     + `</table></div>`;
 }
 
@@ -89,6 +90,13 @@ const codeBox = (code, note) => `<div style="background:#ffffff;border:2px dashe
 const panel = (label, html) => `<div style="border:1px solid ${C.line};padding:18px 22px;margin:0 0 20px;"><p style="margin:0 0 10px;font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:${C.muted};">${label}</p>${html}</div>`;
 const field = (label, html) => `<p style="margin:0 0 6px;font-size:17px;"><strong>${label}:</strong> ${html}</p>`;
 const footnote = `<p style="margin:20px 0 0;font-size:16px;color:${C.muted};">Sent from fonkiart.com</p>`;
+// The way out of coupon emails, at the end of every one of them (Andy, 2026-11-23, "1bc yes"):
+// the person's own link, which the server makes as the email goes (unsubscribe.js sendCouponEmail).
+// Without it the email isn't built at all.
+function unsubscribeLine(href) {
+  if (!/^https:\/\//.test(String(href ?? ""))) throw new Error("a coupon email needs its Unsubscribe link");
+  return `<p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:${C.ink};">Don't want coupons by email? <a href="${e(href)}" style="color:${C.ink};text-decoration:underline;">Unsubscribe</a></p>`;
+}
 
 // The picture runs down the left third of every email, beside the message
 // (Andy, 11-01: "to the left, at 1/3 of the size" / "the picture to the left in all emails"),
@@ -200,13 +208,13 @@ export function customerReset({ link: href, minutes }) {
     + signoff);
 }
 
-export function welcomeCoupon({ code, discount, verifyLink }) {
+export function welcomeCoupon({ code, discount, verifyLink, unsubscribe }) {
   return frame("Welcome to Fonkiart",
     p("Thank you for joining. Here is your exclusive welcome coupon:")
     + codeBox(e(code), `${e(discount)}% off your first purchase`)
     + small("Enter this code at checkout. Valid on original art and prints. One use per customer.")
     + (verifyLink ? button(verifyLink, "Verify my email") + small("Tapping it confirms your email and signs you in to your Fonkiart account. No password needed.") : "")
-    + signoff);
+    + signoff, undefined, unsubscribeLine(unsubscribe));
 }
 
 // The coupon to a buyer who started a Cart checkout and didn't finish paying (Andy, 2026-11-22:
@@ -219,14 +227,24 @@ export function unfinishedCouponSubject({ titles, words }) {
   const what = titles.length === 1 ? clip(oneLine(titles[0]), 60) : `your ${titles.length} pieces`;
   return `Still thinking about ${what}? Here's ${words} — Fonkiart`;
 }
-export function unfinishedCoupon({ firstName, titles, code, words }) {
+export function unfinishedCoupon({ firstName, titles, code, words, unsubscribe }) {
   const one = titles.length === 1;
   return frame(`Still thinking it over${firstName ? `, ${e(firstName)}` : ""}?`,
     p(`${one ? "Your piece is" : "Your pieces are"} still here, waiting for you. Here is ${e(words)} to bring ${one ? "it" : "them"} home:`)
     + codeBox(e(code), `${e(words)} your order`)
     + button(SITE, "Back to the shop")
     + small("Enter the code at checkout with this email address. One use.")
-    + signoff, { big: titles });
+    + signoff, { big: titles }, unsubscribeLine(unsubscribe));
+}
+
+// The coupon Andy makes under Admin -> Leads ("+ Create Coupon"), when he ticks the box that emails
+// it (leadsCoupon.js). words: how much, as their code has it ("15% off").
+export function couponGift({ code, words, unsubscribe }) {
+  return frame("A Gift From Fonkiart",
+    p("We have a special offer just for you:")
+    + codeBox(e(code), `${e(words)} your purchase`)
+    + small("Enter this code at checkout. One use only.")
+    + signoff, undefined, unsubscribeLine(unsubscribe));
 }
 
 // applied: the coupon's words ("20% coupon applied", "$300 coupon applied"), or "" (storeOps.js orderReceived).
@@ -287,11 +305,11 @@ export function requestReply({ name, message, link: href, requestText }) {
     + signoff, aboutRequest(requestText));
 }
 
-// Emails written in the admin (invoice, order status, coupon): the admin sends
-// the heading and the inside, the server puts them in the same frame. pieces: the titles the
-// email is about (an invoice, an order's status, a Cart payment), left out for none (a coupon).
-export function adminFrame(heading, content, pieces) {
-  return frame(heading, content, pieces);
+// Emails written in the admin (an invoice, an order's status): the admin sends the heading and the
+// inside, the server puts them in the same frame. pieces: the titles the email is about, left out
+// for none. unsubscribe: only for a coupon an old Admin tab still writes itself (leadsCoupon.js).
+export function adminFrame(heading, content, pieces, unsubscribe) {
+  return frame(heading, content, pieces, unsubscribe ? unsubscribeLine(unsubscribe) : "");
 }
 
 // ── to the shop ──────────────────────────────────────────────

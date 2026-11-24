@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { Menu, Package, LogIn, KeyRound, ShoppingBag, MessageCircle, Receipt } from "lucide-react";
+import { Menu, Package, LogIn, KeyRound, ShoppingBag, MessageCircle, Receipt, Mail } from "lucide-react";
 
 import { supabase } from "./lib/supabase";
 import { adminHasToken, setAdminPassword } from "./lib/adminAuth";
@@ -32,7 +32,9 @@ import CardReturnPage from "./pages/CardReturnPage";
 import { readCardReturn, dropCardOrder, withoutTitles } from "./lib/cartOrder";
 import { firstEntry, newEntry, samePageAgain } from "./lib/backInside";
 import { readAdminLink, withoutAdminLink, askOpenList } from "./lib/adminLink";
+import { readUnsubscribe, withoutUnsubscribe } from "./lib/unsubscribeLink";
 import ThreadPage from "./pages/ThreadPage";
+import UnsubscribePage from "./pages/UnsubscribePage";
 import HomePage from "./pages/HomePage";
 import CatalogPage from "./pages/CatalogPage";
 import CollectionsPage from "./pages/CollectionsPage";
@@ -52,9 +54,9 @@ import BuyerDashboard from "./pages/BuyerDashboard";
 
 import AdminPage from "./admin/AdminPage";
 
-// Pages that only exist while their link (?thread= / ?invoice=) is in the address bar, and the
-// way back from a card payment on Stripe (?cart=FA-...&card=...), which is read once on arrival.
-const LINK_PAGES = new Set(["conversation", "invoice", "card-return"]);
+// Pages that only exist while their link (?thread= / ?invoice= / ?unsubscribe=) is in the address bar,
+// and the way back from a card payment on Stripe (?cart=FA-...&card=...), which is read once on arrival.
+const LINK_PAGES = new Set(["conversation", "invoice", "unsubscribe", "card-return"]);
 // Where the Collectors Room was opened from: "admin" (the Admin Panel), or "" (the site).
 const ROOM_FROM = "fonkiart-room-from";
 
@@ -62,6 +64,8 @@ export default function App() {
   const [invoiceToken] = useState(() => new URLSearchParams(window.location.search).get("invoice"));
   const [invoiceShopView] = useState(() => readInvoiceParams(window.location.search).shopView);
   const [threadToken]  = useState(() => new URLSearchParams(window.location.search).get("thread"));
+  // "Unsubscribe" in a coupon email (src/lib/unsubscribeLink.js): its own small page.
+  const [unsubToken]   = useState(() => readUnsubscribe(window.location.search));
   const [deepLinkId]   = useState(() => new URLSearchParams(window.location.search).get("artwork"));
   // Back from paying a Cart order by card: { ref, session } once paid, { ref, cancelled } from
   // Stripe's own page without paying (src/lib/cartOrder.js readCardReturn).
@@ -87,7 +91,7 @@ export default function App() {
   // site not a chat site").
   // The invoice link (?invoice=<token>) does the same (Andy, 2026-11-17: "should go to
   // the site ... not to some lost page somewhere").
-  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : cardReturn ? "card-return" : resetLink ? "home" : adminLink ? "admin" : localStorage.getItem("fonkiart-page") || "home"));
+  const [page, setPage] = useState(() => (threadToken ? "conversation" : invoiceToken ? "invoice" : cardReturn ? "card-return" : unsubToken ? "unsubscribe" : resetLink ? "home" : adminLink ? "admin" : localStorage.getItem("fonkiart-page") || "home"));
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => {
@@ -222,13 +226,19 @@ export default function App() {
     };
     init();
     loadArtworks();
-    if (!threadToken && !invoiceToken && !cardReturn && !sessionStorage.getItem("fonkiart-welcome-seen")) {
+    if (!threadToken && !invoiceToken && !cardReturn && !unsubToken && !sessionStorage.getItem("fonkiart-welcome-seen")) {
       setTimeout(() => setShowWelcome(true), 1500);
     }
   }, []);
 
-  // Not the conversation or the invoice: they only exist while their link is in the address bar.
+  // Not the conversation, the invoice or Unsubscribe: they only exist while their link is in the address bar.
   useEffect(() => { if (!LINK_PAGES.has(page)) localStorage.setItem("fonkiart-page", page); }, [page]);
+  // The Unsubscribe link stays in the address bar while its page is open (a reload opens it again)
+  // and leaves with it.
+  useEffect(() => {
+    if (!unsubToken || page === "unsubscribe") return;
+    window.history.replaceState(window.history.state, "", window.location.pathname + withoutUnsubscribe(window.location.search) + window.location.hash);
+  }, [unsubToken, page]);
   useEffect(() => { localStorage.setItem("fonkiart-cart", JSON.stringify(cart)); }, [cart]);
   // After the line above: it counts on the cart being kept here first.
   useSavedCart({ cart, setCart, user, artworks, saving: cartSaving });
@@ -317,6 +327,7 @@ export default function App() {
       about:"About Fonkiart", children:"Children Benefit — Fonkiart",
       admin:"Admin — Fonkiart", "buyer-dashboard":"My Account — Fonkiart",
       conversation:"Your Conversation — Fonkiart", invoice:"Your Invoice — Fonkiart",
+      unsubscribe:"Coupon Emails — Fonkiart",
       "card-return": cardReturn?.cancelled ? "Your Cart — Fonkiart" : "Your Order — Fonkiart",
     };
     document.title = titles[page] || "Fonkiart";
@@ -366,6 +377,7 @@ export default function App() {
     : page === "card-return" ? { label: "Your Order", Icon: Receipt }
     : page === "conversation" ? { label: "Your Conversation", Icon: MessageCircle }
     : page === "invoice" ? { label: "Your Invoice", Icon: Receipt }
+    : page === "unsubscribe" ? { label: "Coupon Emails", Icon: Mail }
     : (NAV_ITEMS.find(n => n.id === page) || NAV_ITEMS[0]);
 
   return (
@@ -457,6 +469,7 @@ export default function App() {
         {page === "children" && <ChildrenPage setPage={goToPage} />}
         {page === "conversation" && threadToken && <ThreadPage token={threadToken} embedded artworks={mergedData.items} />}
         {page === "invoice" && invoiceToken && <InvoicePage token={invoiceToken} shopView={invoiceShopView} embedded artworks={mergedData.items} />}
+        {page === "unsubscribe" && unsubToken && <UnsubscribePage token={unsubToken} setPage={goToPage} />}
 
         <Footer settings={mergedData.settings} onTrackOrder={() => setTrackModal(true)} />
         <FloatingCart cart={cart} removeFromCart={removeFromCart} cartOpen={cartOpen} setCartOpen={setCartOpen} onView={setDeepModal} onViewCart={() => openCart(false)} />

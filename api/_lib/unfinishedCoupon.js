@@ -48,10 +48,11 @@ async function piecesFor(db, rows) {
 
 // The answer for the list: { coupons, choose, percent }.
 //  - choose: can an amount be chosen (has the SQL run)? Not known: false. percent: the shop's %.
-//  - coupons, by order id: { ref, sentAt, said, used, code, sizes, pieces }. code: their coupon, when
-//    they have one. sizes: what it gives now, or the shop's % when they have none. pieces: their
-//    checkout's pieces still for sale, { title, price }. said: how much the one already sent was, in
-//    words ("$300 off"), null when none went, or it went before amounts could be chosen.
+//  - coupons, by order id: { ref, sentAt, said, used, code, sizes, pieces }, and out: true when they
+//    asked for no more coupons. code: their coupon, when they have one. sizes: what it gives now, or
+//    the shop's % when they have none. pieces: their checkout's pieces still for sale, { title, price
+//    }. said: how much the one already sent was, in words ("$300 off"), null when none went, or it
+//    went before amounts could be chosen.
 // Only orders that are still unfinished checkouts are answered.
 export async function couponStatus(db, body) {
   const ids = Array.isArray(body?.ids) ? [...new Set(body.ids)] : [];

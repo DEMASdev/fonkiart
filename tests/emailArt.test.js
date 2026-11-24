@@ -55,6 +55,7 @@ const ART = [
   { id: 17, title: "No picture yet", image: null, isChildren: false },
   { id: 18, title: "Crayon Sun", image: "https://img.test/crayon.jpg", isChildren: true },
 ];
+const UNSUB = "https://fonkiart.com/?unsubscribe=made-up"; // every coupon email has one (tests/unsubscribe.test.js)
 const artDb = (extra = {}) => fakeDb({ Artworks: ART.map(a => ({ ...a })), ...extra });
 const byImage = new Map(ART.map(a => [a.image, a]));
 
@@ -188,7 +189,7 @@ test("a piece that can't be told for sure shows no picture at all, never another
 test("the emails about no piece keep a random piece of Aliana's art, as before", async () => {
   const db = artDb();
   const none = {
-    "Welcome coupon": T.welcomeCoupon({ code: "FK-AAAA-BBBB", discount: 15 }),
+    "Welcome coupon": T.welcomeCoupon({ code: "FK-AAAA-BBBB", discount: 15, unsubscribe: UNSUB }),
     "Contact form (shop)": T.contactStore({ name: "Ana Test", email: "ana@example.com", message: "hi" }),
     "Contact form (buyer)": T.contactBuyer({ name: "Ana Test", message: "hi", sender: "shop@fonkiart.com" }),
     "Password reset (customer)": T.customerReset({ link: "https://fonkiart.com/?reset=x", minutes: 30 }),
@@ -196,7 +197,7 @@ test("the emails about no piece keep a random piece of Aliana's art, as before",
     "Email that matched no request (shop)": T.inboundUnmatched({ from: "a@example.com", subject: "hi", text: "hello" }),
     "Reply to a contact message (buyer)": T.requestReply({ name: "Ana", message: "Thanks!", link: "https://fonkiart.com/?thread=x", requestText: "Do you ship to Canada?" }),
     "Reminder with messages only (shop)": T.reminderStore({ requests: [{ name: "Ana", email: "ana@example.com", message: "Do you ship to Canada?", days: 0 }], orders: [] }),
-    "Coupon gift (Admin -> Leads)": await adminSent(AE.couponEmail({ code: "FK-AAAA-BBBB", discount: 10 })),
+    "Coupon gift (Admin -> Leads)": T.couponGift({ code: "FK-AAAA-BBBB", words: "10% off", unsubscribe: UNSUB }),
   };
   const eligible = new Set(ART.filter(a => a.image && !a.isChildren).map(a => a.title));
   for (const [name, html] of Object.entries(none)) {
@@ -276,7 +277,7 @@ test("Admin -> Orders names the piece in every email it sends; the server keeps 
   assert.deepEqual(T.readSlot(await adminSent({ ...body, pieces: ["Madame Mango"] })).titles, ["Madame Mango"]);
   assert.deepEqual(T.readSlot(await adminSent({ ...body, pieces: "Madame Mango" })).titles, [], "garbled: no picture, not a random one");
   assert.deepEqual(T.readSlot(await adminSent({ ...body, pieces: [42, "Madame Mango"] })).titles, ["Madame Mango"]);
-  assert.equal(T.readSlot(await adminSent(body)).titles, null, "no pieces: a coupon, a random piece");
+  assert.equal(T.readSlot(await adminSent(body)).titles, null, "no pieces: a random piece");
 });
 
 test("no title can break out of the picture's slot or turn into another piece", async () => {
@@ -315,7 +316,7 @@ test("control: the check catches today's random picture (it lands on another pie
 });
 
 // The coupon to a buyer who didn't finish paying (Andy, 2026-11-22): their own pieces, BIG and whole.
-const coupon = (titles) => T.unfinishedCoupon({ firstName: "Ana", titles, code: "FK-AAAA-BBBB", words: "15% off" });
+const coupon = (titles) => T.unfinishedCoupon({ firstName: "Ana", titles, code: "FK-AAAA-BBBB", words: "15% off", unsubscribe: UNSUB });
 const imgTags = (html) => [...String(html).matchAll(/<img [^>]*>/g)].map(m => m[0]);
 
 test("the coupon after an unfinished checkout shows the buyer's own pieces, big and whole, and never another", async () => {
@@ -369,7 +370,7 @@ test("the table: every email the server can build is either about its pieces or 
   const helpers = new Set(["ART_SLOT", "adminFrame", "artFor", "artRow", "artThumb", "emailImage", "inquiryTitle", "pickArt", "piecesSlot", "readSlot", "readThumbs", "supabaseTemplate", "thumbSlot"]);
   const emails = Object.keys(T).filter(k => !helpers.has(k) && !k.endsWith("Subject")).sort();
   // unfinishedCoupon: about its pieces, big (its own test above).
-  assert.deepEqual(emails, ["adminReset", "cardPaidShop", "contactBuyer", "contactStore", "customerReset", "inboundUnmatched", "inquiryBuyer",
+  assert.deepEqual(emails, ["adminReset", "cardPaidShop", "contactBuyer", "contactStore", "couponGift", "customerReset", "inboundUnmatched", "inquiryBuyer",
     "inquiryStore", "invoiceApproved", "orderBuyer", "orderStore", "paymentReceived", "reminderStore", "requestReply", "requestReplyStore",
     "shipAddressShop", "unfinishedCoupon", "welcomeCoupon"], "a new email? add it to this table and to ABOUT_ONE / ABOUT_PIECES or the no-piece list");
   assert.deepEqual(Object.keys(CE).filter(k => !k.endsWith("Subject")).sort(), ["bankFailed", "bankFailedShop", "cartPaidShop", "cartReceived"]);

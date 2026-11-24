@@ -18,6 +18,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
   const [generatedCode, setGeneratedCode] = useState("");
   const [returning, setReturning] = useState(false);
   const [alreadyUsed, setAlreadyUsed] = useState(false);
+  const [emailed, setEmailed] = useState(true); // false: they asked for no more coupons by email, so their code is only here
   const [sizes, setSizes] = useState([]); // what their own code gives, when that is not the shop's % (src/lib/couponSize.js)
 
   const handleSubmit = async () => {
@@ -29,6 +30,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
       setGeneratedCode(r.code);
       setReturning(!!r.returning);
       setAlreadyUsed(!!r.used);
+      setEmailed(r.emailed !== false);
       setSizes(ownSizes(r.sizes));
     } catch(e) { console.error("Error:", e); setErr("Error: " + e.message); setLoading(false); return; }
     setLoading(false);
@@ -89,7 +91,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
                   </>
                 ) : (
                   <>
-                    <p>{returning ? "Welcome back! Your coupon is still waiting for you:" : "Check your inbox! Your unique coupon is also right here:"}</p>
+                    <p>{returning ? "Welcome back! Your coupon is still waiting for you:" : emailed ? "Check your inbox! Your unique coupon is also right here:" : "Your unique coupon is right here:"}</p>
                     <div className="coupon-box">
                       <span className="coupon-code">{generatedCode}</span>
                       <button className="coupon-copy" onClick={copy}>{copied ? "✓ Copied!" : "Copy"}</button>

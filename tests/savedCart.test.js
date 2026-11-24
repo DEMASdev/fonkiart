@@ -91,6 +91,7 @@ function fakeDb({ leads = [], artworks = ART(), orders = [], clients = [], reque
   const storage = {
     async createBucket() { bucket = true; return { data: {}, error: null }; },
     from: () => ({
+      async list(dir) { return { data: Object.keys(files).filter((f) => f.startsWith(`${dir}/`)).map((f) => ({ name: f.slice(dir.length + 1) })), error: null }; },
       async download(path) {
         if (fails.note) return { data: null, error: { message: "Storage is down" } };
         return bucket && files[path] != null ? { data: new Blob([files[path]]), error: null } : { data: null, error: { message: "Object not found" } };
@@ -199,11 +200,12 @@ test("3bb the welcome gift hands the pass only to whoever gives an email FIRST: 
   assert.equal((await leadCoupon(fakeDb({ leads: [LEAD({ email: "x@example.com", coupon_code: null })] }), "x@example.com", "welcome-popup")).fresh, false);
   // Never in an email, never in a log.
   assert.ok(!JSON.stringify(mail.sent).includes(out.pass) && !said.includes(out.pass));
-  // No server key: no pass, and everything else as before.
+  // No server key (the server has nothing at all then): no coupon email, which would have no Unsubscribe link, and no pass.
   try {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const { out: none } = await logsOf(() => opWelcome(fakeDb(), { email: "new@example.com" }, mailbox()));
-    assert.deepEqual(Object.keys(none).sort(), ["code", "returning"]);
+    const none = mailbox();
+    await logsOf(() => assert.rejects(opWelcome(fakeDb(), { email: "new@example.com" }, none), /no key for the Unsubscribe link/));
+    assert.deepEqual(none.sent, []);
   } finally { process.env.SUPABASE_SERVICE_ROLE_KEY = KEY; }
 });
 
@@ -1140,6 +1142,7 @@ test("7bb '+ Create Coupon': an email on the list with no code gets one on its o
   const { runAdmin, rows, sent, made } = await (async () => {
     const { recordQuery } = await import(new URL("src/lib/adminQuery.js", root).href);
     const { validateChain } = await import(new URL("api/_lib/adminOps.js", root).href);
+    const { couponGift, unsubscribedLeads } = await import(new URL("api/_lib/leadsCoupon.js", root).href);
     const react = miniReact();
     const runtime = await import("react/jsx-runtime");
     const all = (node, pick, out = []) => { for (const n of [].concat(node ?? [])) if (Array.isArray(n)) all(n, pick, out); else if (n?.props) { if (pick(n)) out.push(n); all(n.props.children, pick, out); } return out; };
@@ -1149,10 +1152,11 @@ test("7bb '+ Create Coupon': an email on the list with no code gets one on its o
     const runAdmin = async (db, email, { mail = true } = {}) => {
       // The server's own checks and replay (api/_lib/adminOps.js), on the stand-in.
       const adminDb = { from: (table) => recordQuery(table, async ({ table: name, chain }) => { validateChain(name, chain); let q = db.from(name); for (const { m, a } of chain) q = q[m](...a); return q; }) };
+      // The email itself: the server builds it from that person's own row (api/_lib/leadsCoupon.js).
+      const adminAction = async (kind, body) => (kind === "coupon-gift" ? couponGift(db, body, { send: async (m) => { sent.push(m); } }) : kind === "unsubscribed" ? unsubscribedLeads(db, body) : assert.fail(kind));
       const { default: Leads } = await loadSrc("src/admin/LeadsTab.jsx", {
-        react, "react/jsx-runtime": runtime, "../lib/adminDb": { adminDb }, "../lib/couponSize": { ownSizes: () => [], sizesWords: () => "" },
-        "../utils/helpers": { generateCouponCode: () => { made.push(`FK-MADE-${String(made.length).padStart(4, "0")}`); return made.at(-1); }, sendEmail: async (m) => { sent.push(m); } },
-        "../lib/adminEmails": { couponEmail: ({ code, discount }) => ({ heading: "x", content: `${code} ${discount}%` }) },
+        react, "react/jsx-runtime": runtime, "../lib/adminDb": { adminDb, adminAction }, "../lib/couponSize": { ownSizes: () => [], sizesWords: () => "" },
+        "../utils/helpers": { generateCouponCode: () => { made.push(`FK-MADE-${String(made.length).padStart(4, "0")}`); return made.at(-1); } },
       });
       const tab = react.mount(() => Leads({ discount: 15 }));
       const press = async (pick) => { await all(tab.out, (n) => n.type === "button" && pick(String(n.props.children)))[0].props.onClick(); await flush(); };
@@ -1162,7 +1166,7 @@ test("7bb '+ Create Coupon': an email on the list with no code gets one on its o
       if (!mail) all(tab.out, (n) => n.props.type === "checkbox")[0].props.onChange({ target: { checked: false } });
       await flush();
       const says = [];
-      const watch = () => { const m = all(tab.out, (n) => /^(ok|warn)-msg$/.test(n.props.className))[0]; if (m && says.at(-1) !== m.props.children) says.push(m.props.children); };
+      const watch = () => { const m = all(tab.out, (n) => /^(ok-msg|warn-msg|lead-said)$/.test(n.props.className))[0]; if (m && says.at(-1) !== m.props.children) says.push(m.props.children); };
       const done = press((s) => s === "Generate & Save");
       for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); watch(); }
       await done; watch();
@@ -1174,15 +1178,17 @@ test("7bb '+ Create Coupon': an email on the list with no code gets one on its o
   })();
   // On the list with no code (a cart saved while signed in makes such a row): it gets one, on its own row, and the email.
   let db = rows([LEAD({ id: 1, email: "else@example.com" }), LEAD({ coupon_code: null, source: "buyer-cart", cart: cartOf(12), cart_at: ago(DAY) })]);
-  let { open } = await runAdmin(db, " Ana@Example.com ");
+  let { open, says } = await runAdmin(db, " Ana@Example.com ");
   assert.equal(made.length, 1);
   assert.deepEqual(db.tables.Leads.map((r) => [r.email, r.coupon_code, r.coupon_used, r.source]), [["else@example.com", "FK-AAAA-BBBB", false, "welcome-popup"], ["ana@example.com", made[0], false, "buyer-cart"]], "no second row, and the rest of it as it was");
   assert.deepEqual(db.tables.Leads[1].cart, cartOf(12));
-  assert.deepEqual(sent.map((m) => [m.to, m.content]), [["ana@example.com", `${made[0]} 15%`]]);
+  assert.deepEqual(sent.map((m) => [m.to, m.subject]), [["ana@example.com", "Your Exclusive Coupon — Fonkiart"]]);
+  assert.match(sent[0].htmlContent, new RegExp(`${made[0]}<[\\s\\S]*15% off your purchase[\\s\\S]*\\?unsubscribe=`));
   assert.equal(open, 0, "made: the form closes, as it does for someone new");
+  assert.equal(says.at(-1), `Coupon ${made[0]} created and emailed to ana@example.com.`, "and the page still says what it did");
   // The box not ticked: no email.
-  await runAdmin(rows([LEAD({ coupon_code: null })]), "ana@example.com", { mail: false });
-  assert.equal(sent.length, 1);
+  ({ says } = await runAdmin(rows([LEAD({ coupon_code: null })]), "ana@example.com", { mail: false }));
+  assert.deepEqual([sent.length, says.at(-1)], [1, `Coupon ${made.at(-1)} created.`]);
   // Two rows for one email, neither with a code: one of them gets it. A new code is never "used" yet.
   db = rows([LEAD({ id: 1, coupon_code: null, coupon_used: true }), LEAD({ id: 2, coupon_code: null })]);
   await runAdmin(db, "ana@example.com", { mail: false });

@@ -65,7 +65,9 @@ function fakeDb(tables = {}, { user = null, fail = {}, users = [] } = {}) {
       },
     },
   };
-  return { from, auth, writes, tables };
+  // Nothing in Storage (nobody asked for no more coupons: tests/unsubscribe.test.js).
+  const storage = { from: () => ({ download: async () => ({ data: null, error: { message: "Object not found", statusCode: "404" } }) }) };
+  return { from, auth, storage, writes, tables };
 }
 
 const mailbox = () => { const sent = []; return { sender: "shop@fonkiart.com", sent, send: async (m) => { sent.push(m); } }; };
@@ -152,6 +154,7 @@ test("admin email refuses a bad recipient", async () => {
 });
 
 // ── public store ────────────────────────────────────────────
+process.env.SUPABASE_SERVICE_ROLE_KEY = ["made", "up", "for", "tests"].join("-"); // the server's key: a coupon email's Unsubscribe link is sealed with it
 test("welcome: new email gets a fresh code + email; returning email gets its old code, no email", async () => {
   const db = fakeDb({ Settings: [{ id: 1, couponDiscount: 15 }], Leads: [{ id: 1, email: "old@x.co", coupon_code: "FK-AAAA-BBBB", coupon_used: true }] });
   const mail = mailbox();
@@ -418,7 +421,7 @@ test("emails about no piece get a random piece of Aliana's art (never a children
     { id: 2, title: "Pink <palms>", image: "https://x/palms.jpg", isChildren: false },
     { id: 3, title: "No picture yet", image: null, isChildren: false },
   ] });
-  const html = T.welcomeCoupon({ code: "FK-1", discount: 15 });
+  const html = T.welcomeCoupon({ code: "FK-1", discount: 15, unsubscribe: "https://fonkiart.com/?unsubscribe=made-up" });
   assert.match(html, /<!--ART-->/);
   for (let i = 0; i < 10; i++) {
     const out = await withArt(db, html);
@@ -433,7 +436,7 @@ test("emails about no piece get a random piece of Aliana's art (never a children
   assert.doesNotMatch(await withArt(fakeDb({}, { fail: { Artworks: { code: "x", message: "down" } } }), html), /<!--ART-->|<img/);
 });
 
-test("admin-written emails (invoice, status, coupon) get the shared frame and a picture, customer text escaped", async () => {
+test("admin-written emails (invoice, status) get the shared frame and a picture, customer text escaped", async () => {
   const sent = [];
   const mail = { send: async (m) => { sent.push(m); } };
   const inv = AE.invoiceEmail({ invNum: "INV-1", invDate: "November 1, 2026", firstName: "<b>Ana</b>", itemTitle: "Pink <palms>", notes: "", dueDate: "", amount: 450, link: "https://fonkiart.com/?invoice=abc", sender: "support@fonkiart.com" });
@@ -445,7 +448,7 @@ test("admin-written emails (invoice, status, coupon) get the shared frame and a 
   assert.match(sent[0].htmlContent, /Review &amp; Confirm/);
   assert.match(sent[0].htmlContent, /You pay after you confirm/);
   assert.doesNotMatch(sent[0].htmlContent, /Approve/);
-  assert.match(AE.couponEmail({ code: "FK-<x>", discount: 15 }).content, /FK-&lt;x&gt;/);
+  assert.match(T.couponGift({ code: "FK-<x>", words: "15% <off>", unsubscribe: "https://fonkiart.com/?unsubscribe=made-up" }), /FK-&lt;x&gt;[\s\S]*15% &lt;off&gt; your purchase/);
   assert.match(AE.statusEmail({ name: "<i>Bo</i>", message: "Shipped", sender: "s@f.com" }).heading, /&lt;i&gt;Bo/);
   // A ready-made htmlContent still goes out exactly as written.
   await adminEmail(mail, { to: "ana@x.com", subject: "x", htmlContent: "<p>plain</p>" });

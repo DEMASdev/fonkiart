@@ -16,6 +16,7 @@ import { bankFailed, bankFailedShop, bankFailedShopSubject, bankFailedSubject } 
 import { buyerSignInLink } from "./verifyLink.js";
 import { opCartSaving, opMyCart, opRememberCart } from "./cartMemory.js";
 import { makePass } from "./cartPass.js";
+import { opUnsubscribe, sendCouponEmail } from "./unsubscribe.js";
 import { appliedWords, couponPrices, ownSizes, sizesOf, sizeWords } from "../../src/lib/couponSize.js";
 
 // Every public action the shop needs, run on the server with the service key, so the
@@ -99,13 +100,15 @@ export async function opWelcome(db, body, mail) {
   const sizes = used ? [] : ownSizes(size);
   if (!made) return { returning: true, code, used, ...(sizes.length ? { sizes } : {}) };
   const discount = await couponDiscount(db);
-  // "Verify my email" beside the code: it signs them in as a buyer (verifyLink.js), or is null.
-  const verifyLink = await buyerSignInLink(db, email);
-  await mail.send({ to: email, subject: `Your ${discount}% Welcome Coupon — Fonkiart`, htmlContent: T.welcomeCoupon({ code, discount, verifyLink }) });
+  // Not to someone who asked for no more coupons (unsubscribe.js): their code is on the screen then,
+  // and the site doesn't say it was emailed. "Verify my email" beside the code in the email: it signs
+  // them in as a buyer (verifyLink.js), or is null.
+  const out = await sendCouponEmail(db, mail, { to: email, subject: `Your ${discount}% Welcome Coupon — Fonkiart`,
+    html: async (unsubscribe) => T.welcomeCoupon({ code, discount, verifyLink: await buyerSignInLink(db, email), unsubscribe }) });
   // The browser that gave this email first may save its cart with it (cartPass.js). An email that
   // was on the list already gets no pass: a stranger may be the one typing it.
   const pass = fresh ? makePass(email, code) : null;
-  return { returning: false, code, ...(pass && { pass }) };
+  return { returning: false, code, ...(!out.sent && { emailed: false }), ...(pass && { pass }) };
 }
 
 export async function opCollectors(db, body) {
@@ -665,6 +668,8 @@ export async function opBuyer(db, req) {
 
 export const STORE_OPS = {
   "welcome": (db, req, mail) => opWelcome(db, req.body || {}, mail),
+  // "Unsubscribe" in a coupon email: no more coupons to whoever that link was made for.
+  "unsubscribe": (db, req) => opUnsubscribe(db, req.body || {}),
   // The cart of someone who gave their email, or who is signed in (cartMemory.js); whether that
   // saving is on at all: one yes or no for the whole site; and the art waiting for whoever is
   // signed in.

@@ -62,7 +62,7 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   //   checkout, never a second
   const [ask, setAsk] = useState(null);
   // "Send a coupon" (Andy, 2026-11-22: "maybe send them a coupon ?"): by order id, what the server
-  // knows (api/_lib/unfinishedCoupon.js): { ref, sentAt, said, used, code, sizes, pieces }, loaded when
+  // knows (api/_lib/unfinishedCoupon.js): { ref, sentAt, said, used, code, sizes, pieces, out }, loaded when
   // the list opens. couponShop: { choose, percent }, can the amount be chosen, and the shop's %; null
   // until it is known. couponNote: what the last tap did, by order id, { ok, text }.
   const [coupons, setCoupons] = useState({});
@@ -565,6 +565,9 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         noteCoupon(o.id, { ok: false, text: `Their coupon ${r.code} was already used, so nothing was sent.` });
       } else if (r.why === "less") {
         noteCoupon(o.id, { ok: false, text: `Their coupon already gives ${r.now}, so it can't be less. Nothing was sent.` });
+      } else if (r.why === "out") {
+        setCoupons(c => ({ ...c, [o.id]: { ...(c[o.id] || {}), out: true } }));
+        noteCoupon(o.id, { ok: false, text: "They asked not to get coupons, so nothing was sent." });
       } else {
         noteCoupon(o.id, { ok: false, text: "Their pieces have sold since, so nothing was sent." });
       }
@@ -582,6 +585,12 @@ export default function OrdersTab({ data, action, onActionHandled }) {
         <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
       </div>
     );
+    if (c?.out) return (
+      <div className="mark-paid-ask">
+        <span>They asked not to get coupons, so there is nothing to send.</span>
+        <button className="tap mark-paid-no" onClick={()=>setAsk(null)}>Close</button>
+      </div>
+    );
     if (c?.used) return (
       <div className="mark-paid-ask">
         <span>Their coupon {c.code} was already used, so there is nothing to send. To send it, reset it under Leads first.</span>
@@ -593,12 +602,13 @@ export default function OrdersTab({ data, action, onActionHandled }) {
   };
   // Its place on a "Didn't finish paying" row: the button, until the checkout's coupon has gone;
   // then a plain line saying when and how much (no button: never a second). One sent before amounts
-  // could be chosen says when only. Their code already used: the button says so, and its tap only
-  // explains.
+  // could be chosen says when only. They asked for no more coupons (Unsubscribe): a plain line too.
+  // Their code already used: the button says so, and its tap only explains.
   const sentDay = (iso) => new Date(iso).toLocaleDateString("en-US", { month:"short", day:"numeric" });
   const couponCell = (o) => {
     const c = coupons[o.id];
     if (c?.sentAt) return <span className="o-coupon-sent" style={SENT_LINE}>Coupon sent {sentDay(c.sentAt)}{c.said && <> <span className="o-coupon-said">{c.said}</span></>}</span>;
+    if (c?.out) return <span className="o-coupon-out" style={SENT_LINE}>Asked not to get coupons</span>;
     const busy = trackBusy[o.id] === "coupon";
     return (
       <button className="tap o-btn o-coupon" aria-expanded={asking("coupon", o.id)} onClick={()=>askCoupon(o)} disabled={busy}>

@@ -9,7 +9,8 @@ import CouponAsk from "./CouponAsk";
 // finish paying" on Admin -> Orders: everyone who gave their email or signed in, put art in their
 // cart and has ordered nothing since (api/_lib/cartCoupon.js): who, their pieces, how long ago, and
 // "Send a coupon", with how much off, asked on the row itself as on that list (CouponAsk.jsx). Only
-// on Andy's tap, and ONE per person in 30 days: once it has gone, a plain line says when and how much.
+// on Andy's tap, and ONE per person in 30 days: once it has gone, a plain line says when and how much;
+// someone who asked for no more coupons ("Unsubscribe") has a plain line saying so.
 //  search: what is typed in Orders' search box. show: false while the orders are loading, or the
 //  page is filtered to another status. percent: the shop's %, as Admin has it. Opened from the
 //  morning email's link (src/lib/adminLink.js): open, in sight.
@@ -77,6 +78,9 @@ export default function CartsLeft({ search = "", show = true, percent }) {
         note(c.email, { ok: false, text: `Their coupon ${r.code} was already used, so nothing was sent.` });
       } else if (r.why === "less") {
         note(c.email, { ok: false, text: `Their coupon already gives ${r.now}, so it can't be less. Nothing was sent.` });
+      } else if (r.why === "out") {
+        mark(c.email, { out: true });
+        note(c.email, { ok: false, text: "They asked not to get coupons, so nothing was sent." });
       } else {
         note(c.email, { ok: false, text: "Their cart has changed since (bought, emptied or sold), so nothing was sent." });
       }
@@ -91,10 +95,11 @@ export default function CartsLeft({ search = "", show = true, percent }) {
     </div>
   ) : <CouponAsk to={c.email} coupon={c} shop={list} percent={percent} onSend={choice => send(c, choice)} onCancel={() => setAsking(null)} />;
   // Its place on a row: the button, until their coupon has gone; then a plain line saying when and how
-  // much (no button: never a second). Their code already used: the button says so, and its tap only
-  // explains.
+  // much (no button: never a second), or that they asked for no more. Their code already used: the
+  // button says so, and its tap only explains.
   const couponCell = (c) => c.sentAt
     ? <span className="o-cart-sent">Coupon sent {day(c.sentAt)}{c.said && ` · ${c.said}`}</span>
+    : c.out ? <span className="o-cart-sent">Asked not to get coupons</span>
     : (
       <button className="tap o-btn o-coupon" aria-expanded={asking === c.email} onClick={() => ask(c)} disabled={!!busy[c.email]}>
         {busy[c.email] ? "Sending…" : c.used ? "Coupon already used" : "✉ Send a coupon"}

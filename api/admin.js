@@ -10,6 +10,7 @@ import { queryMarkingSold } from "./_lib/artworks.js";
 import { adminReminderNow } from "./_lib/reminders.js";
 import { couponStatus, couponSend } from "./_lib/unfinishedCoupon.js";
 import { cartsForAdmin, cartCouponSend } from "./_lib/cartCoupon.js";
+import { couponGift, isOldGift, oldGift, unsubscribedLeads } from "./_lib/leadsCoupon.js";
 import { cardCheck } from "./_lib/stripe.js";
 import { siteUrl } from "./_lib/site.js";
 
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
     if (body.kind === "query") return res.status(200).json(await queryMarkingSold(db, body.table, body.chain));
     if (body.kind === "storage-sign") return res.status(200).json(await signUpload(db, body.path));
     if (body.kind === "storage-remove") return res.status(200).json(await removeFiles(db, body.paths));
-    if (body.kind === "email") return res.status(200).json(await adminEmail({ send }, body));
+    if (body.kind === "email") return res.status(200).json(isOldGift(body) ? await oldGift(db, body, { send }) : await adminEmail({ send }, body));
     if (body.kind === "request-thread") return res.status(200).json(await adminThread(db, body));
     if (body.kind === "request-reply") return res.status(200).json(await adminReply(db, body, { sender: senderAddress(), send }));
     if (body.kind === "inbound-setup") return res.status(200).json(await adminInboundSetup());
@@ -49,6 +50,9 @@ export default async function handler(req, res) {
     // "Left in the cart" -> "Send a coupon": the same, for someone who left art in their cart.
     if (body.kind === "carts-left") return res.status(200).json(await cartsForAdmin(db));
     if (body.kind === "cart-coupon-send") return res.status(200).json(await cartCouponSend(db, body, { send }));
+    // Leads: the email of "+ Create Coupon", and which of these people asked for no more coupons.
+    if (body.kind === "coupon-gift") return res.status(200).json(await couponGift(db, body, { send }));
+    if (body.kind === "unsubscribed") return res.status(200).json(await unsubscribedLeads(db, body));
     // deep: "Check again" makes a real $0.50 payment page on Stripe's own site, cards only (not
     // the card form inside fonkiart.com), and cancels it at once (see cardCheck).
     if (body.kind === "card-check") return res.status(200).json(await cardCheck({ deep: body.deep === true, site: siteUrl() }));

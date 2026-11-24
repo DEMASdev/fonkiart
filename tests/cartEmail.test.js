@@ -98,7 +98,9 @@ function fakeDb({ leads = [], artworks = [], settings = { couponDiscount: 15 }, 
       deleteUser: async () => { asked.deleteUser++; return { data: null, error: null }; },
     },
   };
-  return { from, auth, writes, asked, tables };
+  // Nothing in Storage (nobody asked for no more coupons: tests/unsubscribe.test.js).
+  const storage = { from: () => ({ download: async () => ({ data: null, error: { message: "Object not found", statusCode: "404" } }) }) };
+  return { from, auth, storage, writes, asked, tables };
 }
 const mailbox = () => { const sent = []; return { sender: "shop@fonkiart.com", sent, send: async (m) => { sent.push(m); } }; };
 const req = (body, token) => ({ body, headers: token ? { authorization: `Bearer ${token}` } : {} });
@@ -300,7 +302,7 @@ test("remember-cart agrees with cart-saving: a signed-in buyer's cart is saved o
 // ── "Verify my email" ───────────────────────────────────────
 const LINK = "https://proj.supabase.co/auth/v1/verify?token=tok-123&type=magiclink&redirect_to=https%3A%2F%2Ffonkiart.com";
 
-test("Verify my email: someone new gets Supabase's own sign-in link, made as a BUYER, in the one welcome email", async () => {
+test("Verify my email: someone new gets Supabase's own sign-in link, made as a BUYER, in the one welcome email", () => withPass(async () => {
   const v = await load("api/_lib/verifyLink.js");
   assert.ok(v, "api/_lib/verifyLink.js is there");
   const store = await import(new URL("api/_lib/storeOps.js", root).href);
@@ -315,13 +317,13 @@ test("Verify my email: someone new gets Supabase's own sign-in link, made as a B
   assert.ok(html.includes(out.code), "the code is in the same email");
   assert.match(html, /20% off/);
   // The link signs someone in: never back to the browser, never in a log.
-  assert.deepEqual(Object.keys(out).sort(), ["code", "returning"]);
+  assert.deepEqual(Object.keys(out).sort(), ["code", "pass", "returning"]);
   assert.doesNotMatch(JSON.stringify(out), /tok-123|verify/);
   assert.doesNotMatch(said.join("\n"), /tok-123|supabase\.co|new@example\.com/i);
   assert.equal(db.asked.updateUserById + db.asked.deleteUser, 0, "nobody's sign-in is changed");
-});
+}));
 
-test("Verify my email: a buyer gets their own link; a collector's sign-in (or anyone not a buyer) gets none, and nothing about it changes", async () => {
+test("Verify my email: a buyer gets their own link; a collector's sign-in (or anyone not a buyer) gets none, and nothing about it changes", () => withPass(async () => {
   const v = await load("api/_lib/verifyLink.js");
   assert.ok(v, "api/_lib/verifyLink.js is there");
   const buyer = fakeDb({ users: [{ id: "u-1", email: "ana@example.com", user_metadata: { role: "buyer" } }] });
@@ -347,7 +349,7 @@ test("Verify my email: a buyer gets their own link; a collector's sign-in (or an
     assert.ok(mail.sent[0].htmlContent.includes(out.code));
     assert.doesNotMatch(said.join("\n"), /new@example\.com|plain\.example/);
   }
-});
+}));
 
 test("Verify my email: an email already on the list is answered as before, with no new email (nobody can flood an inbox by typing it again)", async () => {
   const v = await load("api/_lib/verifyLink.js");
@@ -375,7 +377,7 @@ test("the signed-in buyer lands in My Account, never the Collectors Room; the ro
 
 test("the verify email: no green, no cream, nothing under 16px (and the checks can see them)", async () => {
   const T = await import(new URL("api/_lib/emails.js", root).href);
-  const html = T.welcomeCoupon({ code: "FK-7QMR-K2PD", discount: 15, verifyLink: LINK });
+  const html = T.welcomeCoupon({ code: "FK-7QMR-K2PD", discount: 15, verifyLink: LINK, unsubscribe: "https://fonkiart.com/?unsubscribe=made-up" });
   assert.match(html, /Verify my email/, "the button is there to check");
   assert.deepEqual(colours(html).filter(green), []);
   assert.deepEqual(colours(html).filter(cream), []);

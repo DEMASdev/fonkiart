@@ -1,11 +1,11 @@
-// The insides of the emails the admin sends (invoice, order status, coupon).
+// The insides of the emails the admin sends (invoice, order status).
 // The server wraps each one in the shared Fonkiart frame with a picture (api/_lib/emails.js):
 // the order's own piece when the email is about one (send its title as `pieces`), a random
-// piece of Aliana's art when it is about none (a coupon). So only the heading and the inside
-// live here. Anything that came from a customer (name, notes, titles) is escaped.
+// piece of Aliana's art when it is about none. So only the heading and the inside live here.
+// Anything that came from a customer (name, notes, titles) is escaped. A coupon is never sent from
+// here: the server builds it and sends it (api/_lib/leadsCoupon.js), with its Unsubscribe link.
 
 import { orderTracking, orderTrackingLink, carrierLabel, isPickup } from "./tracking.js";
-import { codePx } from "./couponCode.js";
 
 const C = { ink: "#1c1a18", muted: "#9e7fa0", gold: "#b8923f", line: "#e8c97a" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -73,13 +73,4 @@ export function statusEmailFor({ status, order, name, sender }) {
   if (!Object.hasOwn(msgs, status)) return null;
   const [subject, message] = msgs[status];
   return { subject, ...statusEmail({ name, message, sender, after: tracking }) };
-}
-
-export function couponEmail({ code, discount }) {
-  return {
-    heading: "A Gift From Fonkiart",
-    content: `<p style="margin:0 0 16px;">We have a special offer just for you:</p>`
-      + `<div style="background:#ffffff;border:2px dashed ${C.line};padding:18px 12px;text-align:center;margin:0 0 20px;"><div style="font-family:Georgia,serif;font-size:${codePx(code)}px;font-weight:bold;letter-spacing:1px;white-space:nowrap;color:${C.ink};">${esc(code)}</div><div style="font-size:16px;color:${C.muted};margin-top:6px;">${esc(discount)}% off your purchase</div></div>`
-      + small("Enter this code at checkout. One use only.") + small("— Fonkiart"),
-  };
 }

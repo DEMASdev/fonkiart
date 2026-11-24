@@ -22,7 +22,7 @@ export default function CartEmailBox({ cart, percent, saving, onSignIn, onClose 
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(null); // { code, returning, used, email, kept: its cart is saved with it }
+  const [done, setDone] = useState(null); // { code, returning, used, email, emailed: it was sent, kept: its cart is saved with it }
   const box = useRef(null);
 
   useEffect(() => { box.current?.focus(); }, []);
@@ -41,7 +41,7 @@ export default function CartEmailBox({ cart, percent, saving, onSignIn, onClose 
     try {
       const r = await storeCall("welcome", { email: v });
       remember(v, { told: saving, pass: r.pass }); // told: the words above said the pieces are remembered
-      setDone({ code: r.code, returning: !!r.returning, used: !!r.used, email: v, kept: toldEmail() === v });
+      setDone({ code: r.code, returning: !!r.returning, used: !!r.used, email: v, emailed: r.emailed !== false, kept: toldEmail() === v });
     } catch {
       setErr("That didn't go through. Please try again.");
     }
@@ -60,7 +60,7 @@ export default function CartEmailBox({ cart, percent, saving, onSignIn, onClose 
 
         <h2 id="cart-box-title" className="cart-box-title">
           {!done ? <>Leave your email and get <span className="cart-box-pct">{percent}%</span> off these pieces</>
-            : done.used ? "Thank you for coming back" : done.returning ? "Welcome back" : "Your code is on its way"}
+            : done.used ? "Thank you for coming back" : done.returning ? "Welcome back" : done.emailed === false ? "Here is your code" : "Your code is on its way"}
         </h2>
         <div className="cart-box-pieces">
           {pieces.map((p) => (
@@ -87,7 +87,8 @@ export default function CartEmailBox({ cart, percent, saving, onSignIn, onClose 
   );
 }
 
-// After sending: the code (or that it was used), "Verify my email" for someone new, and, only
+// After sending: the code (or that it was used), "Verify my email" for someone new (emailed: false:
+// they asked for no more coupons by email, so nothing says it was sent), and, only
 // while cart saving is on, that the pieces are saved with the email, or how they would be.
 export function BoxSent({ done, saving, onSignIn, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -107,7 +108,7 @@ export function BoxSent({ done, saving, onSignIn, onClose }) {
             <span className="cart-box-code-text">{done.code}</span>
             <button type="button" className="cart-box-copy" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
           </div>
-          {!done.returning && <p className="cart-box-text">We sent it to your email, with a &ldquo;Verify my email&rdquo; button that signs you in. No password needed.</p>}
+          {!done.returning && done.emailed !== false && <p className="cart-box-text">We sent it to your email, with a &ldquo;Verify my email&rdquo; button that signs you in. No password needed.</p>}
         </>
       )}
       {saving && done.kept && <p className="cart-box-text">Your pieces are saved with your email.</p>}
