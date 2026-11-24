@@ -45,7 +45,7 @@ export default function ContactPage({ data }) {
                 <div className="fld"><label>Name</label><input autoComplete="name" value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Your name" /></div>
                 <div className="fld"><label>Email</label><input type="email" autoComplete="email" autoCapitalize="none" value={form.email} onChange={e=>f("email",e.target.value)} placeholder="your@email.com" /></div>
                 <div className="fld"><label>Message</label><textarea value={form.message} onChange={e=>f("message",e.target.value)} placeholder="Tell us what you have in mind…" style={{ minHeight:120 }} /></div>
-                {formErr && <div className="warn-msg" style={{marginBottom:12}}>{formErr}</div>}
+                {formErr && <p className="contact-err" role="alert">{formErr}</p>}
                 <button className="btn-p" style={{ width:"100%" }} onClick={handleSend} disabled={loading}>{loading ? "Sending…" : "Send Message"}</button>
               </>
           }

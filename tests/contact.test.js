@@ -80,7 +80,7 @@ async function page(storeCall) {
   const find = (want, n = d.tree) => typeof n === "string" ? [] : [...(want(n) ? [n] : []), ...n.children.flatMap((x) => find(want, x))];
   const text = (n = d.tree) => typeof n === "string" ? n : n.children.map((x) => text(x)).join(" ");
   const fill = () => ["name", "email", "message"].forEach((k, i) => find((n) => n.type === "input" || n.type === "textarea")[i].props.onChange({ target: { value: FORM[k] } }));
-  return { fill, text: () => text().replace(/\s+/g, " ").trim(), values: () => find((n) => n.type === "input" || n.type === "textarea").map((n) => n.props.value), send: () => find((n) => n.type === "button")[0].props.onClick() };
+  return { fill, find, text: () => text().replace(/\s+/g, " ").trim(), values: () => find((n) => n.type === "input" || n.type === "textarea").map((n) => n.props.value), send: () => find((n) => n.type === "button")[0].props.onClick() };
 }
 
 test("the page: says it was sent only when it was", async () => {
@@ -99,6 +99,9 @@ test("the page: it didn't go through, so it says so and keeps what they wrote; t
   await logsOf(() => p.send());
   assert.doesNotMatch(p.text(), /Message sent!/);
   assert.match(p.text(), /That didn't go through\. Please try again\./);
+  const [said] = p.find((n) => n.props.role === "alert");
+  assert.deepEqual([said.type, said.props.className], ["p", "contact-err"], "read out, in plain red words as on the shop's other forms");
+  assert.match(read("src/index.css"), /\n\.contact-err \{ font-size:16px;line-height:1\.5;color:#c0392b;margin-bottom:12px; \}\n/, "no box, so no cream one");
   assert.deepEqual(p.values(), [FORM.name, FORM.email, FORM.message]);
   assert.match(p.text(), /Send Message/, "the button is ready again");
   up = true;

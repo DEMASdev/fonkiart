@@ -402,10 +402,11 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .contact-detail { display:flex;align-items:center;gap:10px;font-size:17px;color:var(--muted);margin-bottom:10px; }
 .contact-detail svg { color:var(--gold); }
 .contact-form-box { background:#fff;padding:36px;border:1px solid var(--border); }
+.contact-err { font-size:16px;line-height:1.5;color:#c0392b;margin-bottom:12px; }
 .contact-form-box h3 { font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:300;margin-bottom:22px; }
 /* Contact's form and the story pages' buttons: nothing under 16px (Andy, 11-17). Kept to these pages:
    .fld / .btn-p are shared with the checkout, which has its own group. */
-.contact-form-box .fld label, .contact-form-box .fld input, .contact-form-box .fld textarea, .contact-form-box .warn-msg,
+.contact-form-box .fld label, .contact-form-box .fld input, .contact-form-box .fld textarea,
 .contact-form-box .btn-p, .placeholder-body .btn-p { font-size:16px; }
 
 /* ── WELCOME POPUP ── */

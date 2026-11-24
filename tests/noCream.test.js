@@ -12,7 +12,7 @@
 // The scan fails on the files before (8d85f29), which had seventeen; its controls pass on both.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 // A colour's red, green and blue (null if it is not one).
@@ -89,6 +89,20 @@ test("no cream or sand in src/index.css or src/threads.css, but for Admin's own 
     assert.ok(all.length > (file.endsWith("index.css") ? 250 : 12), `${file}: the scan reads its colours (${all.length})`);
     const found = all.filter(f => cream(f) && !ADMIN.has(`${f.sel} ${f.colour}`)).map(f => `${f.sel} { ${f.prop}: ${f.colour} }`);
     assert.deepEqual(found, [], `${file}: cream or sand`);
+  }
+});
+
+// Kept because only Admin sees them, so no page of the shop may use them. Contact did (2026-11-23): what
+// was wrong with the form was said in Admin's cream box.
+test("Admin's own status colours are seen in Admin only", () => {
+  const walk = (dir) => readdirSync(new URL(`../${dir}/`, import.meta.url), { withFileTypes: true }).flatMap(d => (d.isDirectory() ? walk(`${dir}/${d.name}`) : `${dir}/${d.name}`));
+  const files = walk("src").filter(f => /\.jsx?$/.test(f));
+  const classes = [...ADMIN].map(k => [...k.split(" #")[0].matchAll(/\.([\w-]+)/g)].map(m => m[1]).filter(c => c !== "orders-tab" && c !== "is-needed").at(-1));
+  assert.deepEqual(classes, ["o-pill", "order-flag", "o-btn-add", "ship-dlg-field", "warn-msg"]);
+  const uses = (c, admin) => files.filter(f => f.startsWith("src/admin/") === admin && new RegExp(`["'\`\\s]${c}["'\`\\s$]`).test(read(f)));
+  for (const c of classes) {
+    assert.ok(uses(c, true).length > 0, `${c}: found in Admin, so the scan reads`);
+    assert.deepEqual(uses(c, false), [], `${c}: a page of the shop uses it`);
   }
 });
 
