@@ -427,14 +427,14 @@ body { font-family:'DM Sans',sans-serif;background:#fff;color:#1c1a18; }
 .welcome-form-side { display:flex;flex-direction:column; }
 .welcome-top { background:var(--sidebar-bg);padding:22px 24px 18px;display:flex;align-items:center;gap:16px; }
 .welcome-pct-wrap { flex-shrink:0; }
-.welcome-pct { font-family:'Cormorant Garamond',serif;font-size:60px;font-weight:300;color:#fff;line-height:1; }
+.welcome-pct { font-family:'Cormorant Garamond',serif;font-size:60px;font-weight:300;color:#fff;line-height:1;font-variant-numeric:lining-nums; } /* a 5 that hangs below its line ran into OFF */
 .welcome-pct-off { font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:500; }
 .welcome-top-title { font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;color:#fff;line-height:1.2;margin-bottom:6px; }
 .welcome-top-sub { font-size:17px;color:rgba(255,255,255,.55);line-height:1.45; }
 .welcome-body { padding:22px 26px 26px;flex:1; }
 .welcome-body p { font-size:17px;color:var(--muted);line-height:1.65;margin-bottom:16px; }
 .coupon-box { background:var(--cream);border:2px dashed var(--gold);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px; }
-.coupon-code { font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.08em;color:var(--ink);white-space:nowrap; } /* a code is never broken in two */
+.coupon-code { font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.08em;color:var(--ink);white-space:nowrap;font-variant-numeric:lining-nums; } /* a code is never broken in two */
 .coupon-copy { background:none;border:none;cursor:pointer;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-family:'DM Sans',sans-serif;padding:3px 6px;transition:all .2s;white-space:nowrap; }
 .coupon-copy:hover { color:var(--ink); }
 @media(max-width:600px){

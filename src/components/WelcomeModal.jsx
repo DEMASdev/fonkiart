@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { storeCall } from "../lib/store";
 import { remember } from "../lib/cartMemory";
 import { ownSizes, sizesWords } from "../lib/couponSize";
@@ -13,6 +13,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const going = useRef(false); // Enter pressed again while it is on its way: still one
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
@@ -23,6 +24,8 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
 
   const handleSubmit = async () => {
     if (!email || !email.includes("@")) { setErr("Please enter a valid email."); return; }
+    if (going.current) return;
+    going.current = true;
     setLoading(true);
     try {
       const r = await storeCall("welcome", { email });
@@ -32,7 +35,7 @@ export default function WelcomeModal({ onClose, discount = 15, artworks = [], sa
       setAlreadyUsed(!!r.used);
       setEmailed(r.emailed !== false);
       setSizes(ownSizes(r.sizes));
-    } catch(e) { console.error("Error:", e); setErr("Error: " + e.message); setLoading(false); return; }
+    } catch(e) { console.error("Error:", e); setErr("Error: " + e.message); setLoading(false); return; } finally { going.current = false; }
     setLoading(false);
     setSubmitted(true);
   };

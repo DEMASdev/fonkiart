@@ -87,6 +87,7 @@ test("the shop's price tags and the Cart's money: Cormorant Garamond 600, lining
   }
   assert.match(css, /\n {2}\.card-price \{ font-size:20px;margin-bottom:10px; \}/, "a price tag on a phone: 20px");
   assert.match(rule(".cart-page-title") || "", /font-variant-numeric:lining-nums/, "Your Cart (1): the 1 reads as a 1");
+  for (const sel of [".welcome-pct", ".coupon-code"]) assert.match(rule(sel) || "", /font-variant-numeric:lining-nums/, `${sel}: the welcome popup's 15% (its 5 hung into OFF) and the coupon's code`);
   assert.match(rule(".card-price-ask") || "", /font-family:'DM Sans',sans-serif;font-size:16px;font-weight:400;/, "Price on request: words, so the site font");
   assert.match(rule(".pay-row") || "", /font-family:'DM Sans',sans-serif;/, "the ways to pay (rows, on the checkout and the invoice page): the site font, like the other buttons");
   assert.match(rule(".checkout-back") || "", /font-family:'DM Sans',sans-serif;font-size:16px;/, "and ← Back above them");

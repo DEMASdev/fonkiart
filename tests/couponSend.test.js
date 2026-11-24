@@ -499,6 +499,7 @@ const React = {
     return [d.hooks[n], (v) => { d.hooks[n] = typeof v === "function" ? v(d.hooks[n]) : v; d.draw(); }];
   },
   useEffect(fn) { const d = drawing, n = d.at++; if (!(n in d.hooks)) { d.hooks[n] = true; d.effects.push(fn); } },
+  useRef(init) { const d = drawing, n = d.at++; return (d.hooks[n] ||= { current: init }); },
 };
 const FRAGMENT = Symbol("Fragment");
 const jsx = (type, props) => ({ type, props: props || {} });
@@ -712,4 +713,25 @@ test("the welcome popup tells the truth to someone coming back for a code with a
   assert.equal(await said({ ...back, sizes: [{ percent: 15 }, DOLLARS] }), "15% off or up to $300 off");
   assert.equal(await said({ ...back, sizes: [{ percent: 20 }] }), "20% off");
   for (const sizes of [undefined, null, [], "x", [{ percent: 400 }]]) assert.equal(await said({ ...back, sizes }), "15% off", `the shop's %: ${JSON.stringify(sizes)}`);
+});
+
+test("the welcome popup: Enter pressed again while it is on its way is still one; one that failed can be tried again", async () => {
+  const asked = [];
+  let answer;
+  const Welcome = await component("src/components/WelcomeModal.jsx", { "../lib/store": { storeCall: async (op, body) => { asked.push([op, body.email]); if (answer instanceof Error) throw answer; return answer; } }, "../lib/cartMemory": { remember() {} }, "./Pic": { default: () => null }, "./SignInLine": { default: () => null } });
+  const screen = draw(Welcome, { onClose() {}, discount: 15, artworks: [] });
+  const enter = () => screen.one("email box", n => n.type === "input").props.onKeyDown({ key: "Enter" });
+  screen.one("email box", n => n.type === "input").props.onChange({ target: { value: SARA } });
+  answer = new Error("not now");
+  const keep = console.error;
+  console.error = () => {};
+  try { enter(); enter(); await settle(); } finally { console.error = keep; }
+  assert.deepEqual(asked, [["welcome", SARA]], "two presses, one");
+  assert.match(screen.text(), /Error: not now/);
+  answer = { returning: false, code: "FK-TEST-AAAA", used: false };
+  const { onKeyDown } = screen.one("email box", n => n.type === "input").props;
+  onKeyDown({ key: "Enter" }); onKeyDown({ key: "Enter" }); onKeyDown({ key: "a" });
+  await settle();
+  assert.equal(asked.length, 2, "tried again, once");
+  assert.match(screen.text(), /Check your inbox! Your unique coupon is also right here:/);
 });
