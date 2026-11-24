@@ -14,6 +14,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
   const [checkout, setCheckout] = useState(null);
   const [commForm, setCommForm] = useState({ name:"", email:user?.email||"", idea:"", budget:"" });
   const [commSent, setCommSent] = useState(false);
+  const [commErr, setCommErr]   = useState("");
   const [orders, setOrders]     = useState([]);
   const [tab, setTab]           = useState("room");
 
@@ -26,10 +27,14 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
 
   const sendCommission = async () => {
     if (!commForm.name || !commForm.idea) return;
+    setCommErr("");
     try {
       await storeCall("request", { kind: "commission", name: commForm.name, email: commForm.email, idea: commForm.idea, budget: commForm.budget });
       setCommSent(true);
-    } catch(e) { console.warn("Commission request:", e); }
+    } catch (e) {
+      console.warn("Commission request:", e?.message || e);
+      setCommErr("That didn't go through. Please try again.");
+    }
   };
 
   const CR = { bg:"#0f0e0c", card:"#1a1816", border:"#2e2a24", gold:"#c9a96e", muted:"#7a6f63", text:"#f2f2f2" };
@@ -151,6 +156,7 @@ export default function CollectorsRoomPage({ user, artworks, settings, onLogout,
                     style={{ width:"100%", background:CR.card, border:`1px solid ${CR.border}`, color:CR.text, padding:"12px 16px", fontFamily:"'DM Sans',sans-serif", fontSize:16, outline:"none", minHeight:120, resize:"vertical", boxSizing:"border-box" }}
                     onFocus={e=>e.target.style.borderColor=CR.gold} onBlur={e=>e.target.style.borderColor=CR.border} />
                 </div>
+                {commErr && <p role="alert" style={{ fontSize:16, lineHeight:1.5, color:"#ff8fa3" }}>{commErr}</p>}
                 <button onClick={sendCommission} disabled={!commForm.name||!commForm.idea} style={{ background:CR.gold, color:"#fff", border:"none", padding:"15px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontSize:16, letterSpacing:".12em", textTransform:"uppercase", opacity:(!commForm.name||!commForm.idea)?0.5:1 }}>
                   Send Commission Request →
                 </button>

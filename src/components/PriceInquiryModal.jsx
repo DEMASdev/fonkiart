@@ -1,21 +1,30 @@
 import { useState } from "react";
 import { storeCall } from "../lib/store";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // as the server's own check
+
 export default function PriceInquiryModal({ item, onClose }) {
   const blank = { name:"", email:"", phone:"", message:"" };
   const [form, setForm] = useState(blank);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
-  const f = (k,v) => setForm(fm=>({...fm,[k]:v}));
+  const [err, setErr] = useState("");
+  const f = (k,v) => { setForm(fm=>({...fm,[k]:v})); setErr(""); };
   const canSend = form.name.trim() && form.email.includes("@");
 
   const send = async () => {
+    if (!EMAIL_RE.test(form.email.trim())) { setErr("Please enter a valid email address."); return; }
     setSending(true);
+    setErr("");
+    // "Inquiry Sent!" only once it was. If not, what they wrote stays in the form.
     try {
       await storeCall("request", { kind: "inquiry", artworkId: item.id, name: form.name, email: form.email, phone: form.phone, message: form.message });
-    } catch(e) { console.warn("Inquiry:", e); }
+      setDone(true);
+    } catch (e) {
+      console.warn("Inquiry:", e?.message || e);
+      setErr("That didn't go through. Please try again.");
+    }
     setSending(false);
-    setDone(true);
   };
 
   if (done) return (
@@ -47,6 +56,7 @@ export default function PriceInquiryModal({ item, onClose }) {
         </div>
         <div className="fld"><label>Phone <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></label><input type="tel" autoComplete="tel" value={form.phone} onChange={e=>f("phone",e.target.value)} placeholder="+1 305 000 0000" /></div>
         <div className="fld"><label>Message <span style={{fontWeight:300,textTransform:"none",letterSpacing:0}}>(optional)</span></label><textarea value={form.message} onChange={e=>f("message",e.target.value)} placeholder="I'm interested in this piece for my living room…" style={{ minHeight:70, resize:"vertical" }} /></div>
+        {err && <p className="contact-err" role="alert">{err}</p>}
         <button className="btn-p" style={{ width:"100%", marginTop:8, opacity:canSend?1:.5, cursor:canSend?"pointer":"default" }} onClick={canSend&&!sending?send:undefined} disabled={!canSend||sending}>
           {sending ? "Sending…" : "Send Inquiry"}
         </button>

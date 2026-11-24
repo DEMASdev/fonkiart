@@ -123,17 +123,22 @@ export async function opCollectors(db, body) {
   return { ok: true };
 }
 
+// A message for the shop: kept under Admin -> Requests, and emailed to it. One of the two is enough.
+// Neither: it reached nobody, so the page must not say it was sent, and the person gets no copy.
+async function toShop(db, mail, what, row, email) {
+  const { error } = await db.from("Requests").insert([{ ...row, status: "new" }]);
+  if (error) console.warn(`store ${what} insert:`, error.message);
+  const [told] = await Promise.allSettled([mail.send({ to: mail.sender, ...email })]);
+  if (told.status === "rejected") console.warn(`store ${what} email:`, told.reason?.message || told.reason);
+  if (error && told.status === "rejected") throw new Error(`a ${what} message reached nobody`);
+}
+
 export async function opRequest(db, body, mail) {
   if (body.kind === "contact") {
     const name = text(body.name, 200, "name", { required: true });
     const email = emailField(body.email);
     const message = text(body.message, 5000, "message", { required: true });
-    const { error } = await db.from("Requests").insert([{ name, email, message, status: "new" }]);
-    if (error) console.warn("store contact insert:", error.message);
-    const [told] = await Promise.allSettled([mail.send({ to: mail.sender, subject: "Contact Form Request", htmlContent: T.contactStore({ name, email, message }), replyTo: email })]);
-    if (told.status === "rejected") console.warn("store contact email:", told.reason?.message || told.reason);
-    // Neither kept nor emailed to the shop: it reached nobody, so the page must not say it was sent.
-    if (error && told.status === "rejected") throw new Error("a contact message reached nobody");
+    await toShop(db, mail, "contact", { name, email, message }, { subject: "Contact Form Request", htmlContent: T.contactStore({ name, email, message }), replyTo: email });
     await Promise.allSettled([mail.send({ to: email, subject: "We received your message — Fonkiart", htmlContent: T.contactBuyer({ name, message, sender: mail.sender }) })]);
     return { ok: true };
   }
@@ -145,12 +150,10 @@ export async function opRequest(db, body, mail) {
     if (!/^\d{1,20}$/.test(String(body.artworkId ?? ""))) throw new InputError("Bad artwork");
     const { data: art } = await db.from("Artworks").select("*").eq("id", String(body.artworkId)).maybeSingle();
     if (!art) throw new InputError("Artwork not found", 404);
-    await Promise.allSettled([
-      db.from("Requests").insert([{ name, email, status: "new",
-        message: `Price inquiry for "${art.title}"${message ? ` — ${message}` : ""}. Phone: ${phone || "not provided"}.` }]),
-      mail.send({ to: mail.sender, subject: `Enquiry about ${art.title}`, htmlContent: T.inquiryStore({ art, name, email, phone, message }) }),
-      mail.send({ to: email, subject: `Your inquiry — ${art.title} · Fonkiart`, htmlContent: T.inquiryBuyer({ name, artTitle: art.title, sender: mail.sender }) }),
-    ]);
+    await toShop(db, mail, "inquiry",
+      { name, email, message: `Price inquiry for "${art.title}"${message ? ` — ${message}` : ""}. Phone: ${phone || "not provided"}.` },
+      { subject: `Enquiry about ${art.title}`, htmlContent: T.inquiryStore({ art, name, email, phone, message }) });
+    await Promise.allSettled([mail.send({ to: email, subject: `Your inquiry — ${art.title} · Fonkiart`, htmlContent: T.inquiryBuyer({ name, artTitle: art.title, sender: mail.sender }) })]);
     return { ok: true };
   }
   if (body.kind === "commission") {
